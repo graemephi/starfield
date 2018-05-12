@@ -13,6 +13,7 @@ func xrealloc(mem: void*, size: usize): void* {
     result := realloc(mem, size);
     if (!result) {
         printf("Failed to realloc");
+        #assert(0);
         exit(1);
     }
     return result;
@@ -22,6 +23,7 @@ func xmalloc(size: usize): void* {
     result := malloc(size);
     if (!result) {
         printf("Failed to malloc");
+        #assert(0);
         exit(1);
     }
     return result;
@@ -31,9 +33,14 @@ func xcalloc(count: usize, size: usize): void* {
     result := calloc(count, size);
     if (!result) {
         printf("Failed to calloc");
+        #assert(0);
         exit(1);
     }
     return result;
+}
+
+func is_power_2(x: int32): bool {
+    return x != 0 && x & (x - 1) == 0;
 }
 
 func clamp(a: float, b: float, x: float): float {
@@ -47,7 +54,6 @@ func clampi(a: int32, b: int32, x: int32): int32 {
            (x > b) ? b :
                      x;
 }
-
 
 func clamp01(x: float): float {
     return clamp(0, 1, x);
@@ -67,6 +73,14 @@ func max(a: float, b: float): float {
 
 func min(a: float, b: float): float {
     return (a < b) ? a : b;
+}
+
+func min4(a: float, b: float, c: float, d: float): float {
+    return min(min(a, b), min(c, d));
+}
+
+func max4(a: float, b: float, c: float, d: float): float {
+    return max(max(a, b), max(c, d));
 }
 
 func float2_to_int2(x: float2): int2 {
@@ -90,9 +104,9 @@ func add2(a: float2, b: float2): float2 {
 }
 
 func sub2(a: float2, b: float2): float2 {
-
     return { a.x - b.x, a.y - b.y };
 }
+
 struct Color {
     r, g, b, a: float;
 }
@@ -109,7 +123,7 @@ struct Tex {
 }
 
 // Star types:
-// *+.·˚⊹⋆✦✧✫✹✺
+// *+.·˚⊹⋆✦✧✫✹✺　
 
 struct StarType {
     id: int32;
@@ -120,9 +134,10 @@ struct StarType {
 enum StarTypes {
     StarType_Space = 0,
     StarType_BigSpace = 13,
+    StarTypeCount
 }
 
-var star_types: StarType[StarType_BigSpace] = {};
+var star_types: StarType[StarTypeCount] = {};
 
 struct StarsHeader {
     len: int64;
@@ -131,8 +146,9 @@ struct StarsHeader {
 }
 
 struct Star {
-    pos: float2;
+    rect: Rect;
     type: StarType*;
+    color: Color*;
 }
 
 struct Starfield {
@@ -141,8 +157,8 @@ struct Starfield {
 }
 
 struct Rect {
-    x, y: float; // center
-    w, h: float; // width, height
+    pos: float2; // center
+    size: float2; // width, height
     rot: float2; // cos theta, sin theta
 }
 
@@ -150,8 +166,7 @@ func stars_header(stars: Star*): StarsHeader* {
     return (:StarsHeader*)(((:char*)stars) - offsetof(StarsHeader, data));
 }
 
-func push_star(starfield: Starfield*, star: Star)
-{
+func push_star(starfield: Starfield*, star: Star) {
     if (!starfield.stars) {
         initial_cap := 32;
         alloc_size := sizeof(Star)*initial_cap + sizeof(StarsHeader);
@@ -164,115 +179,150 @@ func push_star(starfield: Starfield*, star: Star)
 
     header := stars_header(starfield.stars);
 
-    if (header.len >= header.cap) {
+    if (header.len == header.cap) {
         new_cap := header.cap * 2;
-        new_header: StarsHeader* = xrealloc(stars_header(starfield.stars), sizeof(Star)*new_cap + sizeof(StarsHeader));
-        starfield.stars = new_header.data;
+        header = xrealloc(header, sizeof(Star)*new_cap + sizeof(StarsHeader));
+        starfield.stars = header.data;
         header.cap = new_cap;
+
     }
 
     starfield.stars[header.len++] = star;
 }
 
-func consume_star(c: char const*, star: Star*): int32 {
+func consume_star(c: char const*, star: Star*): char const* {
+    next := 0;
     if (*c == '\n') {
-        star.type = star_types + StarType_Space;
-        return 1;
-    } else if (*c == ' ') {
-        star.type = star_types + StarType_Space;
-        return 1;
-    } else if (*c == '*') {
-        star.type = star_types + 1;
-        return 1;
-    } else if (*c == '+') {
-        star.type = star_types + 2;
-        return 1;
-    } else if (*c == '.') {
-        star.type = star_types + 3;
-        return 1;
-    } else if (memcmp(c, "·", 2) == 0) {
-        star.type = star_types + 4;
-        return 2;
-    } else if (memcmp(c, "˚", 2) == 0) {
-        star.type = star_types + 5;
-        return 2;
-    } else if (memcmp(c, "⊹", 3) == 0) {
-        star.type = star_types + 6;
-        return 3;
-    } else if (memcmp(c, "⋆", 3) == 0) {
-        star.type = star_types + 7;
-        return 3;
-    } else if (memcmp(c, "✦", 3) == 0) {
-        star.type = star_types + 8;
-        return 3;
-    } else if (memcmp(c, "✧", 3) == 0) {
-        star.type = star_types + 9;
-        return 3;
-    } else if (memcmp(c, "✫", 3) == 0) {
-        star.type = star_types + 10;
-        return 3;
-    } else if (memcmp(c, "✹", 3) == 0) {
-        star.type = star_types + 11;
-        return 3;
-    } else if (memcmp(c, "✺", 3) == 0) {
-        star.type = star_types + 12;
-        return 3;
-    } else if (memcmp(c, "　", 3) == 0) {
-        star.type = star_types + StarType_BigSpace;
-        return 3;
+        c++;
     }
 
-    #assert(0);
-    star.type = 0;
-    return 1;
+    if (*c == ' ') {
+        #static_assert(StarType_Space == 0);
+        star.type = star_types + StarType_Space;
+        next = 1;
+    } else if (*c == '*') {
+        star.type = star_types + 1;
+        next = 1;
+    } else if (*c == '+') {
+        star.type = star_types + 2;
+        next = 1;
+    } else if (*c == '.') {
+        star.type = star_types + 3;
+        next = 1;
+    } else if (memcmp(c, "·", sizeof("·") - 1) == 0) {
+        star.type = star_types + 4;
+        next = sizeof("·") - 1;
+    } else if (memcmp(c, "˚", sizeof("˚") - 1) == 0) {
+        star.type = star_types + 5;
+        next = sizeof("˚") - 1;
+    } else if (memcmp(c, "⊹", sizeof("⊹") - 1) == 0) {
+        star.type = star_types + 6;
+        next = sizeof("⊹") - 1;
+    } else if (memcmp(c, "⋆", sizeof("⋆") - 1) == 0) {
+        star.type = star_types + 7;
+        next = sizeof("⋆") - 1;
+    } else if (memcmp(c, "✦", sizeof("✦") - 1) == 0) {
+        star.type = star_types + 8;
+        next = sizeof("✦") - 1;
+    } else if (memcmp(c, "✧", sizeof("✧") - 1) == 0) {
+        star.type = star_types + 9;
+        next = sizeof("✧") - 1;
+    } else if (memcmp(c, "✫", sizeof("✫") - 1) == 0) {
+        star.type = star_types + 10;
+        next = sizeof("✫") - 1;
+    } else if (memcmp(c, "✹", sizeof("✹") - 1) == 0) {
+        star.type = star_types + 11;
+        next = sizeof("✹") - 1;
+    } else if (memcmp(c, "✺", sizeof("✺") - 1) == 0) {
+        star.type = star_types + 12;
+        next = sizeof("✺") - 1;
+    } else if (memcmp(c, "　", sizeof("　") - 1) == 0) {
+        #static_assert(StarType_BigSpace == 13);
+        star.type = star_types + StarType_BigSpace;
+        next = sizeof("　") - 1;
+    } else {
+        #assert(0);
+        star.type = 0;
+        next = 1;
+    }
+
+    return c + next;
+}
+
+var random_state: uint32 = 1;
+func random(): uint32 {
+    random_state ^= random_state << 13;
+    random_state ^= random_state >> 17;
+    random_state ^= random_state << 5;
+    return random_state;
+}
+
+const int_23_mask = 0b00000000_011111111111111111111111;
+const int_23_reciprocal = 1. / int_23_mask;
+func random01(): float {
+    r := random() & int_23_mask;
+    return r * int_23_reciprocal;
+}
+
+func random_unit_vector2(): float2 {
+    theta := random01() * Tau;
+    return { cos(theta), sin(theta) };
 }
 
 func create_starfield(starfield: char const*): Starfield {
     // todo: adjust height based on character, jitter
     result: Starfield = {};
 
-    width := 2;
-    height := 2;
+    width := 0;
+    height := 0;
     line_width := 0;
     star_count := 0;
 
     c := starfield;
-    star: Star;
     while (*c) {
-        c += consume_star(c, &star);
+        star: Star;
+        c = consume_star(c, &star);
 
-        line_width += 4;
+        if (star.type) {
+            init_star_type(star.type);
 
-        if (star.type != star_types + StarType_Space) {
-            if (star.type == star_types + StarType_BigSpace) {
-                line_width += 3;
-            } else {
+            if (star.type.id == StarType_BigSpace) {
+                line_width += 1;
+            } else if (star.type.id != StarType_Space) {
                 star_count++;
 
-                star.pos = { float(line_width), float(height) };
+                star.rect.pos = { float(line_width), float(height) };
+                star.rect.size = float2 { 1 + random01(), 1 + random01() };
+                star.rect.rot = random_unit_vector2();
 
                 push_star(&result, star);
             }
         }
 
         if (*c == '\n') {
-            height += 8;
+            height += 6;
             width = maxi(width, line_width);
             line_width = 0;
             c++;
+        } else {
+            line_width += 2;
         }
     }
 
-    width += 2;
+    width += 8;
+    height += 4;
 
     R := maxi(width, height);
-    y_pad := (R - height) / 2;
-    x_pad := (R - width) / 2;
+    x_pad := 4 + (R - width) / 2;
+    y_pad := 4 + (R - height) / 2;
 
     result.star_count = star_count;
     for (i := 0; i < star_count; i++) {
-        result.stars[i].pos.x = (result.stars[i].pos.x + x_pad) / R;
-        result.stars[i].pos.y = (result.stars[i].pos.y + y_pad) / R;
+        s := result.stars + i;
+        s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
+        s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
+        s.rect.size.x = s.type.tex.size.x * s.rect.size.x / ImageSize.x;
+        s.rect.size.y = s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
     return result;
@@ -292,26 +342,40 @@ func distance2i(a: int2, b: int2): float {
     return sqrt(float(d));
 }
 
+func dot2(a: float2, b: float2): float {
+    return a.x*b.x + a.y*b.y;
+}
+
+func distance_squared2(a: float2, b: float2): float {
+    d := sub2(a, b);
+    return dot2(d, d);
+}
+
+func distance2(a: float2, b: float2): float {
+    d := distance_squared2(a, b);
+    return sqrt(d);
+}
+
 func draw_simple_star(buffer: Color*, size: int2) {
-    center := int2 { size.x / 2, size.y / 2 };
-    range := distance2i({size.x / 2, 0}, center);
+    center := div2(int2_to_float2(size), { 2., 2. });
+    range := distance2({size.x / 2., 0}, center);
+    radius := distance2({}, center);
 
     col := buffer;
     for (y := 0; y < size.y; y++) {
         for (x := 0; x < size.x; x++) {
-            c := distance2i({x, y}, center);
-            rel := sub2(int2_to_float2({x, y}), int2_to_float2(center));
+            xy := int2_to_float2({x, y});
+            c := distance2(xy, center) / radius;
+            rel := sub2(xy, center);
 
-            // dot against basis axes and combine by multiplying, then scale
-            spike := fabs(rel.x * rel.y) / range;
-            c = c * spike;
+            spike := clamp01(fabs(rel.x * rel.y) / range);
+            color := (1 - c)*(1 - spike);
 
-            col.a = clamp01((range - c) / range);
-
+            col.a = color;
             if (c < range) {
-                col.r = clamp01((range - c) / range) * col.a;
-                col.g = clamp01((range - c) / range) * col.a;
-                col.b = clamp01((range - c) / range) * col.a;
+                col.r = color * col.a;
+                col.g = color * col.a;
+                col.b = color * col.a;
             }
 
             col++;
@@ -319,114 +383,147 @@ func draw_simple_star(buffer: Color*, size: int2) {
     }
 }
 
+func draw_outline(buffer: Color*, size: int2, color: Color) {
+    for (i := 0; i < size.x; i++) {
+        buffer[i] = color;
+        buffer[i + (size.x - 1) * size.y];
+    }
+
+    for (i := 0; i < size.y; i++) {
+        buffer[i * size.x] = color;
+        buffer[i * size.x + (size.x - 1)];
+    }
+}
+
+func make_tex(size: int2): Tex {
+    #assert(is_power_2(size.x));
+    #assert(is_power_2(size.y));
+    return Tex { size = size, pixels = xcalloc(size.x * size.y, sizeof(Color)) };
+}
+
+func free_tex(tex: Tex*) {
+    #assert(tex.pixels);
+    free(tex.pixels);
+    tex.pixels = 0;
+    tex.size = { 0, 0 };
+}
+
 func init_star_type(type: StarType*) {
     idx := (:int32)(type - star_types);
+    #assert(idx >= 0);
+    #assert(idx < StarTypeCount);
+
+    if (type.tex.pixels) {
+        #assert(type.size.x != 0.);
+        #assert(type.size.y != 0.);
+        #assert(type.tex.size.x != 0);
+        #assert(type.tex.size.y != 0);
+        return;
+    }
+
     type.id = idx;
 
     switch (idx) {
         case 0:
-            // Empty space, should not reach.
-            #assert(0);
-        case 1: // *
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 8, 8 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
+            draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
+        case 1: // *
+            type.tex = make_tex({ 32, 32 });
+            type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 2: // +
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 3: // .
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 4: // ·
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 5: // ˚
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 6: // ⊹
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 7: // ⋆
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 8: // ✦
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 9: // ✧
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 10: // ✫
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 11: // ✹
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 12: // ✺
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 32, 32 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 13: // '　'
-            type.tex.size = { 32, 32 };
+            type.tex = make_tex({ 8, 8 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
-            type.tex.pixels = calloc(type.tex.size.x * type.tex.size.y, sizeof(Color));
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_outline(type.tex.pixels, type.tex.size, { 1, 0, 0, 0.5 });
     }
 }
 
 func rotate(v: float2, cos_sin_theta: float2): float2 {
-    return float2 { v.x * cos_sin_theta.x - v.y * cos_sin_theta.y, v.x * cos_sin_theta.y + v.y * cos_sin_theta.x };
+    if (cos_sin_theta.x && cos_sin_theta.y) {
+        return float2 {
+            v.x * cos_sin_theta.x - v.y * cos_sin_theta.y,
+            v.x * cos_sin_theta.y + v.y * cos_sin_theta.x
+        };
+    }
+
+    return v;
+}
+
+func inside_normal_rect(pos: float2): bool {
+    return pos.x > 0 && pos.x < 1
+        && pos.y > 0 && pos.y < 1;
 }
 
 func inside_rect(rect: Rect, pos: float2): bool {
-    normalised := rect_relative(rect, pos);
-    result := normalised.x > 0 && normalised.x < 1
-           && normalised.y > 0 && normalised.y < 1;
-    return result;
+    return inside_normal_rect(rect_relative(rect, pos));
 }
 
-func rect_relative(rect: Rect, pos: float2): float2 {
-    shift_pos := float2 { pos.x - rect.x, pos.y - rect.y };
+func rect_relative(rect: Rect, abs_pos: float2): float2 {
+    shift_pos := sub2(abs_pos, rect.pos);
     rot_pos := rotate(shift_pos, rect.rot);
-    scaled_pos := div2(rot_pos, { rect.w, rect.h });
+    scaled_pos := div2(rot_pos, rect.size);
     result := add2(scaled_pos, { 0.5, 0.5 });
     return result;
 }
 
-func rect_absolute(rect: Rect, pos: float2): float2 {
-    centered_pos := sub2(pos, { 0.5, 0.5 });
-    scaled_pos := mul2(centered_pos, { rect.w, rect.h });
+func rect_absolute(rect: Rect, rel_pos: float2): float2 {
+    centered_pos := sub2(rel_pos, { 0.5, 0.5 });
+    scaled_pos := mul2(centered_pos, rect.size);
     rot_pos := rotate(scaled_pos, { rect.rot.x, -rect.rot.y });
-    shift_pos := float2 { rot_pos.x + rect.x, rot_pos.y + rect.y };
+    shift_pos := add2(rot_pos, rect.pos);
     return shift_pos;
 }
 
 func lerp(a: float, b: float, t: float): float {
-    return (b - a)*t + a;
+    return (1 - t)*a + t*b;
 }
 
-func lerp_color(a: Color, b: Color, t: float): Color {
+func color_lerp(a: Color, b: Color, t: float): Color {
     return Color {
         lerp(a.r, b.r, t),
         lerp(a.g, b.g, t),
@@ -435,8 +532,145 @@ func lerp_color(a: Color, b: Color, t: float): Color {
     };
 }
 
-func is_power_2(x: int32): bool {
-    return x & (x - 1) == 0;
+func color_add(a: Color, b: Color): Color {
+    return Color {
+        a.r + b.r,
+        a.g + b.g,
+        a.b + b.b,
+        a.a + b.a
+    };
+}
+
+func color_sub(a: Color, b: Color): Color {
+    return Color {
+        a.r - b.r,
+        a.g - b.g,
+        a.b - b.b,
+        a.a - b.a
+    };
+}
+
+func color_mul(a: Color, b: Color): Color {
+    return Color {
+        a.r * b.r,
+        a.g * b.g,
+        a.b * b.b,
+        a.a * b.a
+    };
+}
+
+func color_mul1(a: Color, b: float): Color {
+    return Color {
+        a.r * b,
+        a.g * b,
+        a.b * b,
+        a.a * b
+    };
+}
+
+func blend(dest: Color, src: Color): Color {
+    result := Color {
+        src.r + (dest.r * (1. - src.a)),
+        src.g + (dest.g * (1. - src.a)),
+        src.b + (dest.b * (1. - src.a)),
+        src.a + dest.a
+    };
+    return result;
+}
+
+struct Image {
+    pixels: Color*;
+    size: int2;
+}
+
+struct PixelIter {
+    image: Image*;
+    start: int2;
+    end: int2;
+    rect: Rect;
+    pixel_pos: int2;
+
+    pos: float2;
+    pixel: Color*;
+}
+
+func is_zero(buf: void const*, len: usize): bool {
+    p := (:char const*)buf;
+    if (*p) {
+        return false;
+    }
+
+    return memcmp(p + 1, buf, len - 1) == 0;
+}
+
+func all_rect(): Rect {
+    return {
+        pos = { 0.5, 0.5 },
+        size = { 1, 1 },
+        rot = { 1, 0 }
+    };
+}
+
+func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
+    x_min := 0.;
+    x_max := 1.;
+    y_min := 0.;
+    y_max := 1.;
+
+    if (!is_zero(&rect, sizeof(rect))) {
+        a := rect_absolute(rect, {0, 0});
+        b := rect_absolute(rect, {1, 0});
+        c := rect_absolute(rect, {0, 1});
+        d := rect_absolute(rect, {1, 1});
+
+        x_min = min4(a.x, b.x, c.x, d.x);
+        x_max = max4(a.x, b.x, c.x, d.x);
+        y_min = min4(a.y, b.y, c.y, d.y);
+        y_max = max4(a.y, b.y, c.y, d.y);
+    } else {
+        rect = all_rect();
+    }
+
+    iter: PixelIter = {};
+
+    iter.start.x = clampi(0, image.size.x, int(x_min * image.size.x));
+    iter.end.x   = clampi(0, image.size.x, int(x_max * image.size.x));
+    iter.start.y = clampi(0, image.size.y, int(y_min * image.size.y));
+    iter.end.y   = clampi(0, image.size.y, int(y_max * image.size.y));
+
+    iter.pixel_pos = { iter.start.x - 1, iter.start.y };
+    iter.rect = rect;
+    iter.image = image;
+
+    return iter;
+}
+
+func pixel_iter_next(it: PixelIter*): bool {
+    it.pixel_pos.x++;
+
+    for (; it.pixel_pos.y < it.end.y; it.pixel_pos.y++) {
+        for (; it.pixel_pos.x < it.end.x; it.pixel_pos.x++) {
+            xy := float2 { float(it.pixel_pos.x + 0.5) / it.image.size.x, float(it.pixel_pos.y + 0.5) / it.image.size.y };
+            rel := rect_relative(it.rect, xy);
+
+            if (inside_normal_rect(rel)) {
+                it.pos = rel;
+                it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
+                return true;
+            }
+        }
+
+        it.pixel_pos.x = it.start.x;
+    }
+
+    return false;
+}
+
+func draw_tex(dest: Image*, target: Rect, tex: Tex) {
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup(tex, it.pos);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
 }
 
 func tex_lookup(tex: Tex, pos: float2): Color {
@@ -446,10 +680,10 @@ func tex_lookup(tex: Tex, pos: float2): Color {
     vi: float2;
     vf := float2 { modf(pos.x, &vi.x), modf(pos.y, &vi.y) };
 
-    a := float2_to_int2(vi);
-    b := float2_to_int2(add2(vi, {1, 0}));
-    c := float2_to_int2(add2(vi, {0, 1}));
-    d := float2_to_int2(add2(vi, {1, 1}));
+    a := float2_to_int2(pos);
+    b := float2_to_int2(add2(pos, {1, 0}));
+    c := float2_to_int2(add2(pos, {0, 1}));
+    d := float2_to_int2(add2(pos, {1, 1}));
 
     #assert(is_power_2(tex.size.x));
     #assert(is_power_2(tex.size.y));
@@ -467,99 +701,198 @@ func tex_lookup(tex: Tex, pos: float2): Color {
     C := tex.pixels[c.x + c.y*tex.size.x];
     D := tex.pixels[d.x + d.y*tex.size.x];
 
-    AB := lerp_color(A, B, vf.x);
-    CD := lerp_color(C, D, vf.x);
-    ABCD := lerp_color(AB, CD, vf.y);
+    AB := color_lerp(A, B, vf.x);
+    CD := color_lerp(C, D, vf.x);
+    ABCD := color_lerp(AB, CD, vf.y);
 
     return ABCD;
+}
+
+func image_sample_nearest(img: Image*, pos: float2): Color {
+    if (pos.x < 0 || pos.x >=1 || pos.y < 0 || pos.y >= 1) {
+        return {};
+    }
+    p := int2 { pos.x * img.size.x, pos.y * img.size.y };
+    return img.pixels[p.x + p.y*img.size.x];
+}
+
+func image_fetch(img: Image*, pos: int2): Color {
+    if (pos.x < 0 || pos.x >= img.size.x || pos.y < 0 || pos.y >= img.size.y) {
+        return {};
+    }
+
+    return img.pixels[pos.x + pos.y*img.size.x];
+}
+
+func make_image(size: int2): Image {
+    return Image {
+        pixels = xcalloc(size.x*size.y, sizeof(Color)),
+        size = size
+    };
+}
+
+func free_image(img: Image*) {
+    #assert(img.pixels);
+    free(img.pixels);
+    img.pixels = 0;
+    img.size = { 0, 0 };
+}
+
+func image_clear(img: Image*) {
+    memset(img.pixels, 0, img.size.x*img.size.y*sizeof(Color));
+}
+
+func image_copy(img: Image*): Image {
+    #assert(img.pixels);
+    result := make_image(img.size);
+    memcpy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
+    return result;
+}
+
+func image_copy_to(dest: Image*, src: Image*) {
+    #assert(src.size.x == dest.size.x);
+    #assert(src.size.y == dest.size.y);
+    memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+}
+
+func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
+    dest_end := dest + len;
+    #assert(radius > 0);
+    r := int(radius);
+    a := radius - r;
+
+    r_rcp :=  1. / ((2 * radius) + 1);
+    c_acc := color_mul1(src[r], a);
+
+    for (i := 0; i < r; i++) {
+        c_acc = color_add(c_acc, src[i]);
+    }
+
+    for (i := 0; i < r + 1; i++) {
+        if (i == r) {
+            c_acc = color_sub(c_acc, color_mul1(src[0], 1 - a));
+        }
+
+        c_acc = color_add(c_acc, color_lerp(src[i + r], src[i + r + 1], a));
+        *dest = color_mul1(c_acc, r_rcp);
+        dest++;
+    }
+
+    for (i := r + 1; i < len - r - 1; i++) {
+        c_acc = color_add(c_acc, color_lerp(src[i + r], src[i + r + 1], a));
+        c_acc = color_sub(c_acc, color_lerp(src[i - r], src[i - r - 1], a));
+        *dest = color_mul1(c_acc, r_rcp);
+        dest++;
+    }
+
+    c_acc = color_add(c_acc, color_mul1(src[len - 1], 1 - a));
+
+    for (i := len - r - 1; i < len; i++) {
+        c_acc = color_sub(c_acc, color_lerp(src[i - r], src[i - r - 1], a));
+        *dest = color_mul1(c_acc, r_rcp);
+        dest++;
+    }
+
+    #assert(dest == dest_end);
+}
+
+func blur_transpose(dest: Color*, src: Color*, w: int) {
+    for (i := 0; i < w; i++) {
+        *dest = *src;
+        dest += w;
+        src++;
+    }
+}
+
+func blur(img: Image*, radius: float) {
+    blur_to(img, img, radius);
+}
+
+func blur_to(dest: Image*, src: Image*, radius: float) {
+    #assert(dest.size.x == src.size.x);
+    #assert(dest.size.y == src.size.y);
+
+    temp := make_image({src.size.y, src.size.x});
+    scratch: Color* = xcalloc(src.size.x, sizeof(Color));
+
+    for (y := 0; y < src.size.y; y++) {
+        row_src := src.pixels + y*src.size.x;
+        row_dest := dest.pixels + y*dest.size.x;
+        blur_row(scratch, row_src, src.size.x, radius);
+        blur_row(row_dest, scratch, src.size.x, radius);
+        blur_row(scratch, row_dest, src.size.x, radius);
+        blur_transpose(temp.pixels + y, scratch, src.size.x);
+    }
+
+    for (y := 0; y < temp.size.y; y++) {
+        row := temp.pixels + y*temp.size.x;
+        blur_row(scratch, row, temp.size.x, radius);
+        blur_row(row, scratch, temp.size.x, radius);
+        blur_row(scratch, row, temp.size.x, radius);
+        blur_transpose(dest.pixels + y, scratch, temp.size.y);
+    }
+
+    free_image(&temp);
+}
+
+
+func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
+    #assert(src.size.x == size.x);
+    #assert(src.size.y == size.y);
+    src_end := src.pixels + src.size.x*src.size.y;
+    for (src_it := src.pixels; src_it != src_end; src_it++) {
+        *dest = color_to_rgb8(*src_it);
+        dest++;
+    }
 }
 
 func color_to_rgb8(color: Color): RGB8 {
     // TODO: Gamma.
     result := RGB8 {
-        r = uint8(color.r * 255.),
-        g = uint8(color.g * 255.),
-        b = uint8(color.b * 255.),
+        r = uint8(clamp01(color.r) * 255.),
+        g = uint8(clamp01(color.g) * 255.),
+        b = uint8(clamp01(color.b) * 255.),
     };
     return result;
 }
 
-func blend(dest: RGB8, src: Color): RGB8 {
-    // TODO: blend into float buffer and blit
-    result := RGB8 {
-        uint8(clamp01((src.r + (dest.r / 255. * (1. - src.a)))) * 255.),
-        uint8(clamp01((src.g + (dest.g / 255. * (1. - src.a)))) * 255.),
-        uint8(clamp01((src.b + (dest.b / 255. * (1. - src.a)))) * 255.),
-    };
-    return result;
-}
-
-func min4(a: float, b: float, c: float, d: float): float {
-    return min(min(a, b), min(c, d));
-}
-
-func max4(a: float, b: float, c: float, d: float): float {
-    return max(min(a, b), max(c, d));
-}
-
-var theta: float;
-var cos_sin_theta: float2 = { 1, 0 };
-
-func draw_starfield(buffer: RGB8*, size: int2, starfield: Starfield*) {
+func draw_starfield(image: Image*, starfield: Starfield*) {
     for (i := 0; i < starfield.star_count; i++) {
-        star := starfield.stars[i];
-        type := star.type;
+        star := starfield.stars + i;
+        star.rect.rot = rotate(star.rect.rot, { cos(0.05), sin(0.05) });
+        draw_tex(image, star.rect, star.type.tex);
+    }
+}
 
-        if (!type.tex.pixels) {
-            #assert(type.size.x == 0 && type.size.y == 0);
-            init_star_type(type);
-        }
+func time_now(): double {
+    ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;
+    return double(ticks) / double(app.time.ticks_per_sec);
+}
 
-        rect: Rect = {
-            x = star.pos.x,
-            y = star.pos.y,
-            w = type.size.x,
-            h = type.size.y,
-            rot = cos_sin_theta
-        };
+func random_histrogram(buffer: Color*, size: int2) {
+    hist: int* = xcalloc(size.x, sizeof(int));
 
-        a := rect_absolute(rect, {0, 0});
-        b := rect_absolute(rect, {1, 0});
-        c := rect_absolute(rect, {0, 1});
-        d := rect_absolute(rect, {1, 1});
+    max_val := 0;
+    for (i := 0; i < int(1e7); i++) {
+        xx := 0.;
+        x := 0.;
+        xx += 1; x += random01();
+        xx += 1; x += random01();
+        x /= xx;
+        #assert(x >= 0);
+        #assert(x <= 1);
+        idx := int(x * (size.x - 1));
+        hist[idx]++;
+        max_val = maxi(hist[idx], max_val);
+    }
 
-        x_min := min4(a.x, b.x, c.x, d.x);
-        x_max := max4(a.x, b.x, c.x, d.x);
-        y_min := min4(a.y, b.y, c.y, d.y);
-        y_max := max4(a.y, b.y, c.y, d.y);
-
-        x_start := clampi(0, size.x, int32(floor(x_min) * size.x));
-        x_end   := clampi(0, size.x, int32(ceil(x_max) * size.x));
-        y_start := clampi(0, size.y, int32(floor(y_min) * size.y));
-        y_end   := clampi(0, size.y, int32(ceil(y_max) * size.y));
-
-        cursor_row := buffer + (x_start + y_start*size.x);
-        for (y := y_start; y < y_end; y++) {
-            cursor := cursor_row;
-            for (x := x_start; x < x_end; x++) {
-                xy := float2 { float(x) / size.x, float(y) / size.y };
-
-                if (inside_rect(rect, xy)) {
-                    rgba := tex_lookup(type.tex, rect_relative(rect, xy));
-                    *cursor = blend(*cursor, rgba);
-                }
-
-                cursor++;
-            }
-            cursor_row += size.x;
+    for (x := 0; x < size.x; x++) {
+        for (y := 0; y < (hist[x] * size.y / max_val); y++) {
+            buffer[x + (size.y - y - 1)*size.x] = { 1, 1, 1, 1 };
         }
     }
 
-    theta += Pi / 60.;
-    if (theta > Tau) {
-        theta -= Tau;
-    }
-    cos_sin_theta = { cos(theta), sin(theta) };
+    free(hist);
 }
 
 func main(argc: int, argv: char**): int {
@@ -579,7 +912,7 @@ func main(argc: int, argv: char**): int {
     #assert(surface.format.format == SDL_PIXELFORMAT_RGB888);
     #assert(surface.format.BitsPerPixel == 32);
 
-    starfield_text := """
+    starfield_text :="""
 ✺   　　 　　 ·   ⊹
  *  ⋆ 　　　  ✧  *
   　　　　　　　.  　
@@ -589,17 +922,47 @@ func main(argc: int, argv: char**): int {
 
     starfield := create_starfield(starfield_text);
 
+    min_t := 1000.; //todo float max
+    max_t := 0.;
+    sum_t := 0.;
+    n_t := 0;
+
+    image := make_image({ surface.w, surface.h });
+    blurred := make_image({ surface.w, surface.h });
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
         }
 
-        SDL_RenderClear(renderer);
+        image_clear(&image);
 
-        draw_starfield(surface.pixels, { surface.w, surface.h }, &starfield);
+        t0 := time_now();
+        t0f := float(t0);
+        draw_starfield(&image, &starfield);
+        blur_to(&blurred, &image, 40*sin(t0f) + 41);
+        for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+            bp := image_fetch(&blurred, it.pixel_pos);
+            *it.pixel = color_lerp(*it.pixel, bp, 0.5+sin(t0f*sqrt(2))*0.5);
+            *it.pixel = color_mul(*it.pixel, color_mul1(bp, 40*sin(t0f) + 49));
+        }
+        image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
+        t1 := time_now();
+
+        t := float((t1 - t0)*1000);
+        min_t = min(t, min_t);
+        max_t = max(t, max_t);
+        sum_t += t;
+        n_t++;
+        if (n_t & 31 == 0) {
+            printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, sum_t/n_t);
+            sum_t = 0;
+            n_t = 0;
+        }
+
         SDL_UpdateWindowSurface(app.window.sdl);
 
         fflush(stdout);
+        SDL_Delay(10);
     }
 
     return 0;
