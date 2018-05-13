@@ -1,3 +1,5 @@
+#foreign(header = "<sdl_bits.h>")
+
 @foreign
 struct SDL_Rect {
     x: int;
