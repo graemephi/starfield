@@ -43,6 +43,10 @@ func is_power_2(x: int32): bool {
     return x != 0 && x & (x - 1) == 0;
 }
 
+func log2i(x: int): int {
+    return int(SDL_MostSignificantBitIndex32(uint32(x)));
+}
+
 func clamp(a: float, b: float, x: float): float {
     return (x < a) ? a :
            (x > b) ? b :
@@ -446,10 +450,6 @@ func free_tex(tex: Tex*) {
     }
 }
 
-func log2i(x: int): int {
-    return int(SDL_MostSignificantBitIndex32(uint32(x)));
-}
-
 func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float {
     step_x := src_size.x / (dest_size.x * target_size.x);
     step_y := src_size.y / (dest_size.y * target_size.y);
@@ -457,7 +457,7 @@ func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): fl
 }
 
 func generate_lods(tex: Tex*) {
-    tex.lod_levels = maxi(0, log2i(tex.size.x) - 3);
+    tex.lod_levels = maxi(0, log2i(tex.size.x));
 
     blurry_v := image_copy(&{tex.pixels, tex.size});
     blurry := &blurry_v;
@@ -469,8 +469,8 @@ func generate_lods(tex: Tex*) {
     size := tex.size;
     for (i := 1; i < tex.lod_levels; i++) {
         size = div2i(size, { 2, 2 });
-        #assert(size.x >= 8);
-        #assert(size.y >= 8);
+        #assert(size.x >= 1);
+        #assert(size.y >= 1);
         blur(blurry, 0.707);
         lod := tex.lods + i;
         *lod = make_image(size);
@@ -723,13 +723,13 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = clampi(0, image.size.x - 1, int(x_min * image.size.x));
-    iter.end.x   = clampi(0, image.size.x - 1, int(x_max * image.size.x));
-    iter.start.y = clampi(0, image.size.y - 1, int(y_min * image.size.y));
-    iter.end.y   = clampi(0, image.size.y - 1, int(y_max * image.size.y));
+    iter.start.x = clampi(0, image.size.x, int(x_min * image.size.x));
+    iter.end.x   = clampi(0, image.size.x, int(x_max * image.size.x));
+    iter.start.y = clampi(0, image.size.y, int(y_min * image.size.y));
+    iter.end.y   = clampi(0, image.size.y, int(y_max * image.size.y));
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
-    iter.pos = rect_relative(rect, { float(iter.pixel_pos.x) / image.size.x, float(iter.pixel_pos.y) / image.size.y });
+    iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
     iter.line_start = iter.pos;
     iter.rect = rect;
     iter.image = image;
@@ -768,7 +768,7 @@ func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
-    return image_sample_linear(tex.lods + 0, pos);
+    return image_sample_linear(&{tex.pixels, tex.size}, pos);
 }
 
 func tex_lookup_lod(tex: Tex*, pos: float2, lod: float): Color {
@@ -777,17 +777,15 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float): Color {
     lodf := lod - lodi;
     a := image_sample_linear(tex.lods + lodi, pos);
     b := Color {};
-    if (lodi + 1 < tex.lod_levels) {
+    if (lodi + 1 < tex.lod_levels && lodf != 0) {
         b = image_sample_linear(tex.lods + lodi + 1, pos);
-    } else {
-        #assert(lodf == 0);
     }
     return color_lerp(a, b, lodf);
 }
 
 func image_sample_linear(img: Image*, pos: float2): Color {
-    pos.x *= img.size.x;
-    pos.y *= img.size.y;
+    pos.x *= img.size.x - 0.5;
+    pos.y *= img.size.y - 0.5;
 
     vi := float2_to_int2(pos);
     vf := float2 { pos.x - vi.x, pos.y - vi.y };
@@ -797,7 +795,6 @@ func image_sample_linear(img: Image*, pos: float2): Color {
     c := add2i(vi, {0, 1});
     d := add2i(vi, {1, 1});
 
-    // Clamp? Black? Mirror? Wrap???
     a.x = clampi(0, img.size.x - 1, a.x);
     a.y = clampi(0, img.size.y - 1, a.y);
     b.x = clampi(0, img.size.x - 1, b.x);
@@ -876,14 +873,17 @@ func blur_fetch(row: Color*, len: int, i: int): Color {
 
 func blur_calc_normalisation_factor(radius: float): float {
     // Computed by blurring a rect at a bunch of radiuses within [0.5, 16] and
-    // fitting a least-squares curve to the energy loss. When you don't
-    // interpolate lods you can see this actually adds a little brightness but
-    // it's better than the dimming that happens without it.
+    // fitting a least-squares curve to the square of the energy loss. The
+    // sqrt'd polynomial actually adds a little brightness but it's better than
+    // the dimming that happens without it. The lerp is pure kludge, but seems
+    // to work well.
+    f := 1. / 0.551;
+
     if (radius < 16) {
-        return 1. / sqrt(1.85261426171087e-4 + radius*(-6.28416167917326e-3 + radius*(7.35416423963536e-2 + radius*(-2.28739004991180e-2))));
-    } else {
-        return 1. / 0.55;
+        f = 1. / sqrt(-2.28739004991180e-2 + radius*(7.35416423963536e-2 + radius*(-6.28416167917326e-3 + radius*(1.85261426171087e-4))));
     }
+
+    return lerp(1, f, .707);
 }
 
 
@@ -924,6 +924,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
 
     temp := make_image({src.size.y, src.size.x});
     scratch: Color* = xcalloc(src.size.x, sizeof(Color));
+
     factor := blur_calc_normalisation_factor(radius);
 
     for (y := 0; y < src.size.y; y++) {
@@ -980,7 +981,7 @@ func color_to_rgb8(color: Color): RGB8 {
 func draw_starfield(image: Image*, starfield: Starfield*) {
     for (i := 0; i < starfield.star_count; i++) {
         star := starfield.stars + i;
-        star.rect.rot = rotate(star.rect.rot, { cos(0.05), sin(0.05)});
+        star.rect.rot = rotate(star.rect.rot, {cos(0.05), sin(0.05)});
         r := star.rect;
         r.size.x *= 0.5*cos(float(time_now())) + 0.6;
         r.size.y *= 0.5*cos(float(time_now())) + 0.6;
@@ -1039,11 +1040,10 @@ func main(argc: int, argv: char**): int {
         t0f := float(t0);
         draw_starfield(&image, &starfield);
         draw_outline(image.pixels, image.size, {1, 0, 1, 1});
-
-        // blur_to(&blurred, &image,  3);
+        // blur(&image, 1);
         // for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-        //     bp := image_fetch(&blurred, it.pixel_pos);
-        //     *it.pixel = color_add(*it.pixel, bp);
+        //     bp := image_sample_linear(&blurred, it.pos);
+        //     *it.pixel = color_lerp(*it.pixel, bp, 0.5);
         // }
         image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
         t1 := time_now();
