@@ -2,7 +2,11 @@ import libc { ... }
 import sdl { ... }
 import noir { ... }
 
-// https://en.wikipedia.org/wiki/Einstein_Cross
+#foreign(header = "<xmmintrin.h>")
+@foreign
+func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
+@foreign
+var _MM_FLUSH_ZERO_ON: uint32;
 
 var ImageSize: int2 const = { 500, 500 };
 
@@ -26,6 +30,7 @@ func xmalloc(size: usize): void* {
         #assert(0);
         exit(1);
     }
+    memset(result, 0, size);
     return result;
 }
 
@@ -45,6 +50,10 @@ func is_power_2(x: int32): bool {
 
 func log2i(x: int): int {
     return int(SDL_MostSignificantBitIndex32(uint32(x)));
+}
+
+func square(x: float): float {
+    return x*x;
 }
 
 func clamp(a: float, b: float, x: float): float {
@@ -163,6 +172,48 @@ func magnitude2i(v: int2): float {
     return sqrt((:float)dot2i(v, v));
 }
 
+var random_state: uint32 = 1;
+func random(): uint32 {
+    random_state ^= random_state << 13;
+    random_state ^= random_state >> 17;
+    random_state ^= random_state << 5;
+    return random_state;
+}
+
+const int_23_mask = 0b00000000_011111111111111111111111;
+const int_23_reciprocal = 1. / int_23_mask;
+func random01(): float {
+    r := random() & int_23_mask;
+    return r * int_23_reciprocal;
+}
+
+func random_unit_vector2(): float2 {
+    theta := random01() * Tau;
+    return { cos(theta), sin(theta) };
+}
+
+func randomn(lo: int, hi: int): int {
+    return random() % (hi - lo) + lo;
+}
+
+func random_poisson(alpha: float): int {
+    result := -1;
+    L := exp(-alpha);
+    p := 1.;
+    do {
+        p *= random01();
+        result++;
+    } while (p > L);
+    return result;
+}
+
+func random_normal(): float {
+    // This is not actually normal / gaussian. It's biased towards zero and can
+    // produce crazy outliers, but it's good enough.
+    p := clamp(1e-5, 1 - 1e-5, random01());
+    return log(p / (1 - p)) * 0.626657068657750;
+}
+
 struct Color {
     r, g, b, a: float;
 }
@@ -175,10 +226,89 @@ struct RGB8 {
 #static_assert(sizeof(RGB8) == 4)
 
 struct Tex {
-    size: int2;
     pixels: Color*;
+    size: int2;
     lod_levels: int;
-    lods: Image*;
+}
+
+func make_tex(size: int2): Tex {
+    #assert(is_power_2(size.x));
+    #assert(size.x == size.y);
+    // Allocate space for lods as well.
+    pixels := xcalloc(size.x*size.y*4/3, sizeof(Color));
+    return Tex {
+        size = size,
+        lod_levels = 1,
+        pixels = pixels
+    };
+}
+
+func free_tex(tex: Tex*) {
+    #assert(tex.pixels);
+    free(tex.pixels);
+    tex.pixels = 0;
+    tex.size = { 0, 0 };
+}
+
+func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float {
+    step_x := src_size.x / (dest_size.x * target_size.x);
+    step_y := src_size.y / (dest_size.y * target_size.y);
+    return max(0, log2(max(step_x, step_y)));
+}
+
+func generate_lods(tex: Tex*) {
+    #assert(tex.size.x == tex.size.y);
+    tex.lod_levels = maxi(1, log2i(tex.size.x));
+
+    blurry := image_copy(&{tex.pixels, tex.size});
+
+    size := tex.size.x;
+    for (i := 1; i < tex.lod_levels; i++) {
+        #assert(size >= 1);
+        blurry_subrect := Image { blurry.pixels, { size, size }};
+        prev_lod := tex_get_lod(tex, i - 1);
+        blur_to(&blurry_subrect, &prev_lod, .707);
+        lod := tex_get_lod(tex, i);
+
+        for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
+            #assert(image_sample_nearest(&lod, it.pos).r == it.pixel.r);
+            *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+        }
+
+        size /= 2;
+    }
+
+    free_image(&blurry);
+}
+
+func tex_get_lod(tex: Tex*, lod: int): Image {
+    #assert(lod >= 0);
+    if (lod >= tex.lod_levels) {
+        return {};
+    }
+
+    lod_size := tex.size.x >> lod;
+    pixels := tex.pixels + (tex.size.x*tex.size.x - lod_size*lod_size)*4/3;
+
+    return Image { pixels = pixels, size = { lod_size, lod_size }};
+}
+
+func tex_lookup(tex: Tex*, pos: float2): Color {
+    return image_sample_linear(&{tex.pixels, tex.size}, pos);
+}
+
+func tex_lookup_lod(tex: Tex*, pos: float2, lod: float): Color {
+    lodi := int(lod);
+    lodf := lod - lodi;
+    a_lod := tex_get_lod(tex, lodi);
+    b_lod := tex_get_lod(tex, lodi + 1);
+    a := image_sample_linear(&a_lod, pos);
+    if (lodf > 0.00015) { // ~srgb(1/255)/2
+        b := image_sample_linear(&b_lod, pos);
+        return color_lerp(a, b, lodf);
+    }
+
+    return a;
 }
 
 // Star types:
@@ -207,8 +337,7 @@ struct StarsHeader {
 struct Star {
     rect: Rect;
     type: StarType*;
-    color: Color*;
-    lod: int;
+    color: Color;
 }
 
 struct Starfield {
@@ -244,10 +373,14 @@ func push_star(starfield: Starfield*, star: Star) {
         header = xrealloc(header, sizeof(Star)*new_cap + sizeof(StarsHeader));
         starfield.stars = header.data;
         header.cap = new_cap;
-
     }
 
+    init_star_type(star.type);
     starfield.stars[header.len++] = star;
+}
+
+func stars_len(starfield: Starfield*): int {
+    return (:int)stars_header(starfield.stars).len;
 }
 
 func consume_star(c: char const*, star: Star*): char const* {
@@ -306,27 +439,41 @@ func consume_star(c: char const*, star: Star*): char const* {
         next = 1;
     }
 
+    init_star_type(star.type);
     return c + next;
 }
 
-var random_state: uint32 = 1;
-func random(): uint32 {
-    random_state ^= random_state << 13;
-    random_state ^= random_state >> 17;
-    random_state ^= random_state << 5;
-    return random_state;
-}
+// https://en.wikipedia.org/wiki/Stellar_classification#cite_note-9
+// https://en.wikipedia.org/wiki/File:TernaryColorTmap.PNG
+var star_colors: Color[] = {
+    { 0xff / 255., 0x01 / 255., 0.,          1. },
+    { 0xff / 255., 0x0f / 255., 0.,          1. },
+    { 0xff / 255., 0x29 / 255., 0x03 / 255., 1. },
+    { 0xff / 255., 0x49 / 255., 0x0d / 255., 1. },
+    { 0xff / 255., 0x6a / 255., 0x1f / 255., 1. },
+    { 0xff / 255., 0xa6 / 255., 0x59 / 255., 1. },
+    { 0xff / 255., 0xc0 / 255., 0x7f / 255., 1. },
+    { 0xff / 255., 0xd8 / 255., 0xa8 / 255., 1. },
+    { 0xff / 255., 0xed / 255., 0xd3 / 255., 1. },
+    { 1,           1,           1,           1. },
+    { 0xdb / 255., 0xe9 / 255., 0xff / 255., 1. },
+    { 0x8e / 255., 0xb4 / 255., 0xff / 255., 1. },
+    { 0x6e / 255., 0x9a / 255., 0xff / 255., 1. },
+    { 0x45 / 255., 0x73 / 255., 0xff / 255., 1. },
+    { 0x2f / 255., 0x5c / 255., 0xff / 255., 1. },
+};
+const star_color_count = (sizeof(star_colors)/sizeof(Color));
 
-const int_23_mask = 0b00000000_011111111111111111111111;
-const int_23_reciprocal = 1. / int_23_mask;
-func random01(): float {
-    r := random() & int_23_mask;
-    return r * int_23_reciprocal;
-}
+func random_star_color(): Color {
+    offset := 8;
+    r := offset + random_normal() * (star_color_count/6);
+    x := clamp(0, star_color_count - 1, r);
 
-func random_unit_vector2(): float2 {
-    theta := random01() * Tau;
-    return { cos(theta), sin(theta) };
+    xi := int(x);
+    xf := x - xi;
+    color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
+    color.a = random01() * (float(xi) / star_color_count);
+    return color;
 }
 
 func create_starfield(starfield: char const*): Starfield {
@@ -344,17 +491,16 @@ func create_starfield(starfield: char const*): Starfield {
         c = consume_star(c, &star);
 
         if (star.type) {
-            init_star_type(star.type);
-
             if (star.type.id == StarType_BigSpace) {
                 line_width += 1;
             } else if (star.type.id != StarType_Space) {
                 star_count++;
 
-                star.rect.pos = { float(line_width), float(height) };
-                xx := 1 + random01();
-                star.rect.size = float2 { xx, xx };
+                star.rect.pos = { float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 };
+                x := 1 + square(random_normal()) / 10.;
+                star.rect.size = float2 { x, x };
                 star.rect.rot = random_unit_vector2();
+                star.color = random_star_color();
 
                 push_star(&result, star);
             }
@@ -377,8 +523,7 @@ func create_starfield(starfield: char const*): Starfield {
     x_pad := 4 + (R - width) / 2;
     y_pad := 4 + (R - height) / 2;
 
-    result.star_count = star_count;
-    for (i := 0; i < star_count; i++) {
+    for (i := 0; i < stars_len(&result); i++) {
         s := result.stars + i;
         s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
@@ -386,33 +531,66 @@ func create_starfield(starfield: char const*): Starfield {
         s.rect.size.y = s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
+    star_count_noise := make_tex({ 4, 4 });
+    density := square(random_normal());
+    for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
+        // TODO: Single channel texture!
+        it.pixel.r = (:float)random_poisson(fabs(density + random_normal()));
+    }
+
+    tiles := 25;
+    w := 1. / tiles;
+    background_star_size := 0.01;
+    xy := float2 {};
+    for (i := 0; i < tiles; i++) {
+        for (j := 0; j < tiles; j++) {
+            count := (:int)max(1., tex_lookup(&star_count_noise, add2(xy, {w/2, w/2})).r);
+            for (k := 0; k < count; k++) {
+                size := max(2. / ImageSize.x, random_normal()*background_star_size);
+
+                push_star(&result, {
+                    rect = {
+                        pos = add2(xy, {random01() * w, random01() * w}),
+                        size = { size, size },
+                        rot = random_unit_vector2()
+                    },
+                    type = star_types + randomn(1, StarType_BigSpace),
+                    color =  random_star_color()
+                });
+            }
+
+            xy.x += w;
+        }
+
+        xy.x = 0;
+        xy.y += w;
+    }
+
+    free_tex(&star_count_noise);
+
+    result.star_count = stars_len(&result);
     return result;
 }
 
 
 func draw_simple_star(buffer: Color*, size: int2) {
-    center := div2(int2_to_float2(size), { 2., 2. });
-    range := distance2({size.x / 2., 0}, center);
-    radius := distance2({}, center);
+    for (it := pixel_iter_begin(&{buffer, size}, {}); pixel_iter_next(&it)) {
+        c := clamp01(distance2(it.pos, { 0.5, 0.5 }) * 2);
+        rel := sub2(it.pos, { 0.5, 0.5 });
 
-    col := buffer;
-    for (y := 0; y < size.y; y++) {
-        for (x := 0; x < size.x; x++) {
-            xy := int2_to_float2({x, y});
-            c := distance2(xy, center) / radius;
-            rel := sub2(xy, center);
+        spike := clamp01(fabs(rel.x * rel.y) * 100);
+        color := 1 - c;
+        color *= color;
+        color *= color;
+        color *= color;
+        color *= color;
+        color *= 4;
 
-            spike := clamp01(fabs(rel.x * rel.y) / range);
-            color := (1 - c)*(1 - spike);
-
-            col.a = color;
-            if (c < range) {
-                col.r = color * col.a;
-                col.g = color * col.a;
-                col.b = color * col.a;
-            }
-
-            col++;
+        it.pixel.a = color;
+        if (c < 1) {
+            it.pixel.r = color * it.pixel.a;
+            it.pixel.g = color * it.pixel.a;
+            it.pixel.b = color * it.pixel.a;
         }
     }
 }
@@ -427,60 +605,6 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
         buffer[i * size.x] = color;
         buffer[i * size.x + (size.x - 1)] = color;
     }
-}
-
-func make_tex(size: int2): Tex {
-    #assert(is_power_2(size.x));
-    #assert(is_power_2(size.y));
-    // just interpolate for non-squares
-    #assert(size.x == size.y);
-    return Tex { size = size, pixels = xcalloc(size.x * size.y, sizeof(Color)) };
-}
-
-func free_tex(tex: Tex*) {
-    #assert(tex.pixels);
-    free(tex.pixels);
-    tex.pixels = 0;
-    tex.size = { 0, 0 };
-    for (i := 1; i < tex.lod_levels; i++) {
-        if (tex.lods[i].pixels) {
-            free(tex.lods[i].pixels);
-            tex.lods[i].pixels = 0;
-        }
-    }
-}
-
-func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float {
-    step_x := src_size.x / (dest_size.x * target_size.x);
-    step_y := src_size.y / (dest_size.y * target_size.y);
-    return log2(max(step_x, step_y));
-}
-
-func generate_lods(tex: Tex*) {
-    tex.lod_levels = maxi(0, log2i(tex.size.x));
-
-    blurry_v := image_copy(&{tex.pixels, tex.size});
-    blurry := &blurry_v;
-
-    tex.lods = calloc(maxi(1, tex.lod_levels), sizeof(Image));
-    tex.lods[0].size = tex.size;
-    tex.lods[0].pixels = tex.pixels;
-
-    size := tex.size;
-    for (i := 1; i < tex.lod_levels; i++) {
-        size = div2i(size, { 2, 2 });
-        #assert(size.x >= 1);
-        #assert(size.y >= 1);
-        blur(blurry, 0.707);
-        lod := tex.lods + i;
-        *lod = make_image(size);
-
-        for (it := pixel_iter_begin(lod, {}); pixel_iter_next(&it)) {
-            *it.pixel = image_sample_nearest(blurry, it.pos);
-        }
-    }
-
-    free_image(blurry);
 }
 
 func init_star_type(type: StarType*) {
@@ -504,11 +628,11 @@ func init_star_type(type: StarType*) {
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
         case 1: // *
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 32, 32});
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 2: // +
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 32, 32});
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 3: // .
@@ -520,35 +644,35 @@ func init_star_type(type: StarType*) {
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 5: // ˚
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 6: // ⊹
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 7: // ⋆
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 8: // ✦
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 9: // ✧
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 10: // ✫
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 11: // ✹
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 12: // ✺
-            type.tex = make_tex({ 32, 32 });
+            type.tex = make_tex({ 64, 64 });
             type.size = div2(int2_to_float2(type.tex.size), int2_to_float2(ImageSize));
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 13: // '　'
@@ -653,7 +777,7 @@ func blend(dest: Color, src: Color): Color {
         src.r + (dest.r * (1. - src.a)),
         src.g + (dest.g * (1. - src.a)),
         src.b + (dest.b * (1. - src.a)),
-        src.a + dest.a
+        src.a + (dest.a * (1. - src.a))
     };
     return result;
 }
@@ -687,12 +811,17 @@ struct PixelIter {
     rect: Rect;
     pixel_pos: int2;
     line_start: float2;
-
     dx: float2;
     dy: float2;
-    lod_level: float;
+
     pos: float2;
     pixel: Color*;
+}
+
+func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
+    #static_assert(offsetof(Tex, pixels) == offsetof(Image, pixels));
+    #static_assert(offsetof(Tex, size) == offsetof(Image, size));
+    return pixel_iter_begin((:Image*)tex, rect);
 }
 
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
@@ -723,10 +852,10 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = clampi(0, image.size.x, int(x_min * image.size.x));
-    iter.end.x   = clampi(0, image.size.x, int(x_max * image.size.x));
-    iter.start.y = clampi(0, image.size.y, int(y_min * image.size.y));
-    iter.end.y   = clampi(0, image.size.y, int(y_max * image.size.y));
+    iter.start.x = clampi(0, image.size.x, int(x_min * image.size.x - 0.5));
+    iter.end.x   = clampi(0, image.size.x, int(x_max * image.size.x - 0.5));
+    iter.start.y = clampi(0, image.size.y, int(y_min * image.size.y - 0.5));
+    iter.end.y   = clampi(0, image.size.y, int(y_max * image.size.y - 0.5));
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -758,56 +887,43 @@ func pixel_iter_next(it: PixelIter*): bool {
     return false;
 }
 
-func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
-    lod := compute_lod_level(dest.size, target.size, tex.size);
-    lod = clamp(0, float(tex.lod_levels - 1), lod);
-    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
-        *it.pixel = blend(*it.pixel, rgba);
+func wrap(x: int, m: int): int {
+    result := x % m;
+    if (result < 0) {
+        result += m;
     }
-}
-
-func tex_lookup(tex: Tex*, pos: float2): Color {
-    return image_sample_linear(&{tex.pixels, tex.size}, pos);
-}
-
-func tex_lookup_lod(tex: Tex*, pos: float2, lod: float): Color {
-    #assert(lod < tex.lod_levels);
-    lodi := int(lod);
-    lodf := lod - lodi;
-    a := image_sample_linear(tex.lods + lodi, pos);
-    b := Color {};
-    if (lodi + 1 < tex.lod_levels && lodf != 0) {
-        b = image_sample_linear(tex.lods + lodi + 1, pos);
-    }
-    return color_lerp(a, b, lodf);
+    return result;
 }
 
 func image_sample_linear(img: Image*, pos: float2): Color {
-    pos.x *= img.size.x - 0.5;
-    pos.y *= img.size.y - 0.5;
+    if (img.pixels == 0) {
+        return {};
+    }
+
+    pos.x = (pos.x * img.size.x) - 0.5;
+    pos.y = (pos.y * img.size.y) - 0.5;
 
     vi := float2_to_int2(pos);
     vf := float2 { pos.x - vi.x, pos.y - vi.y };
 
     a := vi;
-    b := add2i(vi, {1, 0});
-    c := add2i(vi, {0, 1});
-    d := add2i(vi, {1, 1});
+    b := add2i(a, {1, 0});
+    c := add2i(a, {0, 1});
+    d := add2i(a, {1, 1});
 
-    a.x = clampi(0, img.size.x - 1, a.x);
-    a.y = clampi(0, img.size.y - 1, a.y);
-    b.x = clampi(0, img.size.x - 1, b.x);
-    b.y = clampi(0, img.size.y - 1, b.y);
-    c.x = clampi(0, img.size.x - 1, c.x);
-    c.y = clampi(0, img.size.y - 1, c.y);
-    d.x = clampi(0, img.size.x - 1, d.x);
-    d.y = clampi(0, img.size.y - 1, d.y);
+    a.x = wrap(a.x, img.size.x);
+    b.x = wrap(b.x, img.size.x);
+    c.x = wrap(c.x, img.size.x);
+    d.x = wrap(d.x, img.size.x);
+    a.y = wrap(a.y, img.size.y);
+    b.y = wrap(b.y, img.size.y);
+    c.y = wrap(c.y, img.size.y);
+    d.y = wrap(d.y, img.size.y);
 
-    A := img.pixels[a.x + a.y*img.size.x];
-    B := img.pixels[b.x + b.y*img.size.x];
-    C := img.pixels[c.x + c.y*img.size.x];
-    D := img.pixels[d.x + d.y*img.size.x];
+    A := image_fetch(img, a);
+    B := image_fetch(img, b);
+    C := image_fetch(img, c);
+    D := image_fetch(img, d);
 
     AB := color_lerp(A, B, vf.x);
     CD := color_lerp(C, D, vf.x);
@@ -817,19 +933,33 @@ func image_sample_linear(img: Image*, pos: float2): Color {
 }
 
 func image_sample_nearest(img: Image*, pos: float2): Color {
-    if (pos.x < 0 || pos.x >= 1 || pos.y < 0 || pos.y >= 1) {
-        return {};
-    }
-    p := int2 { int(pos.x * img.size.x), int(pos.y * img.size.y) };
-    return img.pixels[p.x + p.y*img.size.x];
+    p := int2 { int(round(pos.x * img.size.x - 0.5)), int(round(pos.y * img.size.y - 0.5)) };
+    return image_fetch(img, p);
 }
 
 func image_fetch(img: Image*, pos: int2): Color {
-    if (pos.x < 0 || pos.x >= img.size.x || pos.y < 0 || pos.y >= img.size.y) {
+    if (img.pixels == 0 || pos.x < 0 || pos.x >= img.size.x || pos.y < 0 || pos.y >= img.size.y) {
         return {};
     }
 
     return img.pixels[pos.x + pos.y*img.size.x];
+}
+
+func draw_tex(dest: Image*, target: Rect, tex: Tex*, colorise: Color) {
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
+}
+
+func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        rgba = color_mul(rgba, multiply_color);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
 }
 
 func make_image(size: int2): Image {
@@ -871,45 +1001,29 @@ func blur_fetch(row: Color*, len: int, i: int): Color {
     return row[i];
 }
 
-func blur_calc_normalisation_factor(radius: float): float {
-    // Computed by blurring a rect at a bunch of radiuses within [0.5, 16] and
-    // fitting a least-squares curve to the square of the energy loss. The
-    // sqrt'd polynomial actually adds a little brightness but it's better than
-    // the dimming that happens without it. The lerp is pure kludge, but seems
-    // to work well.
-    f := 1. / 0.551;
-
-    if (radius < 16) {
-        f = 1. / sqrt(-2.28739004991180e-2 + radius*(7.35416423963536e-2 + radius*(-6.28416167917326e-3 + radius*(1.85261426171087e-4))));
-    }
-
-    return lerp(1, f, .707);
-}
-
-
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
     #assert(radius > 0);
     r := int(radius);
     a := radius - r;
 
-    r_rcp :=  1. / (2 * radius + 1);
-    c_acc := color_mul1(src[r], a);
+    r_rcp :=  1. / (2. * radius + 1.);
+    c_acc := color_mul1(blur_fetch(src, len, r), a);
 
     for (i := 0; i < r; i++) {
-        c_acc = color_add(c_acc, src[i]);
+        c_acc = color_add(c_acc, blur_fetch(src, len, i));
     }
 
     for (i := 0; i < len; i++) {
         dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r), blur_fetch(src, len, i+r+1), a));
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
         c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
     }
 }
 
-func blur_transpose_and_scale(dest: Color*, src: Color*, width: int, scale: float) {
-    for (i := 0; i < width; i++) {
-        *dest = color_mul1(*src, scale);
-        dest += width;
+func blur_transpose(dest: Color*, dest_width: int, src: Color*, src_width: int) {
+    for (i := 0; i < src_width; i++) {
+        *dest = *src;
+        dest += dest_width;
         src++;
     }
 }
@@ -923,9 +1037,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     #assert(dest.size.y == src.size.y);
 
     temp := make_image({src.size.y, src.size.x});
-    scratch: Color* = xcalloc(src.size.x, sizeof(Color));
-
-    factor := blur_calc_normalisation_factor(radius);
+    scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
 
     for (y := 0; y < src.size.y; y++) {
         row_src := src.pixels + y*src.size.x;
@@ -933,7 +1045,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
         blur_row(scratch, row_src, src.size.x, radius);
         blur_row(row_dest, scratch, src.size.x, radius);
         blur_row(scratch, row_dest, src.size.x, radius);
-        blur_transpose_and_scale(temp.pixels + y, scratch, src.size.x, factor);
+        blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
     }
 
     for (y := 0; y < temp.size.y; y++) {
@@ -941,12 +1053,92 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
         blur_row(scratch, row, temp.size.x, radius);
         blur_row(row, scratch, temp.size.x, radius);
         blur_row(scratch, row, temp.size.x, radius);
-        blur_transpose_and_scale(dest.pixels + y, scratch, temp.size.y, factor);
+        blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
     }
 
     free_image(&temp);
+    free(scratch);
 }
 
+func diffract_row_color(dest: Color*, src: Color*, len: int, inner_radius: float, outer_radius: float, channel: int) {
+
+}
+
+func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float, outer_radius: float) {
+    #assert(inner_radius > 0);
+    #assert(outer_radius > inner_radius);
+
+    r := int(inner_radius);
+    r2 := int(outer_radius);
+    a := inner_radius - r;
+    a2 := outer_radius - r2;
+
+    r_rcp :=  1. / (2 * (outer_radius - inner_radius) + 1);
+    c_acc := color_mul1(blur_fetch(src, len, r2), a2);
+    c_acc = color_sub(c_acc, color_mul1(blur_fetch(src, len, r), 1 - a));
+
+    for (i := r; i < r2; i++) {
+        c_acc = color_add(c_acc, blur_fetch(src, len, i));
+    }
+
+    for (i := 0; i < len; i++) {
+        dest[i] = color_mul1(color_add(c_acc, src[i]), r_rcp);
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r2+1), blur_fetch(src, len, i+r2+2), a2));
+        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r2), blur_fetch(src, len, i-r2-1), a2));
+        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i+r+2), blur_fetch(src, len, i+r+1), a));
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i-r-1), blur_fetch(src, len, i-r), a));
+    }
+}
+
+func diffraction(img: Image*, inner_radius: float, outer_radius: float) {
+    convolution_iters := 4;
+
+    temp := make_image(img.size);
+    transpose := make_image({img.size.y, img.size.x});
+    scratch_a: Color* = xcalloc(maxi(img.size.x, img.size.y), sizeof(Color));
+    scratch_b: Color* = xcalloc(maxi(img.size.x, img.size.y), sizeof(Color));
+
+    for (y := 0; y < img.size.y; y++) {
+        row := img.pixels + y*img.size.x;
+        diffract_row(scratch_a, row, img.size.x, inner_radius, outer_radius);
+        for (i := 0; i < convolution_iters; i++) {
+            diffract_row(scratch_b, scratch_a, img.size.x, inner_radius, outer_radius);
+            diffract_row(scratch_a, scratch_b, img.size.x, inner_radius, outer_radius);
+        }
+
+        temp_row := temp.pixels + y*img.size.x;
+        for (x := 0; x < img.size.x; x++) {
+            temp_row[x] = scratch_a[x];
+        }
+
+        blur_transpose(transpose.pixels + y, transpose.size.x, row, img.size.x);
+    }
+
+    for (y := 0; y < transpose.size.y; y++) {
+        row := transpose.pixels + y*transpose.size.x;
+        diffract_row(scratch_a, row, transpose.size.x, inner_radius, outer_radius);
+        for (i := 0; i < convolution_iters; i++) {
+            diffract_row(scratch_b, scratch_a, transpose.size.x, inner_radius, outer_radius);
+            diffract_row(scratch_a, scratch_b, transpose.size.x, inner_radius, outer_radius);
+        }
+
+        column_cursor := temp.pixels + y;
+        for (i := 0; i < temp.size.y; i++) {
+            *column_cursor = color_add(*column_cursor, scratch_a[i]);
+            column_cursor += temp.size.x;
+        }
+    }
+
+    for (i := 0; i < img.size.x*img.size.y; i++) {
+        img.pixels[i] = color_add(img.pixels[i], temp.pixels[i]);
+    }
+
+
+    free_image(&temp);
+    free_image(&transpose);
+    free(scratch_a);
+    free(scratch_b);
+}
 
 func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     #assert(src.size.x == size.x);
@@ -957,7 +1149,6 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
         dest++;
     }
 }
-
 
 func srgb(val: float): float {
     val = clamp01(val);
@@ -978,14 +1169,10 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-func draw_starfield(image: Image*, starfield: Starfield*) {
-    for (i := 0; i < starfield.star_count; i++) {
+func draw_starfield(dest: Image*, starfield: Starfield*) {
+    for (i := starfield.star_count - 1; i >= 0; i--) {
         star := starfield.stars + i;
-        star.rect.rot = rotate(star.rect.rot, {cos(0.05), sin(0.05)});
-        r := star.rect;
-        r.size.x *= 0.5*cos(float(time_now())) + 0.6;
-        r.size.y *= 0.5*cos(float(time_now())) + 0.6;
-        draw_tex(image, r, &star.type.tex);
+        draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
     }
 }
 
@@ -995,6 +1182,8 @@ func time_now(): double {
 }
 
 func main(argc: int, argv: char**): int {
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+
     if (!app_init()) {
         print_and_clear_error();
         return 1;
@@ -1019,44 +1208,53 @@ func main(argc: int, argv: char**): int {
   ✫ 　　  +
 """;
 
+
     starfield := create_starfield(starfield_text);
 
     min_t := 1000.; //todo float max
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
-
+    t_reset := time_now();
 
     image := make_image({ surface.w, surface.h });
-    // blurred := make_image({ surface.w, surface.h });
+    blurred := make_image({ surface.w, surface.h });
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
         }
 
-        image_clear(&image);
+        if (true  || !n_t || app.mouse.left_button.pressed) {
+            image_clear(&image);
 
-        t0 := time_now();
-        t0f := float(t0);
-        draw_starfield(&image, &starfield);
-        draw_outline(image.pixels, image.size, {1, 0, 1, 1});
-        // blur(&image, 1);
-        // for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-        //     bp := image_sample_linear(&blurred, it.pos);
-        //     *it.pixel = color_lerp(*it.pixel, bp, 0.5);
-        // }
-        image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
-        t1 := time_now();
+            t0 := time_now();
+            t0f := float(t0);
+            draw_starfield(&image, &starfield);
+            // draw_outline(image.pixels, image.size, {1, 0, 1, 1});
+            diffraction(&image, 3, 6);
+            blur_to(&blurred, &image, 4);
+            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+                bp := image_sample_linear(&blurred, it.pos);
+                mbp := color_mul(*it.pixel, bp);
+                xbp := color_lerp(bp, mbp, .75);
+                *it.pixel = color_add(*it.pixel, xbp);
+            }
+            image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
+            t1 := time_now();
 
-        t := float((t1 - t0)*1000);
-        min_t = min(t, min_t);
-        max_t = max(t, max_t);
-        sum_t += t;
-        n_t++;
-        if (n_t & 31 == 0) {
-            printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, sum_t/n_t);
-            sum_t = 0;
-            n_t = 0;
+            t := float((t1 - t0)*1000);
+            min_t = min(t, min_t);
+            max_t = max(t, max_t);
+            sum_t += t;
+            n_t++;
+
+            if (app.mouse.left_button.pressed) {
+                printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, sum_t/n_t);
+
+                free(stars_header(starfield.stars));
+                starfield = create_starfield(starfield_text);
+                t_reset = t0;
+            }
         }
 
         SDL_UpdateWindowSurface(app.window.sdl);
