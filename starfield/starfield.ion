@@ -531,7 +531,7 @@ func create_starfield(starfield: char const*): Starfield {
         s.rect.size.y = s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
-    star_count_noise := make_tex({ 4, 4 });
+    star_count_noise := make_tex({ 8 ,8 });
     density := square(random_normal());
     for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
@@ -541,20 +541,20 @@ func create_starfield(starfield: char const*): Starfield {
     tiles := 25;
     w := 1. / tiles;
     background_star_size := 0.01;
-    xy := float2 {};
+    xy := float2 { w / 2., w / 2. };
     for (i := 0; i < tiles; i++) {
         for (j := 0; j < tiles; j++) {
-            count := (:int)max(1., tex_lookup(&star_count_noise, add2(xy, {w/2, w/2})).r);
+            count := (:int)max(1., tex_lookup(&star_count_noise, xy).r);
             for (k := 0; k < count; k++) {
                 size := max(2. / ImageSize.x, random_normal()*background_star_size);
 
                 push_star(&result, {
                     rect = {
-                        pos = add2(xy, {random01() * w, random01() * w}),
+                        pos = add2(xy, {(random01()) * w, (random01()) * w}),
                         size = { size, size },
                         rot = random_unit_vector2()
                     },
-                    type = star_types + randomn(1, StarType_BigSpace),
+                    type = star_types + 1,
                     color =  random_star_color()
                 });
             }
@@ -1060,38 +1060,45 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     free(scratch);
 }
 
-func diffract_row_color(dest: Color*, src: Color*, len: int, inner_radius: float, outer_radius: float, channel: int) {
-
+func diffract_fetch(src: Color*, len: int, i: int, channel: int): float {
+    #assert(channel >= 0 && channel < sizeof(Color));
+    color := blur_fetch(src, len, i);
+    return ((:float*)&color)[channel];
 }
 
-func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float, outer_radius: float) {
-    #assert(inner_radius > 0);
-    #assert(outer_radius > inner_radius);
+func diffract_row(dest: Color*, src: Color*, len: int, inner_radius_mono: float, outer_radius_mono: float) {
+    for (channel := 0; channel < 3; channel++) {
+        inner_radius := inner_radius_mono + (channel * inner_radius_mono) / 3.6666;
+        outer_radius := outer_radius_mono + (channel * outer_radius_mono) / 3.6666;
 
-    r := int(inner_radius);
-    r2 := int(outer_radius);
-    a := inner_radius - r;
-    a2 := outer_radius - r2;
+        #assert(inner_radius > 0);
+        #assert(outer_radius > inner_radius);
 
-    r_rcp :=  1. / (2 * (outer_radius - inner_radius) + 1);
-    c_acc := color_mul1(blur_fetch(src, len, r2), a2);
-    c_acc = color_sub(c_acc, color_mul1(blur_fetch(src, len, r), 1 - a));
+        r := int(inner_radius);
+        r2 := int(outer_radius);
+        a := inner_radius - r;
+        a2 := outer_radius - r2;
 
-    for (i := r; i < r2; i++) {
-        c_acc = color_add(c_acc, blur_fetch(src, len, i));
-    }
+        r_rcp :=  1. / (2 * (outer_radius - inner_radius) + 1);
+        c_acc := diffract_fetch(src, len, r2, channel) * a2;
+        c_acc -= diffract_fetch(src, len, r, channel) * (1 - a);
 
-    for (i := 0; i < len; i++) {
-        dest[i] = color_mul1(color_add(c_acc, src[i]), r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r2+1), blur_fetch(src, len, i+r2+2), a2));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r2), blur_fetch(src, len, i-r2-1), a2));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i+r+2), blur_fetch(src, len, i+r+1), a));
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i-r-1), blur_fetch(src, len, i-r), a));
+        for (i := r + 1; i < r2; i++) {
+            c_acc += diffract_fetch(src, len, i, channel);
+        }
+
+        for (i := 0; i < len; i++) {
+            ((:float*)(dest + i))[channel] = (c_acc + ((:float*)(src + i))[channel]) * r_rcp;
+            c_acc += lerp(diffract_fetch(src, len, i+r2+1, channel), diffract_fetch(src, len, i+r2+2, channel), a2);
+            c_acc -= lerp(diffract_fetch(src, len, i-r2, channel), diffract_fetch(src, len, i-r2-1, channel), a2);
+            c_acc -= lerp(diffract_fetch(src, len, i+r+2, channel), diffract_fetch(src, len, i+r+1, channel), a);
+            c_acc += lerp(diffract_fetch(src, len, i-r-1, channel), diffract_fetch(src, len, i-r, channel), a);
+        }
     }
 }
 
 func diffraction(img: Image*, inner_radius: float, outer_radius: float) {
-    convolution_iters := 4;
+    convolution_iters := 5;
 
     temp := make_image(img.size);
     transpose := make_image({img.size.y, img.size.x});
@@ -1224,14 +1231,16 @@ func main(argc: int, argv: char**): int {
             print_and_clear_error();
         }
 
-        if (true  || !n_t || app.mouse.left_button.pressed) {
+        if (!n_t || app.mouse.left_button.pressed) {
             image_clear(&image);
 
             t0 := time_now();
             t0f := float(t0);
             draw_starfield(&image, &starfield);
             // draw_outline(image.pixels, image.size, {1, 0, 1, 1});
-            diffraction(&image, 3, 6);
+            // d := 6 + random01() * 4;
+
+            diffraction(&image, 4, 7);
             blur_to(&blurred, &image, 4);
             for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
                 bp := image_sample_linear(&blurred, it.pos);
