@@ -1164,9 +1164,8 @@ func diffraction(img: Image*, radius: float) {
 
     red := planes;
     diffract_plane(red, scratch, transpose, img.size, inner_radius, outer_radius);
-    if (true) {
-        diffract_plane(transpose, scratch, 0, img.size, inner_radius, outer_radius);
-    }
+    diffract_plane(transpose, scratch, 0, img.size, inner_radius, outer_radius);
+
     // Can we do this step by row?
     for (i := 0; i < img.size.x; i++) {
         for (j := 0; j < img.size.y; j++) {
@@ -1176,9 +1175,8 @@ func diffraction(img: Image*, radius: float) {
 
     green := planes + pixel_count;
     diffract_plane(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
-    if (true) {
     diffract_plane(transpose, scratch, 0, img.size, inner_radius * 1.1, outer_radius * 1.2);
-    }
+
     for (i := 0; i < img.size.x; i++) {
         for (j := 0; j < img.size.y; j++) {
             green[i + j*img.size.x] += transpose[j + i*img.size.y];
@@ -1187,9 +1185,8 @@ func diffraction(img: Image*, radius: float) {
 
     blue := planes + 2*pixel_count;
     diffract_plane(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
-    if (true) {
     diffract_plane(transpose, scratch, 0, img.size, inner_radius * 1.2, outer_radius * 1.4);
-    }
+
     for (i := 0; i < img.size.x; i++) {
         for (j := 0; j < img.size.y; j++) {
             blue[i + j*img.size.x] += transpose[j + i*img.size.y];
