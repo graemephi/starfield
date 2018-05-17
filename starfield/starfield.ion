@@ -2,6 +2,9 @@ import libc { ... }
 import sdl { ... }
 import noir { ... }
 
+@foreign
+func isnan(f: float): bool;
+
 #foreign(header = "<xmmintrin.h>")
 @foreign
 func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
@@ -464,10 +467,28 @@ var star_colors: Color[] = {
 };
 const star_color_count = (sizeof(star_colors)/sizeof(Color));
 
+func mod(x: float, m: float): float {
+    if (x < 0) {
+        x = m - x;
+    }
+    r := x / m;
+    q := r - int(r);
+    p := q * m;
+    return p;
+}
+
+func wrap(x: float, m: float): float {
+    y := mod(x, m * 2);
+    if (y > m) {
+        y -= (y - m);
+    }
+    return y;
+}
 func random_star_color(): Color {
     offset := 8;
-    r := offset + random_normal() * (star_color_count/6);
-    x := clamp(0, star_color_count - 1, r);
+    r := offset + random_normal() * (star_color_count / 8);
+    x := wrap(r, star_color_count - 1);
+    #assert(x >= 0 && x < star_color_count);
 
     xi := int(x);
     xf := x - xi;
@@ -887,7 +908,7 @@ func pixel_iter_next(it: PixelIter*): bool {
     return false;
 }
 
-func wrap(x: int, m: int): int {
+func wrapi(x: int, m: int): int {
     result := x % m;
     if (result < 0) {
         result += m;
@@ -911,14 +932,14 @@ func image_sample_linear(img: Image*, pos: float2): Color {
     c := add2i(a, {0, 1});
     d := add2i(a, {1, 1});
 
-    a.x = wrap(a.x, img.size.x);
-    b.x = wrap(b.x, img.size.x);
-    c.x = wrap(c.x, img.size.x);
-    d.x = wrap(d.x, img.size.x);
-    a.y = wrap(a.y, img.size.y);
-    b.y = wrap(b.y, img.size.y);
-    c.y = wrap(c.y, img.size.y);
-    d.y = wrap(d.y, img.size.y);
+    a.x = wrapi(a.x, img.size.x);
+    b.x = wrapi(b.x, img.size.x);
+    c.x = wrapi(c.x, img.size.x);
+    d.x = wrapi(d.x, img.size.x);
+    a.y = wrapi(a.y, img.size.y);
+    b.y = wrapi(b.y, img.size.y);
+    c.y = wrapi(c.y, img.size.y);
+    d.y = wrapi(d.y, img.size.y);
 
     A := image_fetch(img, a);
     B := image_fetch(img, b);
@@ -1060,91 +1081,129 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     free(scratch);
 }
 
-func diffract_fetch(src: Color*, len: int, i: int, channel: int): float {
-    #assert(channel >= 0 && channel < sizeof(Color));
-    color := blur_fetch(src, len, i);
-    return ((:float*)&color)[channel];
+func diffract_fetch(row: float*, len: int, i: int): float {
+    if (i < 0 || i >= len) {
+        return {};
+    }
+
+    return row[i];
 }
 
-func diffract_row(dest: Color*, src: Color*, len: int, inner_radius_mono: float, outer_radius_mono: float) {
-    for (channel := 0; channel < 3; channel++) {
-        inner_radius := inner_radius_mono + (channel * inner_radius_mono) / 3.6666;
-        outer_radius := outer_radius_mono + (channel * outer_radius_mono) / 3.6666;
+func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, outer_radius: float) {
+    #assert(inner_radius > 0);
+    #assert(outer_radius > inner_radius);
 
-        #assert(inner_radius > 0);
-        #assert(outer_radius > inner_radius);
+    r := int(inner_radius);
+    r2 := int(outer_radius);
+    a := inner_radius - r;
+    a2 := outer_radius - r2;
 
-        r := int(inner_radius);
-        r2 := int(outer_radius);
-        a := inner_radius - r;
-        a2 := outer_radius - r2;
+    r_rcp :=  1. / (2 * (outer_radius - inner_radius));
 
-        r_rcp :=  1. / (2 * (outer_radius - inner_radius) + 1);
-        c_acc := diffract_fetch(src, len, r2, channel) * a2;
-        c_acc -= diffract_fetch(src, len, r, channel) * (1 - a);
+    c_sub := diffract_fetch(src, len, r) * a;
+    c_acc := diffract_fetch(src, len, r2) * a2;
 
-        for (i := r + 1; i < r2; i++) {
-            c_acc += diffract_fetch(src, len, i, channel);
+    for (i := 0; i < r2; i++) {
+        if (i < r) {
+            c_sub += diffract_fetch(src, len, i);
+        }
+        c_acc += diffract_fetch(src, len, i);
+    }
+
+    for (i := 0; i < len; i++) {
+        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        c_acc += lerp(diffract_fetch(src, len, i+r2+1), diffract_fetch(src, len, i+r2+2), a2);
+        c_acc -= lerp(diffract_fetch(src, len, i-r2), diffract_fetch(src, len, i-r2-1), a2);
+        c_sub += lerp(diffract_fetch(src, len, i+r+1), diffract_fetch(src, len, i+r+2), a);
+        c_sub -= lerp(diffract_fetch(src, len, i-r), diffract_fetch(src, len, i-r-1), a);
+    }
+}
+
+const diffraction_iters = 3;
+func diffract_plane(plane: float*, scratch: float*, tranposed_src: float*, size: int2, inner_radius: float, outer_radius: float) {
+    for (y := 0; y < size.y; y++) {
+        plane_row := plane + y*size.x;
+
+        if (tranposed_src) {
+            tranpose_cursor := tranposed_src + y;
+            for (i := 0; i < size.x; i++) {
+                *tranpose_cursor = plane_row[i];
+                tranpose_cursor += size.x;
+            }
         }
 
-        for (i := 0; i < len; i++) {
-            ((:float*)(dest + i))[channel] = (c_acc + ((:float*)(src + i))[channel]) * r_rcp;
-            c_acc += lerp(diffract_fetch(src, len, i+r2+1, channel), diffract_fetch(src, len, i+r2+2, channel), a2);
-            c_acc -= lerp(diffract_fetch(src, len, i-r2, channel), diffract_fetch(src, len, i-r2-1, channel), a2);
-            c_acc -= lerp(diffract_fetch(src, len, i+r+2, channel), diffract_fetch(src, len, i+r+1, channel), a);
-            c_acc += lerp(diffract_fetch(src, len, i-r-1, channel), diffract_fetch(src, len, i-r, channel), a);
+        for (i := 0; i < diffraction_iters; i++) {
+            diffract_row(scratch, plane_row, size.x, inner_radius, outer_radius);
+            diffract_row(plane_row, scratch, size.x, inner_radius, outer_radius);
         }
     }
 }
 
-func diffraction(img: Image*, inner_radius: float, outer_radius: float) {
-    convolution_iters := 5;
+func planarise(img: Image*): float* {
+    pixel_count := img.size.x*img.size.y;
+    pixels: float* = xcalloc(pixel_count, sizeof(float)*3);
 
-    temp := make_image(img.size);
-    transpose := make_image({img.size.y, img.size.x});
-    scratch_a: Color* = xcalloc(maxi(img.size.x, img.size.y), sizeof(Color));
-    scratch_b: Color* = xcalloc(maxi(img.size.x, img.size.y), sizeof(Color));
-
-    for (y := 0; y < img.size.y; y++) {
-        row := img.pixels + y*img.size.x;
-        diffract_row(scratch_a, row, img.size.x, inner_radius, outer_radius);
-        for (i := 0; i < convolution_iters; i++) {
-            diffract_row(scratch_b, scratch_a, img.size.x, inner_radius, outer_radius);
-            diffract_row(scratch_a, scratch_b, img.size.x, inner_radius, outer_radius);
-        }
-
-        temp_row := temp.pixels + y*img.size.x;
-        for (x := 0; x < img.size.x; x++) {
-            temp_row[x] = scratch_a[x];
-        }
-
-        blur_transpose(transpose.pixels + y, transpose.size.x, row, img.size.x);
+    for (i := 0; i < pixel_count; i++) {
+        pixels[i] = img.pixels[i].r;
+        pixels[i + pixel_count] = img.pixels[i].g;
+        pixels[i + 2*pixel_count] = img.pixels[i].b;
     }
 
-    for (y := 0; y < transpose.size.y; y++) {
-        row := transpose.pixels + y*transpose.size.x;
-        diffract_row(scratch_a, row, transpose.size.x, inner_radius, outer_radius);
-        for (i := 0; i < convolution_iters; i++) {
-            diffract_row(scratch_b, scratch_a, transpose.size.x, inner_radius, outer_radius);
-            diffract_row(scratch_a, scratch_b, transpose.size.x, inner_radius, outer_radius);
-        }
+    return pixels;
+}
 
-        column_cursor := temp.pixels + y;
-        for (i := 0; i < temp.size.y; i++) {
-            *column_cursor = color_add(*column_cursor, scratch_a[i]);
-            column_cursor += temp.size.x;
+func diffraction(img: Image*, radius: float) {
+    inner_radius := radius * 0.25;
+    outer_radius := radius / 1.4;
+
+    pixel_count := img.size.x*img.size.y;
+
+    scratch: float* = xcalloc(maxi(img.size.x, img.size.y), sizeof(float));
+    planes := planarise(img);
+    transpose: float* = xcalloc(pixel_count, sizeof(float));
+
+    red := planes;
+    diffract_plane(red, scratch, transpose, img.size, inner_radius, outer_radius);
+    if (true) {
+        diffract_plane(transpose, scratch, 0, img.size, inner_radius, outer_radius);
+    }
+    // Can we do this step by row?
+    for (i := 0; i < img.size.x; i++) {
+        for (j := 0; j < img.size.y; j++) {
+            red[i + j*img.size.x] += transpose[j + i*img.size.y];
         }
     }
 
-    for (i := 0; i < img.size.x*img.size.y; i++) {
-        img.pixels[i] = color_add(img.pixels[i], temp.pixels[i]);
+    green := planes + pixel_count;
+    diffract_plane(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
+    if (true) {
+    diffract_plane(transpose, scratch, 0, img.size, inner_radius * 1.1, outer_radius * 1.2);
+    }
+    for (i := 0; i < img.size.x; i++) {
+        for (j := 0; j < img.size.y; j++) {
+            green[i + j*img.size.x] += transpose[j + i*img.size.y];
+        }
     }
 
+    blue := planes + 2*pixel_count;
+    diffract_plane(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
+    if (true) {
+    diffract_plane(transpose, scratch, 0, img.size, inner_radius * 1.2, outer_radius * 1.4);
+    }
+    for (i := 0; i < img.size.x; i++) {
+        for (j := 0; j < img.size.y; j++) {
+            blue[i + j*img.size.x] += transpose[j + i*img.size.y];
+        }
+    }
 
-    free_image(&temp);
-    free_image(&transpose);
-    free(scratch_a);
-    free(scratch_b);
+    for (i := 0; i < pixel_count; i++) {
+        img.pixels[i].r += 0.15*red[i];
+        img.pixels[i].g += 0.15*green[i];
+        img.pixels[i].b += 0.15*blue[i];
+    }
+
+    free(scratch);
+    free(planes);
 }
 
 func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
@@ -1158,6 +1217,7 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
 }
 
 func srgb(val: float): float {
+    #assert(!isnan(val));
     val = clamp01(val);
 
     if (val <= 0.0031308) {
@@ -1240,7 +1300,7 @@ func main(argc: int, argv: char**): int {
             // draw_outline(image.pixels, image.size, {1, 0, 1, 1});
             // d := 6 + random01() * 4;
 
-            diffraction(&image, 4, 7);
+            diffraction(&image, 2.707);
             blur_to(&blurred, &image, 4);
             for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
                 bp := image_sample_linear(&blurred, it.pos);
