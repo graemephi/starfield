@@ -484,16 +484,17 @@ func wrap(x: float, m: float): float {
     }
     return y;
 }
-func random_star_color(): Color {
+
+func random_star_color(alpha: float): Color {
     offset := 8;
-    r := offset + random_normal() * (star_color_count / 8);
+    r := offset + random_normal() * (star_color_count / 7);
     x := wrap(r, star_color_count - 1);
     #assert(x >= 0 && x < star_color_count);
 
     xi := int(x);
     xf := x - xi;
     color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
-    color.a = random01() * (float(xi) / star_color_count);
+    color.a = random01() * (float(xi) / star_color_count) * alpha;
     return color;
 }
 
@@ -521,7 +522,7 @@ func create_starfield(starfield: char const*): Starfield {
                 x := 1 + square(random_normal()) / 10.;
                 star.rect.size = float2 { x, x };
                 star.rect.rot = random_unit_vector2();
-                star.color = random_star_color();
+                star.color = random_star_color(1);
 
                 push_star(&result, star);
             }
@@ -552,16 +553,19 @@ func create_starfield(starfield: char const*): Starfield {
         s.rect.size.y = s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
-    star_count_noise := make_tex({ 8 ,8 });
-    density := square(random_normal());
+    star_count_noise := make_tex({ 8, 8 });
+    density := square(random_normal() + 2);
+    n := 0;
     for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
         it.pixel.r = (:float)random_poisson(fabs(density + random_normal()));
+        n++;
     }
+    #assert(n == 64);
 
     tiles := 25;
     w := 1. / tiles;
-    background_star_size := 0.01;
+    background_star_size := 0.005;
     xy := float2 { w / 2., w / 2. };
     for (i := 0; i < tiles; i++) {
         for (j := 0; j < tiles; j++) {
@@ -571,19 +575,19 @@ func create_starfield(starfield: char const*): Starfield {
 
                 push_star(&result, {
                     rect = {
-                        pos = add2(xy, {(random01()) * w, (random01()) * w}),
+                        pos = add2(xy, {(random01() - 0.5) * w, (random01() - 0.5) * w}),
                         size = { size, size },
-                        rot = random_unit_vector2()
+                        rot = {}
                     },
                     type = star_types + 1,
-                    color =  random_star_color()
+                    color = random_star_color(size)
                 });
             }
 
             xy.x += w;
         }
 
-        xy.x = 0;
+        xy.x = w / 2;
         xy.y += w;
     }
 
@@ -595,25 +599,27 @@ func create_starfield(starfield: char const*): Starfield {
 
 
 func draw_simple_star(buffer: Color*, size: int2) {
-    for (it := pixel_iter_begin(&{buffer, size}, {}); pixel_iter_next(&it)) {
-        c := clamp01(distance2(it.pos, { 0.5, 0.5 }) * 2);
-        rel := sub2(it.pos, { 0.5, 0.5 });
+    buffer[size.x/2 + size.x*size.y/2] = { 64, 64, 64, 1 };
+    // for (it := pixel_iter_begin(&{buffer, size}, {}); pixel_iter_next(&it)) {
+    //     c := clamp01(distance2(it.pos, { 0.5, 0.5 }) * 2);
+    //     rel := sub2(it.pos, { 0.5, 0.5 });
 
-        spike := clamp01(fabs(rel.x * rel.y) * 100);
-        color := 1 - c;
-        color *= color;
-        color *= color;
-        color *= color;
-        color *= color;
-        color *= 4;
+    //     spike := clamp01(fabs(rel.x * rel.y) * 100);
+    //     color := 1 - c;
+    //     color *= color;
+    //     color *= color;
+    //     color *= color;
+    //     color *= color;
+    //     color *= color;
+    //     color *= 16;
 
-        it.pixel.a = color;
-        if (c < 1) {
-            it.pixel.r = color * it.pixel.a;
-            it.pixel.g = color * it.pixel.a;
-            it.pixel.b = color * it.pixel.a;
-        }
-    }
+    //     it.pixel.a = color;
+    //     if (c < 1) {
+    //         it.pixel.r = color * it.pixel.a;
+    //         it.pixel.g = color * it.pixel.a;
+    //         it.pixel.b = color * it.pixel.a;
+    //     }
+    // }
 }
 
 func draw_outline(buffer: Color*, size: int2, color: Color) {
@@ -873,10 +879,10 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = clampi(0, image.size.x, int(x_min * image.size.x - 0.5));
-    iter.end.x   = clampi(0, image.size.x, int(x_max * image.size.x - 0.5));
-    iter.start.y = clampi(0, image.size.y, int(y_min * image.size.y - 0.5));
-    iter.end.y   = clampi(0, image.size.y, int(y_max * image.size.y - 0.5));
+    iter.start.x = clampi(0, image.size.x, int((x_min * image.size.x)));
+    iter.end.x   = clampi(0, image.size.x, int((x_max * image.size.x)));
+    iter.start.y = clampi(0, image.size.y, int((y_min * image.size.y)));
+    iter.end.y   = clampi(0, image.size.y, int((y_max * image.size.y)));
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -941,14 +947,51 @@ func image_sample_linear(img: Image*, pos: float2): Color {
     c.y = wrapi(c.y, img.size.y);
     d.y = wrapi(d.y, img.size.y);
 
-    A := image_fetch(img, a);
-    B := image_fetch(img, b);
-    C := image_fetch(img, c);
-    D := image_fetch(img, d);
+    A := img.pixels[a.x + a.y*img.size.x];
+    B := img.pixels[b.x + b.y*img.size.x];
+    C := img.pixels[c.x + c.y*img.size.x];
+    D := img.pixels[d.x + d.y*img.size.x];
 
     AB := color_lerp(A, B, vf.x);
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
+
+    return ABCD;
+}
+
+func sample_linear(pixels: float*, size: int2, pos: float2): float {
+    if (pixels == 0) {
+        return {};
+    }
+
+    pos.x = (pos.x * size.x) - 0.5;
+    pos.y = (pos.y * size.y) - 0.5;
+
+    vi := float2_to_int2(pos);
+    vf := float2 { pos.x - vi.x, pos.y - vi.y };
+
+    a := vi;
+    b := add2i(a, {1, 0});
+    c := add2i(a, {0, 1});
+    d := add2i(a, {1, 1});
+
+    a.x = wrapi(a.x, size.x);
+    b.x = wrapi(b.x, size.x);
+    c.x = wrapi(c.x, size.x);
+    d.x = wrapi(d.x, size.x);
+    a.y = wrapi(a.y, size.y);
+    b.y = wrapi(b.y, size.y);
+    c.y = wrapi(c.y, size.y);
+    d.y = wrapi(d.y, size.y);
+
+    A := pixels[a.x + a.y*size.x];
+    B := pixels[b.x + b.y*size.x];
+    C := pixels[c.x + c.y*size.x];
+    D := pixels[d.x + d.y*size.x];
+
+    AB := lerp(A, B, vf.x);
+    CD := lerp(C, D, vf.x);
+    ABCD := lerp(AB, CD, vf.y);
 
     return ABCD;
 }
@@ -1034,7 +1077,17 @@ func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
         c_acc = color_add(c_acc, blur_fetch(src, len, i));
     }
 
-    for (i := 0; i < len; i++) {
+    for (i := 0; i < r+1; i++) {
+        dest[i] = color_mul1(c_acc, r_rcp);
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
+        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
+    }
+    for (i := r+1; i < len - r - 2; i++) {
+        dest[i] = color_mul1(c_acc, r_rcp);
+        c_acc = color_add(c_acc, color_lerp(src[i+r+1], src[i+r+2], a));
+        c_acc = color_sub(c_acc, color_lerp(src[i-r], src[i-r-1], a));
+    }
+    for (i := len - r - 2; i < len; i++) {
         dest[i] = color_mul1(c_acc, r_rcp);
         c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
         c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
@@ -1110,7 +1163,21 @@ func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, oute
         c_acc += diffract_fetch(src, len, i);
     }
 
-    for (i := 0; i < len; i++) {
+    for (i := 0; i < r2 + 1; i++) {
+        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        c_acc += lerp(diffract_fetch(src, len, i+r2+1), diffract_fetch(src, len, i+r2+2), a2);
+        c_acc -= lerp(diffract_fetch(src, len, i-r2), diffract_fetch(src, len, i-r2-1), a2);
+        c_sub += lerp(diffract_fetch(src, len, i+r+1), diffract_fetch(src, len, i+r+2), a);
+        c_sub -= lerp(diffract_fetch(src, len, i-r), diffract_fetch(src, len, i-r-1), a);
+    }
+    for (i := r2 + 1; i < len - r2 - 2; i++) {
+        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        c_acc += lerp(src[i+r2+1], src[i+r2+2], a2);
+        c_acc -= lerp(src[i-r2], src[i-r2-1], a2);
+        c_sub += lerp(src[i+r+1], src[i+r+2], a);
+        c_sub -= lerp(src[i-r], src[i-r-1], a);
+    }
+    for (i := len - r2 - 2; i < len; i++) {
         dest[i] = ((c_acc - c_sub)) * r_rcp;
         c_acc += lerp(diffract_fetch(src, len, i+r2+1), diffract_fetch(src, len, i+r2+2), a2);
         c_acc -= lerp(diffract_fetch(src, len, i-r2), diffract_fetch(src, len, i-r2-1), a2);
@@ -1119,7 +1186,7 @@ func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, oute
     }
 }
 
-const diffraction_iters = 3;
+const diffraction_iters = 4;
 func diffract_plane(plane: float*, scratch: float*, tranposed_src: float*, size: int2, inner_radius: float, outer_radius: float) {
     for (y := 0; y < size.y; y++) {
         plane_row := plane + y*size.x;
@@ -1151,8 +1218,46 @@ func planarise(img: Image*): float* {
 
     return pixels;
 }
+func is_identity_transform(transform: float2): bool {
+    return (transform.x == 0 || transform.x == 1) && (transform.y == 0);
+}
 
-func diffraction(img: Image*, radius: float) {
+func transform_image(src: Image*, transform: float2): Image {
+    if (is_identity_transform(transform)) {
+        return *src;
+    }
+
+    a := rotate({-0.5, -0.5}, transform);
+    b := rotate({ 0.5, -0.5}, transform);
+    c := rotate({-0.5,  0.5}, transform);
+    d := rotate({ 0.5,  0.5}, transform);
+
+    x_min := min4(a.x, b.x, c.x, d.x);
+    x_max := max4(a.x, b.x, c.x, d.x);
+    y_min := min4(a.y, b.y, c.y, d.y);
+    y_max := max4(a.y, b.y, c.y, d.y);
+    x := x_max - x_min;
+    y := y_max - y_min;
+
+    size := int2 { int(x * src.size.x), int(y * src.size.y) };
+    result := make_image(size);
+
+    inverse_rect := all_rect();
+    inverse_rect.size = { 1. / x, 1. / y };
+    d2 := dot2(transform, transform);
+    inverse_rect.rot = {transform.x / d2, -transform.y / d2};
+
+    for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
+        *it.pixel = image_sample_linear(src, it.pos);
+    }
+
+    return result;
+}
+
+func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float2) {
+    transformed_img := transform_image(img_dest, transform);
+    img := &transformed_img;
+
     inner_radius := radius * 0.25;
     outer_radius := radius / 1.4;
 
@@ -1193,10 +1298,37 @@ func diffraction(img: Image*, radius: float) {
         }
     }
 
-    for (i := 0; i < pixel_count; i++) {
-        img.pixels[i].r += 0.15*red[i];
-        img.pixels[i].g += 0.15*green[i];
-        img.pixels[i].b += 0.15*blue[i];
+    if (img.pixels == img_dest.pixels) {
+        for (i := 0; i < pixel_count; i++) {
+            img_dest.pixels[i].r += alpha*red[i];
+            img_dest.pixels[i].g += alpha*green[i];
+            img_dest.pixels[i].b += alpha*blue[i];
+        }
+    } else {
+        // Todo: Clean up
+        a := rotate({-0.5, -0.5}, transform);
+        b := rotate({ 0.5, -0.5}, transform);
+        c := rotate({-0.5,  0.5}, transform);
+        d := rotate({ 0.5,  0.5}, transform);
+
+        x_min := min4(a.x, b.x, c.x, d.x);
+        x_max := max4(a.x, b.x, c.x, d.x);
+        y_min := min4(a.y, b.y, c.y, d.y);
+        y_max := max4(a.y, b.y, c.y, d.y);
+        x := x_max - x_min;
+        y := y_max - y_min;
+
+        scale := float2 { x, y };
+        offset := float2 { 0.5, 0.5 };
+        for (it := pixel_iter_begin(img_dest, {}); pixel_iter_next(&it)) {
+            pos := add2(div2(rotate(sub2(it.pos, offset), transform), scale), offset);
+
+            it.pixel.r += alpha*sample_linear(red, img.size, pos);
+            it.pixel.g += alpha*sample_linear(green, img.size, pos);
+            it.pixel.b += alpha*sample_linear(blue, img.size, pos);
+        }
+
+        free_image(img);
     }
 
     free(scratch);
@@ -1283,27 +1415,30 @@ func main(argc: int, argv: char**): int {
 
     image := make_image({ surface.w, surface.h });
     blurred := make_image({ surface.w, surface.h });
+    blurred2 := make_image({ surface.w, surface.h });
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
         }
 
-        if (!n_t || app.mouse.left_button.pressed) {
+        if ( !n_t || app.mouse.left_button.pressed) {
             image_clear(&image);
 
             t0 := time_now();
             t0f := float(t0);
             draw_starfield(&image, &starfield);
-            // draw_outline(image.pixels, image.size, {1, 0, 1, 1});
-            // d := 6 + random01() * 4;
-
-            diffraction(&image, 2.707);
-            blur_to(&blurred, &image, 4);
+            diffraction(&image, 0.1, 16, mul2({sqrt(2), sqrt(2)}, random_unit_vector2()));
+            blur_to(&blurred, &image, 1);
+            blur_to(&blurred2, &image, 1.5);
             for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-                bp := image_sample_linear(&blurred, it.pos);
+                bp := image_fetch(&blurred, it.pixel_pos);
                 mbp := color_mul(*it.pixel, bp);
-                xbp := color_lerp(bp, mbp, .75);
-                *it.pixel = color_add(*it.pixel, xbp);
+                xbp := color_lerp(bp, mbp, 0.95);
+
+                bp2 := image_fetch(&blurred2, it.pixel_pos);
+                mbp2 := color_mul(*it.pixel, bp2);
+                xbp2 := color_lerp(bp2, mbp2, .75);
+                *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
             }
             image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
             t1 := time_now();
