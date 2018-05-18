@@ -13,9 +13,6 @@ var _MM_FLUSH_ZERO_ON: uint32;
 
 var ImageSize: int2 const = { 500, 500 };
 
-const Pi = PI;
-const Tau = Pi*2;
-
 func xrealloc(mem: void*, size: usize): void* {
     result := realloc(mem, size);
     if (!result) {
