@@ -1,0 +1,241 @@
+struct Image {
+    pixels: Color*;
+    size: int2;
+}
+
+struct PixelIter {
+    image: Image*;
+    start: int2;
+    end: int2;
+    rect: Rect;
+    pixel_pos: int2;
+    line_start: float2;
+    dx: float2;
+    dy: float2;
+
+    pos: float2;
+    pixel: Color*;
+}
+
+func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
+    #static_assert(offsetof(Tex, pixels) == offsetof(Image, pixels));
+    #static_assert(offsetof(Tex, size) == offsetof(Image, size));
+    return pixel_iter_begin((:Image*)tex, rect);
+}
+
+func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
+    iter: PixelIter = {};
+
+    x_min := 0.;
+    x_max := 1.;
+    y_min := 0.;
+    y_max := 1.;
+
+    if (!is_zero(&rect, sizeof(rect))) {
+        a := rect_absolute(rect, {0, 0});
+        b := rect_absolute(rect, {1, 0});
+        c := rect_absolute(rect, {0, 1});
+        d := rect_absolute(rect, {1, 1});
+
+        x_min = min4(a.x, b.x, c.x, d.x);
+        x_max = max4(a.x, b.x, c.x, d.x);
+        y_min = min4(a.y, b.y, c.y, d.y);
+        y_max = max4(a.y, b.y, c.y, d.y);
+
+        origin := rect_relative(rect, { 0, 0 });
+        iter.dx = sub2(rect_relative(rect, { 1. / (image.size.x), 0 }), origin);
+        iter.dy = sub2(rect_relative(rect, { 0, 1. / (image.size.y) }), origin);
+    } else {
+        rect = all_rect();
+        iter.dx = { 1. / image.size.x, 0. };
+        iter.dy = { 0., 1. / image.size.y };
+    }
+
+    iter.start.x = clampi(0, image.size.x, int((x_min * image.size.x)));
+    iter.end.x   = clampi(0, image.size.x, int((x_max * image.size.x)));
+    iter.start.y = clampi(0, image.size.y, int((y_min * image.size.y)));
+    iter.end.y   = clampi(0, image.size.y, int((y_max * image.size.y)));
+
+    iter.pixel_pos = { iter.start.x - 1, iter.start.y };
+    iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
+    iter.line_start = iter.pos;
+    iter.rect = rect;
+    iter.image = image;
+
+    return iter;
+}
+
+func pixel_iter_next(it: PixelIter*): bool {
+    it.pixel_pos.x++;
+
+    for (; it.pixel_pos.y < it.end.y; it.pixel_pos.y++) {
+        for (; it.pixel_pos.x < it.end.x; it.pixel_pos.x++) {
+            it.pos = add2(it.pos, it.dx);
+
+            if (inside_normal_rect(it.pos)) {
+                it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
+                return true;
+            }
+        }
+
+        it.line_start = add2(it.line_start, it.dy);
+        it.pos = it.line_start;
+        it.pixel_pos.x = it.start.x;
+    }
+
+    return false;
+}
+
+func wrapi(x: int, m: int): int {
+    result := x % m;
+    if (result < 0) {
+        result += m;
+    }
+    return result;
+}
+
+func image_sample_linear(img: Image*, pos: float2): Color {
+    if (img.pixels == 0) {
+        return {};
+    }
+
+    pos.x = (pos.x * img.size.x) - 0.5;
+    pos.y = (pos.y * img.size.y) - 0.5;
+
+    vi := float2_to_int2(pos);
+    vf := float2 { pos.x - vi.x, pos.y - vi.y };
+
+    a := vi;
+    b := add2i(a, {1, 0});
+    c := add2i(a, {0, 1});
+    d := add2i(a, {1, 1});
+
+    a.x = wrapi(a.x, img.size.x);
+    b.x = wrapi(b.x, img.size.x);
+    c.x = wrapi(c.x, img.size.x);
+    d.x = wrapi(d.x, img.size.x);
+    a.y = wrapi(a.y, img.size.y);
+    b.y = wrapi(b.y, img.size.y);
+    c.y = wrapi(c.y, img.size.y);
+    d.y = wrapi(d.y, img.size.y);
+
+    A := img.pixels[a.x + a.y*img.size.x];
+    B := img.pixels[b.x + b.y*img.size.x];
+    C := img.pixels[c.x + c.y*img.size.x];
+    D := img.pixels[d.x + d.y*img.size.x];
+
+    AB := color_lerp(A, B, vf.x);
+    CD := color_lerp(C, D, vf.x);
+    ABCD := color_lerp(AB, CD, vf.y);
+
+    return ABCD;
+}
+
+func sample_linear(pixels: float*, size: int2, pos: float2): float {
+    if (pixels == 0) {
+        return {};
+    }
+
+    pos.x = (pos.x * size.x) - 0.5;
+    pos.y = (pos.y * size.y) - 0.5;
+
+    vi := float2_to_int2(pos);
+    vf := float2 { pos.x - vi.x, pos.y - vi.y };
+
+    a := vi;
+    b := add2i(a, {1, 0});
+    c := add2i(a, {0, 1});
+    d := add2i(a, {1, 1});
+
+    a.x = wrapi(a.x, size.x);
+    b.x = wrapi(b.x, size.x);
+    c.x = wrapi(c.x, size.x);
+    d.x = wrapi(d.x, size.x);
+    a.y = wrapi(a.y, size.y);
+    b.y = wrapi(b.y, size.y);
+    c.y = wrapi(c.y, size.y);
+    d.y = wrapi(d.y, size.y);
+
+    A := pixels[a.x + a.y*size.x];
+    B := pixels[b.x + b.y*size.x];
+    C := pixels[c.x + c.y*size.x];
+    D := pixels[d.x + d.y*size.x];
+
+    AB := lerp(A, B, vf.x);
+    CD := lerp(C, D, vf.x);
+    ABCD := lerp(AB, CD, vf.y);
+
+    return ABCD;
+}
+
+func image_sample_nearest(img: Image*, pos: float2): Color {
+    p := int2 { int(round(pos.x * img.size.x - 0.5)), int(round(pos.y * img.size.y - 0.5)) };
+    return image_fetch(img, p);
+}
+
+func image_fetch(img: Image*, pos: int2): Color {
+    if (img.pixels == 0 || pos.x < 0 || pos.x >= img.size.x || pos.y < 0 || pos.y >= img.size.y) {
+        return {};
+    }
+
+    return img.pixels[pos.x + pos.y*img.size.x];
+}
+
+func draw_tex(dest: Image*, target: Rect, tex: Tex*, colorise: Color) {
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
+}
+
+func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        rgba = color_mul(rgba, multiply_color);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
+}
+
+func make_image(size: int2): Image {
+    return Image {
+        pixels = xcalloc(size.x*size.y, sizeof(Color)),
+        size = size
+    };
+}
+
+func free_image(img: Image*) {
+    #assert(img.pixels);
+    free(img.pixels);
+    img.pixels = 0;
+    img.size = { 0, 0 };
+}
+
+func image_clear(img: Image*) {
+    memset(img.pixels, 0, img.size.x*img.size.y*sizeof(Color));
+}
+
+func image_copy(img: Image*): Image {
+    #assert(img.pixels);
+    result := make_image(img.size);
+    memcpy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
+    return result;
+}
+
+func image_copy_to(dest: Image*, src: Image*) {
+    #assert(src.size.x == dest.size.x);
+    #assert(src.size.y == dest.size.y);
+    memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+}
+
+
+func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
+    #assert(src.size.x == size.x);
+    #assert(src.size.y == size.y);
+    src_end := src.pixels + src.size.x*src.size.y;
+    for (src_it := src.pixels; src_it != src_end; src_it++) {
+        *dest = color_to_rgb8(*src_it);
+        dest++;
+    }
+}

@@ -1,0 +1,171 @@
+
+
+func is_power_2(x: int32): bool {
+    return x != 0 && x & (x - 1) == 0;
+}
+
+func log2i(x: int): int {
+    return int(SDL_MostSignificantBitIndex32(uint32(x)));
+}
+
+func square(x: float): float {
+    return x*x;
+}
+
+func clamp(a: float, b: float, x: float): float {
+    return (x < a) ? a :
+           (x > b) ? b :
+                     x;
+}
+
+func clampi(a: int32, b: int32, x: int32): int32 {
+    return (x < a) ? a :
+           (x > b) ? b :
+                     x;
+}
+
+func clamp01(x: float): float {
+    return clamp(0, 1, x);
+}
+
+func maxi(a: int32, b: int32): int32 {
+    return (a > b) ? a : b;
+}
+
+func mini(a: int32, b: int32): int32 {
+    return (a < b) ? a : b;
+}
+
+func max(a: float, b: float): float {
+    return (a > b) ? a : b;
+}
+
+func min(a: float, b: float): float {
+    return (a < b) ? a : b;
+}
+
+func min4(a: float, b: float, c: float, d: float): float {
+    return min(min(a, b), min(c, d));
+}
+
+func max4(a: float, b: float, c: float, d: float): float {
+    return max(max(a, b), max(c, d));
+}
+
+func float2_to_int2(x: float2): int2 {
+    return { int32(x.x), int32(x.y) };
+}
+
+func int2_to_float2(x: int2): float2 {
+    return { float(x.x), float(x.y) };
+}
+
+func mul2(a: float2, b: float2): float2 {
+    return { a.x * b.x, a.y * b.y };
+}
+
+func div2(a: float2, b: float2): float2 {
+    return { a.x / b.x, a.y / b.y };
+}
+
+func add2(a: float2, b: float2): float2 {
+    return { a.x + b.x, a.y + b.y };
+}
+
+func sub2(a: float2, b: float2): float2 {
+    return { a.x - b.x, a.y - b.y };
+}
+
+func mul2i(a: int2, b: int2): int2 {
+    return { a.x * b.x, a.y * b.y };
+}
+
+func div2i(a: int2, b: int2): int2 {
+    return { a.x / b.x, a.y / b.y };
+}
+
+func add2i(a: int2, b: int2): int2 {
+    return { a.x + b.x, a.y + b.y };
+}
+
+func sub2i(a: int2, b: int2): int2 {
+    return { a.x - b.x, a.y - b.y };
+}
+
+func dot2i(a: int2, b: int2): int32 {
+    return a.x*b.x + a.y*b.y;
+}
+
+func distance_squared2i(a: int2, b: int2): int32 {
+    d := int2 { a.x - b.x, a.y - b.y };
+    return dot2i(d, d);
+}
+
+func distance2i(a: int2, b: int2): float {
+    d := distance_squared2i(a, b);
+    return sqrt(float(d));
+}
+
+func dot2(a: float2, b: float2): float {
+    return a.x*b.x + a.y*b.y;
+}
+
+func distance_squared2(a: float2, b: float2): float {
+    d := sub2(a, b);
+    return dot2(d, d);
+}
+
+func distance2(a: float2, b: float2): float {
+    d := distance_squared2(a, b);
+    return sqrt(d);
+}
+
+func magnitude2(v: float2): float {
+    return sqrt(dot2(v, v));
+}
+
+func magnitude2i(v: int2): float {
+    return sqrt((:float)dot2i(v, v));
+}
+
+var random_state: uint32 = 1;
+func random(): uint32 {
+    random_state ^= random_state << 13;
+    random_state ^= random_state >> 17;
+    random_state ^= random_state << 5;
+    return random_state;
+}
+
+const int_23_mask = 0b00000000_011111111111111111111111;
+const int_23_reciprocal = 1. / int_23_mask;
+func random01(): float {
+    r := random() & int_23_mask;
+    return r * int_23_reciprocal;
+}
+
+func random_unit_vector2(): float2 {
+    theta := random01() * Tau;
+    return { cos(theta), sin(theta) };
+}
+
+func randomn(lo: int, hi: int): int {
+    return random() % (hi - lo) + lo;
+}
+
+func random_poisson(alpha: float): int {
+    result := -1;
+    L := exp(-alpha);
+    p := 1.;
+    do {
+        p *= random01();
+        result++;
+    } while (p > L);
+    return result;
+}
+
+func random_normal(): float {
+    // This is not actually normal / gaussian. It's biased towards zero and can
+    // produce crazy outliers, but it's good enough.
+    p := clamp(1e-5, 1 - 1e-5, random01());
+    return log(p / (1 - p)) * 0.626657068657750;
+}
