@@ -1,5 +1,6 @@
 const Pi = PI;
 const Tau = Pi*2;
+const Sqrt2 = 1.4142135623730950488;
 
 func is_power_2(x: int32): bool {
     return x != 0 && x & (x - 1) == 0;
@@ -65,16 +66,32 @@ func mul2(a: float2, b: float2): float2 {
     return { a.x * b.x, a.y * b.y };
 }
 
+func mul2s(a: float2, s: float): float2 {
+    return { a.x * s, a.y * s };
+}
+
 func div2(a: float2, b: float2): float2 {
     return { a.x / b.x, a.y / b.y };
+}
+
+func div2s(a: float2, s: float): float2 {
+    return { a.x / s, a.y / s };
 }
 
 func add2(a: float2, b: float2): float2 {
     return { a.x + b.x, a.y + b.y };
 }
 
+func add2s(a: float2, s: float): float2 {
+    return { a.x + s, a.y + s };
+}
+
 func sub2(a: float2, b: float2): float2 {
     return { a.x - b.x, a.y - b.y };
+}
+
+func sub2s(a: float2, s: float): float2 {
+    return { a.x - s, a.y - s };
 }
 
 func mul2i(a: int2, b: int2): int2 {
@@ -129,6 +146,15 @@ func magnitude2i(v: int2): float {
     return sqrt((:float)dot2i(v, v));
 }
 
+func mod2s(v: float2, m: float): float2 {
+    return { mod(v.x, m), mod(v.y, m) };
+}
+
+func normalise(v: float2): float2 {
+    m := magnitude2(v);
+    return { v.x / m, v.y / m };
+}
+
 var random_state: uint32 = 1;
 func random(): uint32 {
     random_state ^= random_state << 13;
@@ -165,8 +191,17 @@ func random_poisson(alpha: float): int {
 }
 
 func random_normal(): float {
-    // This is not actually normal / gaussian. It's biased towards zero and can
-    // produce crazy outliers, but it's good enough.
-    p := clamp(1e-5, 1 - 1e-5, random01());
-    return log(p / (1 - p)) * 0.626657068657750;
+    u := 0.;
+    v := 0.;
+    s := 0.;
+    do {
+        u = random01() * 2. - 1.;
+        v = random01() * 2. - 1.;
+        s = u*u + v*v;
+    } while(s >= 1);
+    return u*sqrt((-2*log(s))/s);
+}
+
+func lerp(a: float, b: float, t: float): float {
+    return (1 - t)*a + t*b;
 }

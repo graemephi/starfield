@@ -3,6 +3,48 @@ struct Image {
     size: int2;
 }
 
+
+func make_image(size: int2): Image {
+    return Image {
+        pixels = xcalloc(size.x*size.y, sizeof(Color)),
+        size = size
+    };
+}
+
+func free_image(img: Image*) {
+    #assert(img.pixels);
+    free(img.pixels);
+    img.pixels = 0;
+    img.size = { 0, 0 };
+}
+
+func image_clear(img: Image*) {
+    memset(img.pixels, 0, img.size.x*img.size.y*sizeof(Color));
+}
+
+func image_copy(img: Image*): Image {
+    #assert(img.pixels);
+    result := make_image(img.size);
+    memcpy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
+    return result;
+}
+
+func image_copy_to(dest: Image*, src: Image*) {
+    #assert(src.size.x == dest.size.x);
+    #assert(src.size.y == dest.size.y);
+    memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+}
+
+func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
+    #assert(src.size.x == size.x);
+    #assert(src.size.y == size.y);
+    src_end := src.pixels + src.size.x*src.size.y;
+    for (src_it := src.pixels; src_it != src_end; src_it++) {
+        *dest = color_to_rgb8(*src_it);
+        dest++;
+    }
+}
+
 struct PixelIter {
     image: Image*;
     start: int2;
@@ -51,10 +93,10 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = clampi(0, image.size.x, int((x_min * image.size.x)));
-    iter.end.x   = clampi(0, image.size.x, int((x_max * image.size.x)));
-    iter.start.y = clampi(0, image.size.y, int((y_min * image.size.y)));
-    iter.end.y   = clampi(0, image.size.y, int((y_max * image.size.y)));
+    iter.start.x = clampi(0, image.size.x, int(round(x_min * image.size.x - 0.5)));
+    iter.end.x   = clampi(0, image.size.x, int(round(x_max * image.size.x - 0.5)));
+    iter.start.y = clampi(0, image.size.y, int(round(y_min * image.size.y - 0.5)));
+    iter.end.y   = clampi(0, image.size.y, int(round(y_max * image.size.y - 0.5)));
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -70,6 +112,8 @@ func pixel_iter_next(it: PixelIter*): bool {
 
     for (; it.pixel_pos.y < it.end.y; it.pixel_pos.y++) {
         for (; it.pixel_pos.x < it.end.x; it.pixel_pos.x++) {
+            // Todo: would be nice to know the effect of floating point
+            // accumulation here.
             it.pos = add2(it.pos, it.dx);
 
             if (inside_normal_rect(it.pos)) {
@@ -175,67 +219,10 @@ func image_sample_nearest(img: Image*, pos: float2): Color {
 
 func image_fetch(img: Image*, pos: int2): Color {
     if (img.pixels == 0 || pos.x < 0 || pos.x >= img.size.x || pos.y < 0 || pos.y >= img.size.y) {
+        #assert(0);
         return {};
     }
 
+    #assert(pos.x + pos.y*img.size.x < img.size.x*img.size.y);
     return img.pixels[pos.x + pos.y*img.size.x];
-}
-
-func draw_tex(dest: Image*, target: Rect, tex: Tex*, colorise: Color) {
-    lod := compute_lod_level(dest.size, target.size, tex.size);
-    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
-        *it.pixel = blend(*it.pixel, rgba);
-    }
-}
-
-func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
-    lod := compute_lod_level(dest.size, target.size, tex.size);
-    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
-        rgba = color_mul(rgba, multiply_color);
-        *it.pixel = blend(*it.pixel, rgba);
-    }
-}
-
-func make_image(size: int2): Image {
-    return Image {
-        pixels = xcalloc(size.x*size.y, sizeof(Color)),
-        size = size
-    };
-}
-
-func free_image(img: Image*) {
-    #assert(img.pixels);
-    free(img.pixels);
-    img.pixels = 0;
-    img.size = { 0, 0 };
-}
-
-func image_clear(img: Image*) {
-    memset(img.pixels, 0, img.size.x*img.size.y*sizeof(Color));
-}
-
-func image_copy(img: Image*): Image {
-    #assert(img.pixels);
-    result := make_image(img.size);
-    memcpy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
-    return result;
-}
-
-func image_copy_to(dest: Image*, src: Image*) {
-    #assert(src.size.x == dest.size.x);
-    #assert(src.size.y == dest.size.y);
-    memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
-}
-
-
-func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
-    #assert(src.size.x == size.x);
-    #assert(src.size.y == size.y);
-    src_end := src.pixels + src.size.x*src.size.y;
-    for (src_it := src.pixels; src_it != src_end; src_it++) {
-        *dest = color_to_rgb8(*src_it);
-        dest++;
-    }
 }

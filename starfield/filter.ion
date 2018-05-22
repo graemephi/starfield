@@ -1,3 +1,7 @@
+func blur(img: Image*, radius: float) {
+    blur_to(img, img, radius);
+}
+
 func blur_fetch(row: Color*, len: int, i: int): Color {
     if (i < 0 || i >= len) {
         return {};
@@ -8,13 +12,14 @@ func blur_fetch(row: Color*, len: int, i: int): Color {
 
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
     #assert(radius > 0);
+    #assert(len - 2 - radius  > 0);
     r := int(radius);
     a := radius - r;
 
     r_rcp :=  1. / (2. * radius + 1.);
-    c_acc := color_mul1(blur_fetch(src, len, r), a);
+    c_acc := color_mul1(blur_fetch(src, len, r + 1), a);
 
-    for (i := 0; i < r; i++) {
+    for (i := 0; i <= r; i++) {
         c_acc = color_add(c_acc, blur_fetch(src, len, i));
     }
 
@@ -41,10 +46,6 @@ func blur_transpose(dest: Color*, dest_width: int, src: Color*, src_width: int) 
         dest += dest_width;
         src++;
     }
-}
-
-func blur(img: Image*, radius: float) {
-    blur_to(img, img, radius);
 }
 
 func blur_to(dest: Image*, src: Image*, radius: float) {
@@ -75,6 +76,103 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     free(scratch);
 }
 
+// Used internally by the diffraction filter.
+struct GrayscaleImage {
+    pixels: float*;
+    size: int2;
+}
+
+func make_grayscale_image(size: int2): GrayscaleImage {
+    return GrayscaleImage {
+        pixels = xcalloc(size.x*size.y, sizeof(float)),
+        size = size
+    };
+}
+
+func free_grayscale_image(img: GrayscaleImage*) {
+    #assert(img.pixels);
+    free(img.pixels);
+    img.pixels = 0;
+    img.size = { 0, 0 };
+}
+
+func grayscale_blur(img: GrayscaleImage*, radius: float) {
+    grayscale_blur_to(img, img, radius);
+}
+
+func grayscale_blur_fetch(row: float*, len: int, i: int): float {
+    if (i < 0 || i >= len) {
+        return {};
+    }
+
+    return row[i];
+}
+
+func grayscale_blur_row(dest: float*, src: float*, len: int, radius: float) {
+    #assert(radius > 0);
+    r := int(radius);
+    a := radius - r;
+
+    r_rcp :=  1. / (2. * radius + 1.);
+    c_acc := grayscale_blur_fetch(src, len, r + 1) * a;
+
+    for (i := 0; i <= r; i++) {
+        c_acc += grayscale_blur_fetch(src, len, i);
+    }
+
+    for (i := 0; i < r + 1; i++) {
+        dest[i] = c_acc * r_rcp;
+        c_acc += lerp(grayscale_blur_fetch(src, len, i+r+1), grayscale_blur_fetch(src, len, i+r+2), a);
+        c_acc -= lerp(grayscale_blur_fetch(src, len, i-r), grayscale_blur_fetch(src, len, i-r-1), a);
+    }
+    for (i := r + 1; i < len - r - 2; i++) {
+        dest[i] = c_acc * r_rcp;
+        c_acc += lerp(src[i+r+1], src[i+r+2], a);
+        c_acc -= lerp(src[i-r], src[i-r-1], a);
+    }
+    for (i := len - r - 2; i < len; i++) {
+        dest[i] = c_acc * r_rcp;
+        c_acc += lerp(grayscale_blur_fetch(src, len, i+r+1), grayscale_blur_fetch(src, len, i+r+2), a);
+        c_acc -= lerp(grayscale_blur_fetch(src, len, i-r), grayscale_blur_fetch(src, len, i-r-1), a);
+    }
+}
+
+func grayscale_blur_transpose(dest: float*, dest_width: int, src: float*, src_width: int) {
+    for (i := 0; i < src_width; i++) {
+        *dest = *src;
+        dest += dest_width;
+        src++;
+    }
+}
+
+func grayscale_blur_to(dest: GrayscaleImage*, src: GrayscaleImage*, radius: float) {
+    #assert(dest.size.x == src.size.x);
+    #assert(dest.size.y == src.size.y);
+
+    temp := make_grayscale_image({src.size.y, src.size.x});
+    scratch: float* = xcalloc(maxi(src.size.x, src.size.y), sizeof(float));
+
+    for (y := 0; y < src.size.y; y++) {
+        row_src := src.pixels + y*src.size.x;
+        row_dest := dest.pixels + y*dest.size.x;
+        grayscale_blur_row(scratch, row_src, src.size.x, radius);
+        grayscale_blur_row(row_dest, scratch, src.size.x, radius);
+        grayscale_blur_row(scratch, row_dest, src.size.x, radius);
+        grayscale_blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
+    }
+
+    for (y := 0; y < temp.size.y; y++) {
+        row := temp.pixels + y*temp.size.x;
+        grayscale_blur_row(scratch, row, temp.size.x, radius);
+        grayscale_blur_row(row, scratch, temp.size.x, radius);
+        grayscale_blur_row(scratch, row, temp.size.x, radius);
+        grayscale_blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
+    }
+
+    free_grayscale_image(&temp);
+    free(scratch);
+}
+
 func diffract_fetch(row: float*, len: int, i: int): float {
     if (i < 0 || i >= len) {
         return {};
@@ -94,32 +192,32 @@ func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, oute
 
     r_rcp :=  1. / (2 * (outer_radius - inner_radius));
 
-    c_sub := diffract_fetch(src, len, r) * a;
-    c_acc := diffract_fetch(src, len, r2) * a2;
+    c_sub := diffract_fetch(src, len, r + 1) * a;
+    c_acc := diffract_fetch(src, len, r2 + 1) * a2;
 
-    for (i := 0; i < r2; i++) {
-        if (i < r) {
+    for (i := 0; i <= r2; i++) {
+        if (i <= r) {
             c_sub += diffract_fetch(src, len, i);
         }
         c_acc += diffract_fetch(src, len, i);
     }
 
     for (i := 0; i < r2 + 1; i++) {
-        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        dest[i] = (c_acc - c_sub) * r_rcp;
         c_acc += lerp(diffract_fetch(src, len, i+r2+1), diffract_fetch(src, len, i+r2+2), a2);
         c_acc -= lerp(diffract_fetch(src, len, i-r2), diffract_fetch(src, len, i-r2-1), a2);
         c_sub += lerp(diffract_fetch(src, len, i+r+1), diffract_fetch(src, len, i+r+2), a);
         c_sub -= lerp(diffract_fetch(src, len, i-r), diffract_fetch(src, len, i-r-1), a);
     }
     for (i := r2 + 1; i < len - r2 - 2; i++) {
-        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        dest[i] = (c_acc - c_sub) * r_rcp;
         c_acc += lerp(src[i+r2+1], src[i+r2+2], a2);
         c_acc -= lerp(src[i-r2], src[i-r2-1], a2);
         c_sub += lerp(src[i+r+1], src[i+r+2], a);
         c_sub -= lerp(src[i-r], src[i-r-1], a);
     }
     for (i := len - r2 - 2; i < len; i++) {
-        dest[i] = ((c_acc - c_sub)) * r_rcp;
+        dest[i] = (c_acc - c_sub) * r_rcp;
         c_acc += lerp(diffract_fetch(src, len, i+r2+1), diffract_fetch(src, len, i+r2+2), a2);
         c_acc -= lerp(diffract_fetch(src, len, i-r2), diffract_fetch(src, len, i-r2-1), a2);
         c_sub += lerp(diffract_fetch(src, len, i+r+1), diffract_fetch(src, len, i+r+2), a);
@@ -159,6 +257,7 @@ func planarise(img: Image*): float* {
 
     return pixels;
 }
+
 func is_identity_transform(transform: float2): bool {
     return (transform.x == 0 || transform.x == 1) && (transform.y == 0);
 }
@@ -185,8 +284,8 @@ func transform_image(src: Image*, transform: float2): Image {
 
     inverse_rect := all_rect();
     inverse_rect.size = { 1. / x, 1. / y };
-    d2 := dot2(transform, transform);
-    inverse_rect.rot = {transform.x / d2, -transform.y / d2};
+    m := magnitude2(transform);
+    inverse_rect.rot = {transform.x / m, -transform.y / m};
 
     for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
         *it.pixel = image_sample_linear(src, it.pos);
@@ -196,6 +295,20 @@ func transform_image(src: Image*, transform: float2): Image {
 }
 
 func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float2) {
+
+        // Todo: Clean up
+        a := rotate({-0.5, -0.5}, transform);
+        b := rotate({ 0.5, -0.5}, transform);
+        c := rotate({-0.5,  0.5}, transform);
+        d := rotate({ 0.5,  0.5}, transform);
+
+        x_min := min4(a.x, b.x, c.x, d.x);
+        x_max := max4(a.x, b.x, c.x, d.x);
+        y_min := min4(a.y, b.y, c.y, d.y);
+        y_max := max4(a.y, b.y, c.y, d.y);
+        x := x_max - x_min;
+        y := y_max - y_min;
+
     transformed_img := transform_image(img_dest, transform);
     img := &transformed_img;
 
@@ -219,6 +332,7 @@ func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float
         }
     }
 
+
     green := planes + pixel_count;
     diffract_plane(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
     diffract_plane(transpose, scratch, 0, img.size, inner_radius * 1.1, outer_radius * 1.2);
@@ -228,6 +342,7 @@ func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float
             green[i + j*img.size.x] += transpose[j + i*img.size.y];
         }
     }
+
 
     blue := planes + 2*pixel_count;
     diffract_plane(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
@@ -246,23 +361,11 @@ func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float
             img_dest.pixels[i].b += alpha*blue[i];
         }
     } else {
-        // Todo: Clean up
-        a := rotate({-0.5, -0.5}, transform);
-        b := rotate({ 0.5, -0.5}, transform);
-        c := rotate({-0.5,  0.5}, transform);
-        d := rotate({ 0.5,  0.5}, transform);
-
-        x_min := min4(a.x, b.x, c.x, d.x);
-        x_max := max4(a.x, b.x, c.x, d.x);
-        y_min := min4(a.y, b.y, c.y, d.y);
-        y_max := max4(a.y, b.y, c.y, d.y);
-        x := x_max - x_min;
-        y := y_max - y_min;
-
-        scale := float2 { x, y };
+        scale := float2 { 1. / x, 1. / y };
+        transform = float2 { transform.x / magnitude2(transform),  transform.y / magnitude2(transform)};
         offset := float2 { 0.5, 0.5 };
         for (it := pixel_iter_begin(img_dest, {}); pixel_iter_next(&it)) {
-            pos := add2(div2(rotate(sub2(it.pos, offset), transform), scale), offset);
+            pos := add2(mul2(rotate(sub2(it.pos, offset), transform), scale), offset);
 
             it.pixel.r += alpha*sample_linear(red, img.size, pos);
             it.pixel.g += alpha*sample_linear(green, img.size, pos);
