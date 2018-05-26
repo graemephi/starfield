@@ -213,6 +213,10 @@ func sample_linear(pixels: float*, size: int2, pos: float2): float {
 }
 
 func image_sample_nearest(img: Image*, pos: float2): Color {
+    if (img.pixels == 0 || img.size.x == 0 || img.size.y == 0) {
+        return {};
+    }
+
     p := int2 { int(round(pos.x * img.size.x - 0.5)), int(round(pos.y * img.size.y - 0.5)) };
     return image_fetch(img, p);
 }

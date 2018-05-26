@@ -68,7 +68,7 @@ func make_tex(size: int2): Tex {
     #assert(is_power_2(size.x));
     #assert(size.x == size.y);
     // Allocate space for lods as well.
-    pixels := xcalloc(size.x*size.y*4/3, sizeof(Color));
+    pixels := xcalloc(size.x*size.y*4, sizeof(Color));
     return Tex {
         size = size,
         lod_levels = 1,
@@ -83,67 +83,173 @@ func free_tex(tex: Tex*) {
     tex.size = { 0, 0 };
 }
 
-func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float {
+func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float2 {
     step_x := fabs(src_size.x / (dest_size.x * target_size.x));
     step_y := fabs(src_size.y / (dest_size.y * target_size.y));
-    return max(0, log2(max(step_x, step_y)));
+    return { max(0, log2(step_x)), max(0, log2(step_y)) };
 }
 
+// Axis-aligned anisotropic filtering
 func generate_lods(tex: Tex*) {
     #assert(tex.size.x == tex.size.y);
     tex.lod_levels = maxi(1, log2i(tex.size.x));
 
     blurry := image_copy(&{tex.pixels, tex.size});
 
-    size := tex.size.x;
-    for (i := 1; i < tex.lod_levels; i++) {
-        #assert(size >= 1);
-        blurry_subrect := Image { blurry.pixels, { size, size }};
-        prev_lod := tex_get_lod(tex, i - 1);
-        blur_to(&blurry_subrect, &prev_lod, .707);
-        lod := tex_get_lod(tex, i);
+    size := tex.size;
+    for (i := 0; i < tex.lod_levels; i++) {
+        #assert(size.x >= 1);
+        #assert(size.y >= 1);
 
-        for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
-            #assert(image_sample_nearest(&lod, it.pos).r == it.pixel.r);
-            *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+        if (i > 0) {
+            // Mip pyramid
+            prev_lod := tex_get_lod(tex, { i - 1, i - 1 });
+            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+
+            blur_to(&blurry_subrect, &prev_lod, .707);
+            lod := tex_get_lod(tex, { i, i });
+
+            for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
+                #assert(is_zero(it.pixel, sizeof(Color)));
+                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+            }
         }
 
-        size /= 2;
+        for (j := i + 1; j < tex.lod_levels; j++) {
+            prev_lod := tex_get_lod(tex, { j - 1, i  });
+            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+
+            blur_horizontal(&blurry_subrect, &prev_lod, 0.5);
+            lod := tex_get_lod(tex, { j, i });
+
+            for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
+                #assert(is_zero(it.pixel, sizeof(Color)));
+                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+            }
+        }
+
+        for (k := i + 1; k < tex.lod_levels; k++) {
+            prev_lod := tex_get_lod(tex, { i, k - 1 });
+            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+
+            blur_vertical(&blurry_subrect, &prev_lod, 0.5);
+            lod := tex_get_lod(tex, { i, k });
+
+            for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
+                #assert(is_zero(it.pixel, sizeof(Color)));
+                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+            }
+        }
     }
 
     free_image(&blurry);
 }
 
-func tex_get_lod(tex: Tex*, lod: int): Image {
-    #assert(lod >= 0);
-    if (lod >= tex.lod_levels) {
+func tex_get_square_lod(tex: Tex*, lod: int): Image {
+    if (lod == 0) {
+        return { tex.pixels, tex.size };
+    }
+
+    return tex_get_square_lod(&{ tex.pixels + tex.size.x*tex.size.y*3, div2is(tex.size, 2) }, lod - 1);
+}
+
+func tex_get_lod(tex: Tex*, lod: int2): Image {
+    // Todo: some way of directly computing offset into buffer.
+    #assert(lod.x >= 0);
+    #assert(lod.y >= 0);
+
+    if (lod.x >= tex.lod_levels || lod.y >= tex.lod_levels) {
         return {};
     }
 
-    lod_size := tex.size.x >> lod;
-    pixels := tex.pixels + (tex.size.x*tex.size.x - lod_size*lod_size)*4/3;
+    square_lod := tex_get_square_lod(tex, mini(lod.x, lod.y));
 
-    return Image { pixels = pixels, size = { lod_size, lod_size }};
+    lod_size := int2 { tex.size.x >> lod.x, tex.size.y >> lod.y };
+    #assert(lod_size.x == square_lod.size.x || lod_size.y == square_lod.size.y);
+
+    if (lod_size.x < lod_size.y) {
+        x := square_lod.size.x;
+        pixels := square_lod.pixels;
+        while (x != lod_size.x) {
+            pixels += x * square_lod.size.y;
+            x /= 2;
+        }
+
+        #assert(pixels < square_lod.pixels + square_lod.size.x*square_lod.size.y*2);
+        #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
+        return { pixels, lod_size };
+    } else if (lod_size.y < lod_size.x) {
+        y := square_lod.size.y;
+        pixels := square_lod.pixels + square_lod.size.x*square_lod.size.y;
+        while (y != lod_size.y) {
+            pixels += y * square_lod.size.x;
+            y /= 2;
+        }
+
+        #assert(pixels < square_lod.pixels + square_lod.size.x*square_lod.size.y*4);
+        #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
+        return { pixels, lod_size };
+    }
+
+    #assert(square_lod.pixels < tex.pixels + tex.size.x*tex.size.y*4);
+    return square_lod;
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
     return image_sample_linear(&{tex.pixels, tex.size}, pos);
 }
 
-func tex_lookup_lod(tex: Tex*, pos: float2, lod: float): Color {
-    lodi := int(lod);
-    lodf := lod - lodi;
-    a_lod := tex_get_lod(tex, lodi);
-    b_lod := tex_get_lod(tex, lodi + 1);
-    a := image_sample_linear(&a_lod, pos);
-    if (lodf > 0.00015) { // ~srgb(1/255)/2
-        b := image_sample_linear(&b_lod, pos);
-        return color_lerp(a, b, lodf);
+func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
+    result := Color {};
+    if (lod.x == lod.y) {
+        lodi := float2_to_int2(lod);
+        lodf := float2 { lod.x - lodi.x, lod.x - lodi.x };
+        a_lod := tex_get_lod(tex, lodi);
+        b_lod := tex_get_lod(tex, add2is(lodi, 1));
+        a := image_sample_linear(&a_lod, pos);
+        if (lodf.x > 0.0001) {
+            b := image_sample_linear(&b_lod, pos);
+            return  color_lerp(a, b, lodf.x);
+        }
+
+        return a;
     }
 
-    return a;
+    lodi := float2_to_int2(lod);
+    lodf := float2 { lod.x - lodi.x, lod.y - lodi.y };
+    a_lod := tex_get_lod(tex, lodi);
+    b_lod := tex_get_lod(tex, add2i(lodi, { 1, 0 }));
+    c_lod := tex_get_lod(tex, add2i(lodi, { 0, 1 }));
+    d_lod := tex_get_lod(tex, add2i(lodi, { 1, 1 }));
+    a := image_sample_linear(&a_lod, pos);
+    b := image_sample_linear(&b_lod, pos);
+    c := image_sample_linear(&c_lod, pos);
+    d := image_sample_linear(&d_lod, pos);
+    ab := color_lerp(a, b, lodf.x);
+    cd := color_lerp(c, d, lodf.x);
+    abcd := color_lerp(ab, cd, lodf.y);
+    return abcd;
 }
 
+func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
+    if (is_zero(&target, sizeof(target))) {
+        target = all_rect();
+    }
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
+}
+
+func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
+    lod := compute_lod_level(dest.size, target.size, tex.size);
+    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
+        rgba := tex_lookup_lod(tex, it.pos, lod);
+        rgba = color_mul(rgba, multiply_color);
+        *it.pixel = blend(*it.pixel, rgba);
+    }
+}
 
 func all_rect(): Rect {
     return {
@@ -277,33 +383,17 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
-    if (is_zero(&target, sizeof(target))) {
-        target = all_rect();
-    }
-    lod := compute_lod_level(dest.size, target.size, tex.size);
-    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
-        *it.pixel = blend(*it.pixel, rgba);
-    }
-}
-
-func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
-    lod := compute_lod_level(dest.size, target.size, tex.size);
-    for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
-        rgba = color_mul(rgba, multiply_color);
-        *it.pixel = blend(*it.pixel, rgba);
-    }
-}
-
 // Star types:
-// *+.·˚⊹⋆✦✧✫✹✺　
+// *+.·˚⊹⋆✦✧✫✹✺
+
+// Set in main, used for anything that should be aligned with diffraction.
+var diffraction_rotation: float2 = {};
 
 struct StarType {
     id: int32;
     size: float2;
     nonsquare: bool;
+    fixed_rotation: bool;
     tex: Tex;
 }
 
@@ -522,13 +612,13 @@ func create_starfield(starfield: char const*): Starfield {
                 star_count++;
 
                 star.rect.pos = { float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 };
-                x := clamp(0.2, 1.2, square(random_normal()));
+                x := clamp(0.66, 1.33, square(random_normal()));
                 y := x;
                 if (star.type.nonsquare) {
-                    y = clamp(0.2, 1.2, square(random_normal()));
+                    y = clamp(0.66, 1.33, square(random_normal()));
                 }
                 star.rect.size = float2 { x, y };
-                star.rect.rot = random_unit_vector2();
+                star.rect.rot = star.type.fixed_rotation ? {} : random_unit_vector2();
                 star.color = random_star_color(star.type, 1 + x*x);
 
                 push_star(&result, star);
@@ -658,7 +748,7 @@ func draw_spiral_galaxy(tex: Tex*) {
     draw_starfield(tex_img, s);
 
     bloom := image_copy(tex_img);
-    blur(&bloom, 8);
+    blur(&bloom, 6);
 
     for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
         rel := sub2s(it.pos, 0.5);
@@ -670,10 +760,36 @@ func draw_spiral_galaxy(tex: Tex*) {
         b := image_sample_linear(&bloom, it.pos);
         c := color_add(a, b);
         d := color_mul(b, c);
-        *it.pixel = color_lerp(*it.pixel, d, .4);
+        center_yellow := pow(1 - clamp01(th / (Sqrt2/4)), 6);
+        e := color_lerp(d, star_colors[5], center_yellow);
+        *it.pixel = color_lerp(*it.pixel, e, 0.25);
     }
 
     free_starfield(s);
+}
+
+func draw_lensed_quasar(tex: Tex*) {
+    center := div2is(tex.size, 2);
+
+    width := tex.size.x / int(1 + random01() * 8);
+    height := tex.size.y / int(1 + random01() * 8);
+
+    top := sub2i(center, { width, 0 });
+    right := add2i(center, { 0, height });
+    bottom := add2i(center, { width, 0 });
+    left := sub2i(center, { 0, height });
+
+    lum := Color { 16., 16., 16., 1. };
+
+    tex.pixels[center.x + tex.size.x*center.y] = { lum.r, lum.g, lum.b * 1.25, lum.a };
+    blur(&{ tex.pixels, tex.size }, 2);
+
+    tex.pixels[top.x + tex.size.x*top.y] = lum;
+    tex.pixels[right.x + tex.size.x*right.y] = lum;
+    tex.pixels[bottom.x + tex.size.x*bottom.y] = lum;
+    tex.pixels[left.x + tex.size.x*left.y] = lum;
+    blur(&{ tex.pixels, tex.size }, .25);
+    blur(&{ tex.pixels, tex.size }, .25);
 }
 
 func init_star_type(type: StarType*) {
@@ -715,13 +831,16 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             draw_simple_star(type.tex.pixels, type.tex.size);
         case 6: // ⊹
-            type.tex = make_tex({ 64, 64 });
-            type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            type.tex = make_tex({ 64,  64 });
+            type.size = { .5, .5 };
+            draw_lensed_quasar(&type.tex);
         case 7: // ⋆
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
+            type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
+            diffraction(&{type.tex.pixels, type.tex.size}, 0.2, .5, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }));
+            diffraction(&{type.tex.pixels, type.tex.size}, 0.1, .5, rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}));
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
@@ -729,10 +848,25 @@ func init_star_type(type: StarType*) {
         case 9: // ✧
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
+            type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
+            diffraction(&{type.tex.pixels, type.tex.size}, 2, 2, diffraction_rotation);
         case 10: // ✫
-            type.tex = make_tex({ 64, 64 });
+            type.tex = make_tex({ 128, 128 });
             type.size = { 1, 1 };
+            type.fixed_rotation = true;
+
+            type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
+            img := image_copy(&Image { type.tex.pixels, type.tex.size });
+            diffraction(&img, 1, 2, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }));
+            blur(&img, 0.1);
+            for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
+                c := image_sample_nearest(&img, it.pos);
+                str := clamp01(1 - magnitude2(sub2(it.pos, { 0.5, 0.5 })) * 12);
+                str = str*str*str*str*str;
+                to_white := color_lerp({1, 1, 1, 1}, { 1, 4, 64, 1 }, str);
+                *it.pixel = color_add(*it.pixel, color_mul(c, to_white));
+            }
         case 11: // ✹
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
@@ -746,7 +880,9 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             draw_outline(type.tex.pixels, type.tex.size, { 1, 0, 0, 0.5 });
         default: {
-            #assert(0);
+            type.tex = make_tex({ 32, 32});
+            type.size = { 1, 1 };
+            draw_simple_star(type.tex.pixels, type.tex.size);
         }
     }
 
@@ -854,18 +990,20 @@ func main(argc: int, argv: char**): int {
     noise := make_image({ surface.w, surface.h });
     for (it := pixel_iter_begin(&noise, {}); pixel_iter_next(&it)) {
         c := Color {
-            random_normal() * (1 / 1024.),
-            random_normal() * (1 / 1024.),
-            random_normal() * (1 / 1024.),
+            square(random_normal()) * (1 / 2048.),
+            square(random_normal()) * (1 / 2048.),
+            square(random_normal()) * (1 / 2048.),
             1
         };
         *it.pixel = c;
     }
-    blur(&noise, 0.06);
+    blur(&noise, 0.1);
+
+    diffraction_rotation = random_unit_vector2();
 
     starfield := create_starfield(starfield_text);
 
-    min_t := 1000.; //todo float max
+    min_t := 1000.;
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
@@ -885,10 +1023,8 @@ func main(argc: int, argv: char**): int {
             t0 := time_now();
             t0f := float(t0);
 
-            // draw_tex(&image, {}, &star_types[12].tex);
-
             draw_starfield(&image, &starfield);
-            diffraction(&image, .1, 4., random_unit_vector2());
+            diffraction(&image, .1, 4., diffraction_rotation);
 
             blur_to(&blurred, &image, 1.33);
             blur_to(&blurred2, &image, 2);
@@ -902,7 +1038,9 @@ func main(argc: int, argv: char**): int {
                 xbp2 := color_lerp(bp2, mbp2, .9);
                 *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
             }
+
             image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
+
             t1 := time_now();
 
             t := float((t1 - t0)*1000);

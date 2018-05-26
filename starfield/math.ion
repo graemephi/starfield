@@ -98,16 +98,32 @@ func mul2i(a: int2, b: int2): int2 {
     return { a.x * b.x, a.y * b.y };
 }
 
+func mul2is(a: int2, s: int): int2 {
+    return { a.x * s, a.y * s };
+}
+
 func div2i(a: int2, b: int2): int2 {
     return { a.x / b.x, a.y / b.y };
+}
+
+func div2is(a: int2, s: int): int2 {
+    return { a.x / s, a.y / s };
 }
 
 func add2i(a: int2, b: int2): int2 {
     return { a.x + b.x, a.y + b.y };
 }
 
+func add2is(a: int2, s: int): int2 {
+    return { a.x + s, a.y + s };
+}
+
 func sub2i(a: int2, b: int2): int2 {
     return { a.x - b.x, a.y - b.y };
+}
+
+func sub2is(a: int2, s: int): int2 {
+    return { a.x - s, a.y - s };
 }
 
 func dot2i(a: int2, b: int2): int32 {
@@ -177,6 +193,10 @@ func random_unit_vector2(): float2 {
 
 func randomn(lo: int, hi: int): int {
     return random() % (hi - lo) + lo;
+}
+
+func randomr(lo: float, hi: float): float {
+    return random01() * (hi - lo) + lo;
 }
 
 func random_poisson(alpha: float): int {
