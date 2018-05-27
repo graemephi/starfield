@@ -146,9 +146,9 @@ func generate_lods(tex: Tex*) {
 }
 
 func tex_get_lod(tex: Tex*, lod: int2): Image {
-    // Pixels are laid out as:
-    // Series of decreasing mips
-    // Each mip is a square mip, followed by decreasing mips in the x axis, then decreasing mips in the y axis
+    // Pixels are laid out as: Series of decreasing mips Each mip is a square
+    // mip, followed by decreasing mips in the x axis, then decreasing mips in
+    // the y axis
 
     #assert(lod.x >= 0);
     #assert(lod.y >= 0);
@@ -165,8 +165,8 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
     lod_size := int2 { tex.size.x >> lod.x, tex.size.y >> lod.y };
     #assert(lod_size.x == square_lod.size.x || lod_size.y == square_lod.size.y);
 
-    // Non-square lod sizes decrease geometrically, 1, 1/2, 1/4, 1/8, so their location is
-    // the running sum, (2^n - 1)/2^n * area(lod_square).
+    // Non-square lod sizes decrease geometrically, 1, 1/2, 1/4, 1/8, so their
+    // location is the running sum, (2^n - 1)/2^n * area(lod_square).
     denom_bit := abs(lod.x - lod.y) - 1;
     numer := (1 << denom_bit) - 1;
 
@@ -371,8 +371,7 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-// Star types:
-// *+.·˚⊹⋆✦✧✫✹✺
+// Star types: *+.·˚⊹⋆✦✧✫✹✺
 
 // Set in main, used for anything that should be aligned with diffraction.
 var diffraction_rotation: float2 = {};
