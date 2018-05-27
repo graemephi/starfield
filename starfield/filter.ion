@@ -267,14 +267,12 @@ func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, oute
 
 
 const diffraction_iters = 4;
-func diffract_plane_tranpose(plane: float*, scratch: float*, transposed_src_dest: float*, size: int2, inner_radius: float, outer_radius: float) {
+func diffract_plane(plane: float*, scratch: float*, transpose_scratch: float*, size: int2, inner_radius: float, outer_radius: float) {
     for (y := 0; y < size.y; y++) {
         plane_row := plane + y*size.x;
 
-        transpose_cursor := transposed_src_dest + y;
         for (i := 0; i < size.x; i++) {
-            *transpose_cursor = plane_row[i];
-            transpose_cursor += size.y;
+            transpose_scratch[y + i*size.y] = plane_row[i];
         }
 
         for (i := 0; i < diffraction_iters; i++) {
@@ -282,19 +280,17 @@ func diffract_plane_tranpose(plane: float*, scratch: float*, transposed_src_dest
             diffract_row(plane_row, scratch, size.x, inner_radius, outer_radius);
         }
     }
-}
 
-func diffract_plane_sum(plane: float*, scratch: float*, sum_src_dest: float*, size: int2, inner_radius: float, outer_radius: float) {
-    for (y := 0; y < size.y; y++) {
-        plane_row := plane + y*size.x;
+    for (x := 0; x < size.x; x++) {
+        transpose_row := transpose_scratch + x*size.y;
 
         for (i := 0; i < diffraction_iters; i++) {
-            diffract_row(scratch, plane_row, size.x, inner_radius, outer_radius);
-            diffract_row(plane_row, scratch, size.x, inner_radius, outer_radius);
+            diffract_row(scratch, transpose_row, size.y, inner_radius, outer_radius);
+            diffract_row(transpose_row, scratch, size.y, inner_radius, outer_radius);
         }
 
-        for (i := 0; i < size.x; i++) {
-            sum_src_dest[y + i*size.y] += plane_row[i];
+        for (i := 0; i < size.y; i++) {
+            plane[x + i*size.x] += transpose_row[i];
         }
     }
 }
@@ -348,7 +344,22 @@ func transformed_bounds(transform: float2): float2 {
     return { x, y };
 }
 
-func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float2) {
+enum DiffractionType {
+    Diffraction_Cross
+}
+
+struct DiffractionArguments {
+    alpha: float;
+    radius: float;
+    transform: float2;
+    type: DiffractionType;
+}
+
+func diffraction(img_dest: Image*, args: DiffractionArguments) {
+    alpha := args.alpha;
+    radius := args.radius;
+    transform := args.transform;
+
     bounds := float2 { 1, 1 };
     rotation := float2 { 1, 0 };
 
@@ -372,20 +383,13 @@ func diffraction(img_dest: Image*, alpha: float, radius: float, transform: float
     scratch: float* = xcalloc(maxi(img.size.x, img.size.y), sizeof(float));
     planes := planarise(img);
     transpose: float* = xcalloc(pixel_count, sizeof(float));
-    transpose_size := int2 { img.size.y, img.size.x };
 
     red := planes;
-    diffract_plane_tranpose(red, scratch, transpose, img.size, inner_radius, outer_radius);
-    diffract_plane_sum(transpose, scratch, red, transpose_size, inner_radius_transpose, outer_radius_transpose);
-
     green := planes + pixel_count;
-    diffract_plane_tranpose(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
-    diffract_plane_sum(transpose, scratch, green, transpose_size, inner_radius_transpose * 1.1, outer_radius_transpose * 1.2);
-
     blue := planes + 2*pixel_count;
-    diffract_plane_tranpose(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
-    diffract_plane_sum(transpose, scratch, blue, transpose_size, inner_radius_transpose * 1.2, outer_radius_transpose * 1.4);
-
+    diffract_plane(red, scratch, transpose, img.size, inner_radius, outer_radius);
+    diffract_plane(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
+    diffract_plane(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
 
     if (img.pixels == img_dest.pixels) {
         for (i := 0; i < pixel_count; i++) {

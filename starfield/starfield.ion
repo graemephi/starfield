@@ -145,16 +145,11 @@ func generate_lods(tex: Tex*) {
     free_image(&blurry);
 }
 
-func tex_get_square_lod(tex: Tex*, lod: int): Image {
-    if (lod == 0) {
-        return { tex.pixels, tex.size };
-    }
-
-    return tex_get_square_lod(&{ tex.pixels + tex.size.x*tex.size.y*3, div2is(tex.size, 2) }, lod - 1);
-}
-
 func tex_get_lod(tex: Tex*, lod: int2): Image {
-    // Todo: some way of directly computing offset into buffer.
+    // Pixels are laid out as:
+    // Series of decreasing mips
+    // Each mip is a square mip, followed by decreasing mips in the x axis, then decreasing mips in the y axis
+
     #assert(lod.x >= 0);
     #assert(lod.y >= 0);
 
@@ -162,37 +157,30 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
         return {};
     }
 
-    square_lod := tex_get_square_lod(tex, mini(lod.x, lod.y));
+    square_level := mini(lod.x, lod.y);
+    square_size := int2 { tex.size.x >> square_level, tex.size.y >> square_level };
+    square_area := square_size.x*square_size.y;
+    square_lod := Image { tex.pixels + tex.size.x*tex.size.y*4 - square_area*4, square_size };
 
     lod_size := int2 { tex.size.x >> lod.x, tex.size.y >> lod.y };
     #assert(lod_size.x == square_lod.size.x || lod_size.y == square_lod.size.y);
 
-    if (lod_size.x < lod_size.y) {
-        x := square_lod.size.x;
-        pixels := square_lod.pixels;
-        while (x != lod_size.x) {
-            pixels += x * square_lod.size.y;
-            x /= 2;
-        }
+    // Non-square lod sizes decrease geometrically, 1, 1/2, 1/4, 1/8, so their location is
+    // the running sum, (2^n - 1)/2^n * area(lod_square).
+    denom_bit := abs(lod.x - lod.y) - 1;
+    numer := (1 << denom_bit) - 1;
 
-        #assert(pixels < square_lod.pixels + square_lod.size.x*square_lod.size.y*2);
-        #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
-        return { pixels, lod_size };
-    } else if (lod_size.y < lod_size.x) {
-        y := square_lod.size.y;
-        pixels := square_lod.pixels + square_lod.size.x*square_lod.size.y;
-        while (y != lod_size.y) {
-            pixels += y * square_lod.size.x;
-            y /= 2;
-        }
-
-        #assert(pixels < square_lod.pixels + square_lod.size.x*square_lod.size.y*4);
-        #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
-        return { pixels, lod_size };
+    pixels := square_lod.pixels;
+    if (lod.x > lod.y) {
+        pixels += square_area + ((numer*square_area) >> denom_bit);
+        #assert(pixels < square_lod.pixels + square_area*2);
+    } else if (lod.y > lod.x) {
+        pixels += square_area*2 + ((numer*square_area) >> denom_bit);
+        #assert(pixels < square_lod.pixels + square_area*4);
     }
 
-    #assert(square_lod.pixels < tex.pixels + tex.size.x*tex.size.y*4);
-    return square_lod;
+    #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
+    return { pixels, lod_size };
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
@@ -839,8 +827,8 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
-            diffraction(&{type.tex.pixels, type.tex.size}, 0.2, .5, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }));
-            diffraction(&{type.tex.pixels, type.tex.size}, 0.1, .5, rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}));
+            diffraction(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .5, transform = rotate(diffraction_rotation, { Sqrt2, Sqrt2 }) });
+            diffraction(&{type.tex.pixels, type.tex.size}, { alpha = 0.1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
@@ -850,7 +838,7 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
-            diffraction(&{type.tex.pixels, type.tex.size}, 2, 2, diffraction_rotation);
+            diffraction(&{type.tex.pixels, type.tex.size}, { 2, 2, diffraction_rotation });
         case 10: // ✫
             type.tex = make_tex({ 128, 128 });
             type.size = { 1, 1 };
@@ -858,7 +846,7 @@ func init_star_type(type: StarType*) {
 
             type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
             img := image_copy(&Image { type.tex.pixels, type.tex.size });
-            diffraction(&img, 1, 2, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }));
+            diffraction(&img, { 1, 2, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }) });
             blur(&img, 0.1);
             for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
                 c := image_sample_nearest(&img, it.pos);
@@ -1024,7 +1012,12 @@ func main(argc: int, argv: char**): int {
             t0f := float(t0);
 
             draw_starfield(&image, &starfield);
-            diffraction(&image, .1, 4., diffraction_rotation);
+            diffraction(&image, {
+                alpha = 0.1,
+                radius = 4,
+                transform = diffraction_rotation,
+                type = Diffraction_Cross
+            });
 
             blur_to(&blurred, &image, 1.33);
             blur_to(&blurred2, &image, 2);
