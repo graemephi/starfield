@@ -271,8 +271,10 @@ func diffract_plane(plane: float*, scratch: float*, transpose_scratch: float*, s
     for (y := 0; y < size.y; y++) {
         plane_row := plane + y*size.x;
 
-        for (i := 0; i < size.x; i++) {
-            transpose_scratch[y + i*size.y] = plane_row[i];
+        if (transpose_scratch) {
+            for (i := 0; i < size.x; i++) {
+                transpose_scratch[y + i*size.y] = plane_row[i];
+            }
         }
 
         for (i := 0; i < diffraction_iters; i++) {
@@ -281,16 +283,18 @@ func diffract_plane(plane: float*, scratch: float*, transpose_scratch: float*, s
         }
     }
 
-    for (x := 0; x < size.x; x++) {
-        transpose_row := transpose_scratch + x*size.y;
+    if (transpose_scratch) {
+        for (x := 0; x < size.x; x++) {
+            transpose_row := transpose_scratch + x*size.y;
 
-        for (i := 0; i < diffraction_iters; i++) {
-            diffract_row(scratch, transpose_row, size.y, inner_radius, outer_radius);
-            diffract_row(transpose_row, scratch, size.y, inner_radius, outer_radius);
-        }
+            for (i := 0; i < diffraction_iters; i++) {
+                diffract_row(scratch, transpose_row, size.y, inner_radius, outer_radius);
+                diffract_row(transpose_row, scratch, size.y, inner_radius, outer_radius);
+            }
 
-        for (i := 0; i < size.y; i++) {
-            plane[x + i*size.x] += transpose_row[i];
+            for (i := 0; i < size.y; i++) {
+                plane[x + i*size.x] += transpose_row[i];
+            }
         }
     }
 }
@@ -312,12 +316,12 @@ func is_identity_transform(transform: float2): bool {
     return (transform.x == 0 || transform.x == 1) && (transform.y == 0);
 }
 
-func transform_image(src: Image*, rotate: float2, bounds: float2): Image {
-    size := int2 { int(bounds.x * src.size.x), int(bounds.y * src.size.y) };
+func transform_image(src: Image*, rotate: float2, scale: float2): Image {
+    size := int2 { int(scale.x * src.size.x), int(scale.y * src.size.y) };
     result := make_image(size);
 
     inverse_rect := all_rect();
-    inverse_rect.size = { 1. / bounds.x, 1. / bounds.y };
+    inverse_rect.size = { 1. / scale.x, 1. / scale.y };
     inverse_rect.rot = { rotate.x, -rotate.y };
 
     for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
@@ -327,7 +331,7 @@ func transform_image(src: Image*, rotate: float2, bounds: float2): Image {
     return result;
 }
 
-func transformed_bounds(transform: float2): float2 {
+func bounds_after_transform(transform: float2): float2 {
     a := rotate({-0.5, -0.5}, transform);
     b := rotate({ 0.5, -0.5}, transform);
     c := rotate({-0.5,  0.5}, transform);
@@ -345,7 +349,12 @@ func transformed_bounds(transform: float2): float2 {
 }
 
 enum DiffractionType {
-    Diffraction_Cross
+    Diffraction_None,
+    Diffraction_Cross,
+    Diffraction_CrossOrthoRed,
+    Diffraction_Single,
+
+    DiffractionTypeCount
 }
 
 struct DiffractionArguments {
@@ -355,21 +364,15 @@ struct DiffractionArguments {
     type: DiffractionType;
 }
 
-func diffraction(img_dest: Image*, args: DiffractionArguments) {
-    alpha := args.alpha;
-    radius := args.radius;
-    transform := args.transform;
-
-    bounds := float2 { 1, 1 };
+func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: float2, transformed_bounds: float2, scratch: float*, transpose_scratch: float* /* nullable */) {
     rotation := float2 { 1, 0 };
 
-    img := img_dest;
+    img := dest;
     if (is_identity_transform(transform) == false) {
-        bounds = transformed_bounds(transform);
         m := magnitude2(transform);
         rotation = float2 { transform.x / m,  transform.y / m };
 
-        transformed_img := transform_image(img_dest, rotation, bounds);
+        transformed_img := transform_image(dest, rotation, transformed_bounds);
         img = &transformed_img;
     }
 
@@ -379,38 +382,74 @@ func diffraction(img_dest: Image*, args: DiffractionArguments) {
     outer_radius_transpose := outer_radius * (float(img.size.y) / img.size.x);
 
     pixel_count := img.size.x*img.size.y;
-
-    scratch: float* = xcalloc(maxi(img.size.x, img.size.y), sizeof(float));
     planes := planarise(img);
-    transpose: float* = xcalloc(pixel_count, sizeof(float));
 
     red := planes;
     green := planes + pixel_count;
     blue := planes + 2*pixel_count;
-    diffract_plane(red, scratch, transpose, img.size, inner_radius, outer_radius);
-    diffract_plane(green, scratch, transpose, img.size, inner_radius * 1.1, outer_radius * 1.2);
-    diffract_plane(blue, scratch, transpose, img.size, inner_radius * 1.2, outer_radius * 1.4);
+    diffract_plane(red, scratch, transpose_scratch, img.size, inner_radius, outer_radius);
+    diffract_plane(green, scratch, transpose_scratch, img.size, inner_radius * 1.1, outer_radius * 1.2);
+    diffract_plane(blue, scratch, transpose_scratch, img.size, inner_radius * 1.2, outer_radius * 1.4);
 
-    if (img.pixels == img_dest.pixels) {
+    if (img.pixels == dest.pixels) {
         for (i := 0; i < pixel_count; i++) {
-            img_dest.pixels[i].r += alpha*red[i];
-            img_dest.pixels[i].g += alpha*green[i];
-            img_dest.pixels[i].b += alpha*blue[i];
+            dest.pixels[i].r += alpha.r*red[i];
+            dest.pixels[i].g += alpha.g*green[i];
+            dest.pixels[i].b += alpha.b*blue[i];
         }
     } else {
-        scale := float2 { 1. / bounds.x, 1. / bounds.y };
+        scale := float2 { 1. / transformed_bounds.x, 1. / transformed_bounds.y };
         offset := float2 { 0.5, 0.5 };
-        for (it := pixel_iter_begin(img_dest, {}); pixel_iter_next(&it)) {
+        for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
             pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), offset);
 
-            it.pixel.r += alpha*sample_linear(red, img.size, pos);
-            it.pixel.g += alpha*sample_linear(green, img.size, pos);
-            it.pixel.b += alpha*sample_linear(blue, img.size, pos);
+            if (inside_normal_rect(pos)) {
+                it.pixel.r += alpha.r*sample_linear(red, img.size, pos);
+                it.pixel.g += alpha.g*sample_linear(green, img.size, pos);
+                it.pixel.b += alpha.b*sample_linear(blue, img.size, pos);
+            }
         }
 
         free_image(img);
     }
 
-    free(scratch);
     free(planes);
+}
+
+func diffract(img: Image*, args: DiffractionArguments) {
+    // Convenience for random selection.
+    if (args.type == Diffraction_None) {
+        return;
+    }
+
+    alpha := args.alpha == 0 ? 1 : args.alpha;
+    radius := args.radius == 0 ? 1 : args.radius;
+    transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
+
+    bounds := bounds_after_transform(transform);
+    m := magnitude2(transform);
+    working_size := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
+
+    scratch_buf_size := maxi(working_size.x, working_size.y);
+    transpose_scratch_size := 0;
+
+    if (args.type != Diffraction_Single) {
+        transpose_scratch_size = working_size.x*working_size.y;
+    }
+
+    scratch_buf: float* = xcalloc(scratch_buf_size + transpose_scratch_size, sizeof(float));
+    tranpose_scratch := transpose_scratch_size ? scratch_buf + scratch_buf_size : 0;
+
+    apply_diffraction(img, { alpha, alpha, alpha }, radius, transform, bounds, scratch_buf, tranpose_scratch);
+
+    if (args.type == Diffraction_CrossOrthoRed) {
+        ortho := rotate(args.transform, mul2s({ InvSqrt2, InvSqrt2 }, 0.7));
+        ortho_bounds := bounds_after_transform(ortho);
+        ortho_working_size := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
+        #assert(maxi(ortho_working_size.x, ortho_working_size.y) < scratch_buf_size);
+        #assert((ortho_working_size.x * ortho_working_size.y) < transpose_scratch_size);
+        apply_diffraction(img, { alpha, alpha*.6, alpha*.2 }, radius, ortho, ortho_bounds, scratch_buf, tranpose_scratch);
+    }
+
+    free(scratch_buf);
 }

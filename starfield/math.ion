@@ -1,6 +1,7 @@
 const Pi = PI;
 const Tau = Pi*2;
 const Sqrt2 = 1.4142135623730950488;
+const InvSqrt2 = 1. / Sqrt2;
 
 func is_power_2(x: int32): bool {
     return x != 0 && x & (x - 1) == 0;
@@ -224,4 +225,22 @@ func random_normal(): float {
 
 func lerp(a: float, b: float, t: float): float {
     return (1 - t)*a + t*b;
+}
+
+func mod(x: float, m: float): float {
+    if (x < 0) {
+        x = m - x;
+    }
+    r := x / m;
+    q := r - int(r);
+    p := q * m;
+    return p;
+}
+
+func wrap(x: float, m: float): float {
+    y := mod(x, m * 2);
+    if (y > m) {
+        y -= (y - m);
+    }
+    return y;
 }

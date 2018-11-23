@@ -102,7 +102,7 @@ func generate_lods(tex: Tex*) {
         #assert(size.y >= 1);
 
         if (i > 0) {
-            // Mip pyramid
+            // Square pyramid
             prev_lod := tex_get_lod(tex, { i - 1, i - 1 });
             blurry_subrect := Image { blurry.pixels, prev_lod.size };
 
@@ -144,6 +144,18 @@ func generate_lods(tex: Tex*) {
 
     free_image(&blurry);
 }
+
+func tex_poke(tex: Tex*, pos: int2, val: Color) {
+    #assert(tex.lod_levels == 1);
+
+    // Todo: assert?
+    pos.x = clampi(0, tex.size.x - 1, pos.x);
+    pos.y = clampi(0, tex.size.y - 1, pos.y);
+    idx := pos.x + tex.size.x*pos.y;
+
+    tex.pixels[idx] = val;
+}
+
 
 func tex_get_lod(tex: Tex*, lod: int2): Image {
     // Pixels are laid out as: Series of decreasing mips Each mip is a square
@@ -541,24 +553,6 @@ var star_colors: Color[] = {
 };
 const star_color_count = (sizeof(star_colors)/sizeof(Color));
 
-func mod(x: float, m: float): float {
-    if (x < 0) {
-        x = m - x;
-    }
-    r := x / m;
-    q := r - int(r);
-    p := q * m;
-    return p;
-}
-
-func wrap(x: float, m: float): float {
-    y := mod(x, m * 2);
-    if (y > m) {
-        y -= (y - m);
-    }
-    return y;
-}
-
 func random_star_color(type: StarType*, alpha: float): Color {
     offset := 8;
     r := offset + random_normal() * (star_color_count / 7);
@@ -698,32 +692,33 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
     }
 }
 
-func draw_spiral_galaxy(tex: Tex*) {
+func draw_galaxy(tex: Tex*, arms: int) {
     tex_img := &Image { tex.pixels, tex.size };
 
     s := &Starfield {};
     for (i := 0; i < 20000; i++) {
-        w := .025;
-        x := random_normal() / 16;
-        y := random_normal() / 16;
+        w := .25;
+        x := (random_normal() / 16);
+        y := (random_normal() / 16);
+        rot := 0.;
 
-        // Creates 4 axis aligned arms, with spillage
-        if (random() & 1) {
+        if (arms > 0) {
             x = lerp(x, wrap(x + w/2, w) - w/2, 0.25+0.75*random01());
-        } else {
-            y = lerp(y, wrap(y + w/2, w) - w/2, 0.25+0.75*random01());
+            y = lerp(x, wrap(x + w/2, w) - w/2, 0.25+0.75*random01());
+
+            rot = randomn(0, arms + 1) * Tau / arms;
         }
 
         // Rotate the arms more towards the edge
         th := magnitude2({x, y});
-        spiral := mul2s({ cos(th*Tau*4), sin(th*Tau*4) }, 2);
+        spiral_str := mul2s({ cos(rot*th*4), sin(rot*th*4) }, 2);
 
         // Dim large/bright stars towards the edge
         size := (Sqrt2 - th) * random01() * 0.02;
 
         push_star(s, {
             rect = {
-                pos = add2s(rotate({ x, y }, spiral), 0.5),
+                pos = add2s(rotate({ x, y }, spiral_str), 0.5),
                 size = { size, size },
                 rot = random_unit_vector2()
             },
@@ -740,8 +735,8 @@ func draw_spiral_galaxy(tex: Tex*) {
     for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
         rel := sub2s(it.pos, 0.5);
         th := magnitude2(rel);
-        spiral := mul2s({ cos(-th*Tau), sin(-th*Tau) }, 2);
-        rel_s := rotate(rel, spiral);
+        sp := mul2s({ cos(-th*Tau), sin(-th*Tau) }, 2);
+        rel_s := rotate(rel, sp);
         p := .5+.5*perlin_octaves(rel_s, 12);
         a := color_lerp(star_colors[star_color_count - 2], {1,1,1,1}, 0.707);
         b := image_sample_linear(&bloom, it.pos);
@@ -758,8 +753,8 @@ func draw_spiral_galaxy(tex: Tex*) {
 func draw_lensed_quasar(tex: Tex*) {
     center := div2is(tex.size, 2);
 
-    width := tex.size.x / int(1 + random01() * 8);
-    height := tex.size.y / int(1 + random01() * 8);
+    width := tex.size.x / int(2 + random01() * 8);
+    height := tex.size.y / int(2 + random01() * 8);
 
     top := sub2i(center, { width, 0 });
     right := add2i(center, { 0, height });
@@ -771,10 +766,11 @@ func draw_lensed_quasar(tex: Tex*) {
     tex.pixels[center.x + tex.size.x*center.y] = { lum.r, lum.g, lum.b * 1.25, lum.a };
     blur(&{ tex.pixels, tex.size }, 2);
 
-    tex.pixels[top.x + tex.size.x*top.y] = lum;
-    tex.pixels[right.x + tex.size.x*right.y] = lum;
-    tex.pixels[bottom.x + tex.size.x*bottom.y] = lum;
-    tex.pixels[left.x + tex.size.x*left.y] = lum;
+    tex_poke(tex, top, lum);
+    tex_poke(tex, right, lum);
+    tex_poke(tex, bottom, lum);
+    tex_poke(tex, left, lum);
+
     blur(&{ tex.pixels, tex.size }, .25);
     blur(&{ tex.pixels, tex.size }, .25);
 }
@@ -826,8 +822,8 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
-            diffraction(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .5, transform = rotate(diffraction_rotation, { Sqrt2, Sqrt2 }) });
-            diffraction(&{type.tex.pixels, type.tex.size}, { alpha = 0.1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
@@ -837,7 +833,7 @@ func init_star_type(type: StarType*) {
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(type.tex.pixels, type.tex.size);
-            diffraction(&{type.tex.pixels, type.tex.size}, { 2, 2, diffraction_rotation });
+            diffract(&{type.tex.pixels, type.tex.size}, { 2, 2, diffraction_rotation });
         case 10: // ✫
             type.tex = make_tex({ 128, 128 });
             type.size = { 1, 1 };
@@ -845,7 +841,7 @@ func init_star_type(type: StarType*) {
 
             type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
             img := image_copy(&Image { type.tex.pixels, type.tex.size });
-            diffraction(&img, { 1, 2, rotate(diffraction_rotation, { Sqrt2, Sqrt2 }) });
+            diffract(&img, { 1, 2, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
             blur(&img, 0.1);
             for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
                 c := image_sample_nearest(&img, it.pos);
@@ -858,10 +854,10 @@ func init_star_type(type: StarType*) {
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
         case 12: // ✺
-            type.tex = make_tex({ 256,256 });
-            type.size = { 0.3333, 0.3333 };
+            type.tex = make_tex({ 256, 256 });
+            type.size = { 1./3., 1./3. };
             type.nonsquare = true;
-            draw_spiral_galaxy(&type.tex);
+            draw_galaxy(&type.tex, 0);
         case 13: // '　'
             type.tex = make_tex({ 8, 8 });
             type.size = { 1, 1 };
@@ -997,8 +993,8 @@ func main(argc: int, argv: char**): int {
     t_reset := time_now();
 
     image := make_image({ surface.w, surface.h });
-    blurred := make_image({ surface.w, surface.h });
-    blurred2 := make_image({ surface.w, surface.h });
+    // blurred := make_image({ surface.w, surface.h });
+    // blurred2 := make_image({ surface.w, surface.h });
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
@@ -1010,26 +1006,34 @@ func main(argc: int, argv: char**): int {
             t0 := time_now();
             t0f := float(t0);
 
-            draw_starfield(&image, &starfield);
-            diffraction(&image, {
-                alpha = 0.1,
-                radius = 4,
-                transform = diffraction_rotation,
-                type = Diffraction_Cross
-            });
 
-            blur_to(&blurred, &image, 1.33);
-            blur_to(&blurred2, &image, 2);
-            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-                bp := image_fetch(&blurred, it.pixel_pos);
-                mbp := color_mul(*it.pixel, bp);
-                xbp := color_lerp(bp, mbp, 0.1);
+            galaxy := make_tex({ 256, 256 });
+            draw_galaxy(&galaxy, n_t % 7);
 
-                bp2 := image_fetch(&blurred2, it.pixel_pos);
-                mbp2 := color_mul(*it.pixel, bp2);
-                xbp2 := color_lerp(bp2, mbp2, .9);
-                *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
-            }
+            draw_tex(&image, {}, &galaxy);
+            free_tex(&galaxy);
+
+
+            // draw_starfield(&image, &starfield);
+            // diffract(&image, {
+            //     alpha = 0.1,
+            //     radius = 4,
+            //     transform = diffraction_rotation,
+            //     type = randomn(0, DiffractionTypeCount)
+            // });
+
+            // blur_to(&blurred, &image, randomr(0, 1)); // ~1.33
+            // blur_to(&blurred2, &image, randomr(0.5,1)); // ~2
+            // for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+            //     bp := image_fetch(&blurred, it.pixel_pos);
+            //     mbp := color_mul(*it.pixel, bp);
+            //     xbp := color_lerp(bp, mbp, 0.1);
+
+            //     bp2 := image_fetch(&blurred2, it.pixel_pos);
+            //     mbp2 := color_mul(*it.pixel, bp2);
+            //     xbp2 := color_lerp(bp2, mbp2, .9);
+            //     *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
+            // }
 
             image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
 
