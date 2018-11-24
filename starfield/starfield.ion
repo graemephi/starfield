@@ -699,37 +699,46 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
 func draw_galaxy(tex: Tex*, arms: int) {
     tex_img := &Image { tex.pixels, tex.size };
 
-    if (arms == 1) {
-        // Yeah... We just rotate spokes, so one looks dumb
-        arms = 2;
-    }
+    arm_width := 0.025 + randomr(-0.01, 0.01);
+    arms = clampi(2, 6, arms);
+    brightness := randomr(0.8, 1.1);
+    bar := randomr(0, 1) * float(arms & 1);
 
     s := &Starfield {};
     for (i := 0; i < 30000; i++) {
-        w := .025;
+        w := arm_width;
         x := (random_normal() / 16);
         y := (random_normal() / 16);
         rot := 0.;
 
         if (arms > 0) {
             x = mod(x + w/2, w) - w/2;
-            y = fabs(y);
-            rot = randomn(0, arms) * Tau / arms;
+
+            if (arms & 1) {
+                y = fabs(y);
+            }
+
+            rot = randomn(0, arms) / float(arms);
+            rot *= random_normal() * 0.1 + 1;
+            rot *= Tau;
+
+            x += (random_normal() / 196);
+            y += (random_normal() / 196);
         }
 
         // Rotate the arms more towards the edge
-        pos := rotate_theta({x, y}, rot);
-        th := magnitude2(pos);
-        bar := smoothstep(th - .25) * 14;
-        spin := randomr(0.9, 1.1) * th * Tau * 4;
-        spiral_str := mul2s({ cos(spin), sin(spin) }, bar);
+        th := magnitude2({x, y});
+        spin := rot + randomr(0.9, 1.1) * Tau * 12 * th * (1 - 1./(arms+1));
+        // spin := rot * smoothstep(4*(fabs(y) - bar));
+        spiral_str := mul2s({ cos(spin), sin(spin) }, 2);
+        pos := rotate({x, y}, spiral_str);
 
         // Dim large/bright stars towards the edge
-        size := (Sqrt2 - th) * random01() * 0.016;
+        size := (Sqrt2 - th) * random01() * 0.016 * brightness;
 
         push_star(s, {
             rect = {
-                pos = add2s(rotate(pos, spiral_str), 0.5),
+                pos = add2s(pos, 0.5),
                 size = { size, size },
                 rot = random_unit_vector2()
             },

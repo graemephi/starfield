@@ -235,6 +235,13 @@ func lerp(a: float, b: float, t: float): float {
     return (1 - t)*a + t*b;
 }
 
+func lerp2(a: float2, b: float2, t: float): float2 {
+    return float2 {
+        (1 - t)*a.x + t*b.x,
+        (1 - t)*a.y + t*b.y
+    };
+}
+
 func mod(x: float, m: float): float {
     if (x < 0) {
         x = m - x;
@@ -254,7 +261,7 @@ func wrap(x: float, m: float): float {
 }
 
 func smoothstep(x: float): float {
-    return x*x*(3 - 2*x);
+    return clamp01(x*x*(3 - 2*x));
 }
 
 func smoothstep_range(a: float, b: float, x: float): float {
