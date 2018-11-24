@@ -270,6 +270,10 @@ func rotate(v: float2, cos_sin_theta: float2): float2 {
     return v;
 }
 
+func rotate_theta(v: float2, theta: float): float2 {
+    return rotate(v, { cos(theta), sin(theta) });
+}
+
 func inside_normal_rect(pos: float2): bool {
     return pos.x >= 0 && pos.x < 1
         && pos.y >= 0 && pos.y < 1;
@@ -695,30 +699,37 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
 func draw_galaxy(tex: Tex*, arms: int) {
     tex_img := &Image { tex.pixels, tex.size };
 
+    if (arms == 1) {
+        // Yeah... We just rotate spokes, so one looks dumb
+        arms = 2;
+    }
+
     s := &Starfield {};
-    for (i := 0; i < 20000; i++) {
-        w := .25;
+    for (i := 0; i < 30000; i++) {
+        w := .025;
         x := (random_normal() / 16);
         y := (random_normal() / 16);
         rot := 0.;
 
         if (arms > 0) {
-            x = lerp(x, wrap(x + w/2, w) - w/2, 0.25+0.75*random01());
-            y = lerp(x, wrap(x + w/2, w) - w/2, 0.25+0.75*random01());
-
-            rot = randomn(0, arms + 1) * Tau / arms;
+            x = mod(x + w/2, w) - w/2;
+            y = fabs(y);
+            rot = randomn(0, arms) * Tau / arms;
         }
 
         // Rotate the arms more towards the edge
-        th := magnitude2({x, y});
-        spiral_str := mul2s({ cos(rot*th*4), sin(rot*th*4) }, 2);
+        pos := rotate_theta({x, y}, rot);
+        th := magnitude2(pos);
+        bar := smoothstep(th - .25) * 14;
+        spin := randomr(0.9, 1.1) * th * Tau * 4;
+        spiral_str := mul2s({ cos(spin), sin(spin) }, bar);
 
         // Dim large/bright stars towards the edge
-        size := (Sqrt2 - th) * random01() * 0.02;
+        size := (Sqrt2 - th) * random01() * 0.016;
 
         push_star(s, {
             rect = {
-                pos = add2s(rotate({ x, y }, spiral_str), 0.5),
+                pos = add2s(rotate(pos, spiral_str), 0.5),
                 size = { size, size },
                 rot = random_unit_vector2()
             },
@@ -730,14 +741,11 @@ func draw_galaxy(tex: Tex*, arms: int) {
     draw_starfield(tex_img, s);
 
     bloom := image_copy(tex_img);
-    blur(&bloom, 6);
+    blur(&bloom, randomr(5, 7));
 
     for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
         rel := sub2s(it.pos, 0.5);
         th := magnitude2(rel);
-        sp := mul2s({ cos(-th*Tau), sin(-th*Tau) }, 2);
-        rel_s := rotate(rel, sp);
-        p := .5+.5*perlin_octaves(rel_s, 12);
         a := color_lerp(star_colors[star_color_count - 2], {1,1,1,1}, 0.707);
         b := image_sample_linear(&bloom, it.pos);
         c := color_add(a, b);
@@ -857,7 +865,7 @@ func init_star_type(type: StarType*) {
             type.tex = make_tex({ 256, 256 });
             type.size = { 1./3., 1./3. };
             type.nonsquare = true;
-            draw_galaxy(&type.tex, 0);
+            draw_galaxy(&type.tex, 4);
         case 13: // '　'
             type.tex = make_tex({ 8, 8 });
             type.size = { 1, 1 };
@@ -993,8 +1001,8 @@ func main(argc: int, argv: char**): int {
     t_reset := time_now();
 
     image := make_image({ surface.w, surface.h });
-    // blurred := make_image({ surface.w, surface.h });
-    // blurred2 := make_image({ surface.w, surface.h });
+    blurred := make_image({ surface.w, surface.h });
+    blurred2 := make_image({ surface.w, surface.h });
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
@@ -1007,34 +1015,34 @@ func main(argc: int, argv: char**): int {
             t0f := float(t0);
 
 
-            galaxy := make_tex({ 256, 256 });
+            galaxy := make_tex({ 512, 512 });
             draw_galaxy(&galaxy, n_t % 7);
 
             draw_tex(&image, {}, &galaxy);
             free_tex(&galaxy);
 
+if (false){
+            draw_starfield(&image, &starfield);
+            diffract(&image, {
+                alpha = 0.1,
+                radius = 4,
+                transform = diffraction_rotation,
+                type = randomn(0, DiffractionTypeCount)
+            });
 
-            // draw_starfield(&image, &starfield);
-            // diffract(&image, {
-            //     alpha = 0.1,
-            //     radius = 4,
-            //     transform = diffraction_rotation,
-            //     type = randomn(0, DiffractionTypeCount)
-            // });
+            blur_to(&blurred, &image, randomr(0, 1)); // ~1.33
+            blur_to(&blurred2, &image, randomr(0.5,1)); // ~2
+            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+                bp := image_fetch(&blurred, it.pixel_pos);
+                mbp := color_mul(*it.pixel, bp);
+                xbp := color_lerp(bp, mbp, 0.1);
 
-            // blur_to(&blurred, &image, randomr(0, 1)); // ~1.33
-            // blur_to(&blurred2, &image, randomr(0.5,1)); // ~2
-            // for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-            //     bp := image_fetch(&blurred, it.pixel_pos);
-            //     mbp := color_mul(*it.pixel, bp);
-            //     xbp := color_lerp(bp, mbp, 0.1);
-
-            //     bp2 := image_fetch(&blurred2, it.pixel_pos);
-            //     mbp2 := color_mul(*it.pixel, bp2);
-            //     xbp2 := color_lerp(bp2, mbp2, .9);
-            //     *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
-            // }
-
+                bp2 := image_fetch(&blurred2, it.pixel_pos);
+                mbp2 := color_mul(*it.pixel, bp2);
+                xbp2 := color_lerp(bp2, mbp2, .9);
+                *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
+            }
+}
             image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
 
             t1 := time_now();

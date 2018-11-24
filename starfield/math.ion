@@ -21,6 +21,14 @@ func clamp(a: float, b: float, x: float): float {
                      x;
 }
 
+func clamp_low(a: float, x: float): float {
+    return max(a, x);
+}
+
+func clamp_high(b: float, x: float): float {
+    return min(b, x);
+}
+
 func clampi(a: int32, b: int32, x: int32): int32 {
     return (x < a) ? a :
            (x > b) ? b :
@@ -242,5 +250,21 @@ func wrap(x: float, m: float): float {
     if (y > m) {
         y -= (y - m);
     }
+    return y;
+}
+
+func smoothstep(x: float): float {
+    return x*x*(3 - 2*x);
+}
+
+func smoothstep_range(a: float, b: float, x: float): float {
+    if (x < a) {
+        return a;
+    } else if (x > b) {
+        return b;
+    }
+
+    y := smoothstep((x - a) / (b - a)) * (b - a) + a;
+
     return y;
 }
