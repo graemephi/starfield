@@ -251,6 +251,18 @@ func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Co
     }
 }
 
+func draw_outline(buffer: Color*, size: int2, color: Color) {
+    for (i := 0; i < size.x; i++) {
+        buffer[i] = color;
+        buffer[i + (size.x - 1) * size.y] = color;
+    }
+
+    for (i := 0; i < size.y; i++) {
+        buffer[i * size.x] = color;
+        buffer[i * size.x + (size.x - 1)] = color;
+    }
+}
+
 func all_rect(): Rect {
     return {
         pos = { 0.5, 0.5 },
@@ -402,13 +414,6 @@ func color_to_rgb8(color: Color): RGB8 {
 
 // Set in main, used for anything that should be aligned with diffraction.
 var diffraction_rotation: float2 = {};
-
-func draw_starfield(dest: Image*, starfield: Starfield*) {
-    for (i := starfield_len(starfield) - 1; i >= 0; i--) {
-        star := starfield.stars + i;
-        draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
-    }
-}
 
 func time_now(): double {
     ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;

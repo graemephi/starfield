@@ -289,18 +289,6 @@ func draw_simple_star(buffer: Color*, size: int2) {
     buffer[size.x/2 + size.x*size.y/2] = { 64, 64, 64, 1 };
 }
 
-func draw_outline(buffer: Color*, size: int2, color: Color) {
-    for (i := 0; i < size.x; i++) {
-        buffer[i] = color;
-        buffer[i + (size.x - 1) * size.y] = color;
-    }
-
-    for (i := 0; i < size.y; i++) {
-        buffer[i * size.x] = color;
-        buffer[i * size.x + (size.x - 1)] = color;
-    }
-}
-
 func draw_galaxy(tex: Tex*, arms: int) {
     tex_img := &Image { tex.pixels, tex.size };
 
@@ -517,4 +505,11 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     }
 
     generate_lods(&type.tex);
+}
+
+func draw_starfield(dest: Image*, starfield: Starfield*) {
+    for (i := starfield_len(starfield) - 1; i >= 0; i--) {
+        star := starfield.stars + i;
+        draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
+    }
 }
