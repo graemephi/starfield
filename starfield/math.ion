@@ -261,7 +261,8 @@ func wrap(x: float, m: float): float {
 }
 
 func smoothstep(x: float): float {
-    return clamp01(x*x*(3 - 2*x));
+    x = clamp01(x);
+    return x*x*(3 - 2*x);
 }
 
 func smoothstep_range(a: float, b: float, x: float): float {
@@ -274,4 +275,8 @@ func smoothstep_range(a: float, b: float, x: float): float {
     y := smoothstep((x - a) / (b - a)) * (b - a) + a;
 
     return y;
+}
+
+func smoothedge(center: float, width: float, x: float): float {
+    return smoothstep((1./width) * (x - center) + 0.5);
 }
