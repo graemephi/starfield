@@ -85,9 +85,9 @@ typedef struct starfield_Rect starfield_Rect;
 typedef struct starfield_PixelIter starfield_PixelIter;
 typedef struct starfield_Color starfield_Color;
 typedef struct starfield_Starfield starfield_Starfield;
+typedef struct starfield_DiffractionArguments starfield_DiffractionArguments;
 typedef struct starfield_Tex starfield_Tex;
 typedef struct starfield_StarType starfield_StarType;
-typedef struct starfield_DiffractionArguments starfield_DiffractionArguments;
 typedef struct TypeFieldInfo TypeFieldInfo;
 typedef struct Any Any;
 typedef struct starfield_Star starfield_Star;
@@ -104,7 +104,7 @@ struct starfield_RGB8 {
     uint8_t padding;
 };
 
-#line 991
+#line 477
 int main(int argc, char (*(*argv)));
 
 #line 1 "C:\\code\\cloned\\bitwise\\ion\\system_packages\\builtin\\config_win32.ion"
@@ -484,7 +484,7 @@ bool noir_app_init(void);
 #line 616
 void noir_print_and_clear_error(void);
 
-#line 934 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 420 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_init_perlin(void);
 
 #line 1 "C:\\code\\starfield\\starfield\\image.ion"
@@ -503,7 +503,7 @@ struct noir_float2 {
     float y;
 };
 
-#line 441 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 36 "C:\\code\\starfield\\starfield\\stars.ion"
 struct starfield_Rect {
     noir_float2 pos;
     noir_float2 size;
@@ -551,22 +551,22 @@ float starfield_random_normal(void);
 #line 1 "C:\\code\\starfield\\starfield\\filter.ion"
 void starfield_blur(starfield_Image (*img), float radius);
 
-#line 406 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 404 "C:\\code\\starfield\\starfield\\starfield.ion"
 extern noir_float2 starfield_diffraction_rotation;
 
 #line 198 "C:\\code\\starfield\\starfield\\math.ion"
 noir_float2 starfield_random_unit_vector2(void);
 
-#line 436 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 31 "C:\\code\\starfield\\starfield\\stars.ion"
 struct starfield_Starfield {
     starfield_Star (*stars);
     int32_t star_count;
 };
 
-#line 590
+#line 185
 starfield_Starfield starfield_create_starfield(char const ((*starfield)));
 
-#line 927
+#line 413 "C:\\code\\starfield\\starfield\\starfield.ion"
 double starfield_time_now(void);
 
 #line 351 "C:\\code\\starfield\\noir\\noir.ion"
@@ -575,48 +575,7 @@ bool noir_app_update(void);
 #line 32 "C:\\code\\starfield\\starfield\\image.ion"
 void starfield_image_copy_to(starfield_Image (*dest), starfield_Image (*src));
 
-#line 61 "C:\\code\\starfield\\starfield\\starfield.ion"
-struct starfield_Tex {
-    starfield_Color (*pixels);
-    noir_int2 size;
-    int lod_levels;
-};
-
-starfield_Tex starfield_make_tex(noir_int2 size);
-
-#line 709
-void starfield_draw_galaxy(starfield_Tex (*tex), int arms);
-
-#line 234
-void starfield_draw_tex(starfield_Image (*dest), starfield_Rect target, starfield_Tex (*tex));
-
-#line 79
-void starfield_free_tex(starfield_Tex (*tex));
-
-#line 823
-void starfield_init_star_type2(starfield_StarType (*type), bool redraw);
-
-#line 416
-typedef int starfield_StarTypes;
-
-#define STARFIELD_StarType_BigSpace ((starfield_StarTypes)(13))
-
-#line 419
-#define STARFIELD_StarTypeCount ((starfield_StarTypes)((STARFIELD_StarType_BigSpace) + (1)))
-
-#line 408
-struct starfield_StarType {
-    int32_t id;
-    noir_float2 size;
-    bool nonsquare;
-    bool fixed_rotation;
-    starfield_Tex tex;
-};
-
-#line 422
-extern starfield_StarType (starfield_star_types[STARFIELD_StarTypeCount]);
-
-#line 920
+#line 406 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_draw_starfield(starfield_Image (*dest), starfield_Starfield (*starfield));
 
 #line 351 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -677,7 +636,37 @@ float starfield_min(float a, float b);
 #line 50
 float starfield_max(float a, float b);
 
-#line 447 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 425 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_init_star_type_really(starfield_StarType (*type), bool redraw);
+
+#line 11
+typedef int starfield_StarTypes;
+
+#define STARFIELD_StarType_BigSpace ((starfield_StarTypes)(13))
+
+#line 14
+#define STARFIELD_StarTypeCount ((starfield_StarTypes)((STARFIELD_StarType_BigSpace) + (1)))
+
+#line 61 "C:\\code\\starfield\\starfield\\starfield.ion"
+struct starfield_Tex {
+    starfield_Color (*pixels);
+    noir_int2 size;
+    int lod_levels;
+};
+
+#line 3 "C:\\code\\starfield\\starfield\\stars.ion"
+struct starfield_StarType {
+    int32_t id;
+    noir_float2 size;
+    bool nonsquare;
+    bool fixed_rotation;
+    starfield_Tex tex;
+};
+
+#line 17
+extern starfield_StarType (starfield_star_types[STARFIELD_StarTypeCount]);
+
+#line 42
 starfield_StarsHeader (*starfield_stars_header(starfield_Star (*stars)));
 
 #line 28 "C:\\code\\cloned\\bitwise\\ion\\system_packages\\builtin\\typeinfo.ion"
@@ -711,10 +700,10 @@ void noir_init_time(void);
 #line 55
 bool noir_init_audio(void);
 
-#line 932 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 418 "C:\\code\\starfield\\starfield\\starfield.ion"
 #define STARFIELD_perlin_gradient_count (128)
 
-#line 933
+#line 419
 extern noir_float2 (starfield_perlin_gradients[STARFIELD_perlin_gradient_count]);
 
 #line 41
@@ -762,33 +751,36 @@ float starfield_random01(void);
 #line 2
 #define STARFIELD_Tau ((STARFIELD_Pi) * (2))
 
-#line 430 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 25 "C:\\code\\starfield\\starfield\\stars.ion"
 struct starfield_Star {
     starfield_Rect rect;
     starfield_StarType (*type);
     starfield_Color color;
 };
 
-#line 492
+#line 87
 char const ((*starfield_consume_star(char const ((*c)), starfield_Star (*star))));
 
-#line 417
+#line 12
 #define STARFIELD_StarType_Space ((starfield_StarTypes)(0))
 
 #line 18 "C:\\code\\starfield\\starfield\\math.ion"
 float starfield_clamp(float a, float b, float x);
 
-#line 573 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 168 "C:\\code\\starfield\\starfield\\stars.ion"
 starfield_Color starfield_random_star_color(starfield_StarType (*type), float alpha);
 
-#line 464
+#line 59
 void starfield_push_star(starfield_Starfield (*starfield), starfield_Star star);
 
 #line 42 "C:\\code\\starfield\\starfield\\math.ion"
 int32_t starfield_maxi(int32_t a, int32_t b);
 
-#line 488 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 83 "C:\\code\\starfield\\starfield\\stars.ion"
 int starfield_stars_len(starfield_Starfield (*starfield));
+
+#line 67 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Tex starfield_make_tex(noir_int2 size);
 
 #line 62 "C:\\code\\starfield\\starfield\\image.ion"
 starfield_PixelIter starfield_pixel_iter_begin_tex(starfield_Tex (*tex), starfield_Rect rect);
@@ -798,6 +790,9 @@ int starfield_random_poisson(float alpha);
 
 #line 198 "C:\\code\\starfield\\starfield\\starfield.ion"
 starfield_Color starfield_tex_lookup(starfield_Tex (*tex), noir_float2 pos);
+
+#line 79
+void starfield_free_tex(starfield_Tex (*tex));
 
 #line 36 "C:\\code\\starfield\\noir\\noir.ion"
 bool noir_check_init(void);
@@ -820,91 +815,10 @@ void noir_update_clipboard(void);
 #line 257
 void noir_update_audio(void);
 
-#line 6 "C:\\code\\starfield\\starfield\\math.ion"
-bool starfield_is_power_2(int32_t x);
-
-#line 245
-float starfield_mod(float x, float m);
-
-#line 166
-float starfield_magnitude2(noir_float2 v);
-
-#line 78
-noir_float2 starfield_mul2s(noir_float2 a, float s);
-
-#line 178
-noir_float2 starfield_normalise(noir_float2 v);
-
-#line 280
-float starfield_smoothedge(float center, float width, float x);
-
-#line 262 "C:\\code\\starfield\\starfield\\starfield.ion"
-noir_float2 starfield_rotate(noir_float2 v, noir_float2 cos_sin_theta);
-
-#line 3 "C:\\code\\starfield\\starfield\\math.ion"
-#define STARFIELD_Sqrt2 (1.4142135623730950488f)
-
-#line 94
-noir_float2 starfield_add2s(noir_float2 a, float s);
-
-#line 25 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Image starfield_image_copy(starfield_Image (*img));
-
-#line 102 "C:\\code\\starfield\\starfield\\math.ion"
-noir_float2 starfield_sub2s(noir_float2 a, float s);
-
-#line 554 "C:\\code\\starfield\\starfield\\starfield.ion"
-extern starfield_Color (starfield_star_colors[15]);
-
-#line 571
-#define STARFIELD_star_color_count (((sizeof(starfield_star_colors)) / (sizeof(starfield_Color))))
-
-#line 141 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float2 pos);
-
-#line 38 "C:\\code\\starfield\\starfield\\math.ion"
-float starfield_clamp01(float x);
-
-#line 347 "C:\\code\\starfield\\starfield\\starfield.ion"
-starfield_Color starfield_color_mul_rgb1(starfield_Color a, float b);
-
-#line 983
-float starfield_perlin_octaves(noir_float2 p, int grid);
-
-#line 355
-starfield_Color starfield_color_blend(starfield_Color dest, starfield_Color src);
-
-#line 451
-void starfield_free_starfield(starfield_Starfield (*starfield));
-
-#line 86
-noir_float2 starfield_compute_lod_level(noir_int2 dest_size, noir_float2 target_size, noir_int2 src_size);
-
-#line 202
-starfield_Color starfield_tex_lookup_lod(starfield_Tex (*tex), noir_float2 pos, noir_float2 lod);
-
-#line 697
-void starfield_draw_outline(starfield_Color (*buffer), noir_int2 size, starfield_Color color);
-
-#line 691
-void starfield_draw_simple_star(starfield_Color (*buffer), noir_int2 size);
-
-#line 794
-void starfield_draw_lensed_quasar(starfield_Tex (*tex));
-
-#line 4 "C:\\code\\starfield\\starfield\\math.ion"
-#define STARFIELD_InvSqrt2 ((1.f) / (STARFIELD_Sqrt2))
-
-#line 215 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos);
-
-#line 93 "C:\\code\\starfield\\starfield\\starfield.ion"
-void starfield_generate_lods(starfield_Tex (*tex));
-
-#line 459
+#line 54 "C:\\code\\starfield\\starfield\\stars.ion"
 int64_t starfield_starfield_len(starfield_Starfield (*starfield));
 
-#line 245
+#line 245 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_draw_tex_multiply(starfield_Image (*dest), starfield_Rect target, starfield_Tex (*tex), starfield_Color multiply_color);
 
 #line 315 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -913,10 +827,25 @@ bool starfield_is_identity_transform(noir_float2 transform);
 #line 334
 noir_float2 starfield_bounds_after_transform(noir_float2 transform);
 
-#line 367
+#line 166 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_magnitude2(noir_float2 v);
+
+#line 367 "C:\\code\\starfield\\starfield\\filter.ion"
 void starfield_apply_diffraction(starfield_Image (*dest), starfield_Color alpha, float radius, noir_float2 transform, noir_float2 transformed_bounds, float (*scratch), float (*transpose_scratch));
 
-#line 184 "C:\\code\\starfield\\starfield\\math.ion"
+#line 262 "C:\\code\\starfield\\starfield\\starfield.ion"
+noir_float2 starfield_rotate(noir_float2 v, noir_float2 cos_sin_theta);
+
+#line 78 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_mul2s(noir_float2 a, float s);
+
+#line 3
+#define STARFIELD_Sqrt2 (1.4142135623730950488f)
+
+#line 4
+#define STARFIELD_InvSqrt2 ((1.f) / (STARFIELD_Sqrt2))
+
+#line 184
 uint32_t starfield_random(void);
 
 #line 13 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -934,7 +863,31 @@ float starfield_lerp(float a, float b, float t);
 #line 394 "C:\\code\\starfield\\starfield\\starfield.ion"
 starfield_RGB8 starfield_color_to_rgb8(starfield_Color color);
 
-#line 424
+#line 292 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_draw_outline(starfield_Color (*buffer), noir_int2 size, starfield_Color color);
+
+#line 286
+void starfield_draw_simple_star(starfield_Color (*buffer), noir_int2 size);
+
+#line 396
+void starfield_draw_lensed_quasar(starfield_Tex (*tex));
+
+#line 25 "C:\\code\\starfield\\starfield\\image.ion"
+starfield_Image starfield_image_copy(starfield_Image (*img));
+
+#line 215
+starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos);
+
+#line 38 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_clamp01(float x);
+
+#line 304 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_draw_galaxy(starfield_Tex (*tex), int arms);
+
+#line 93 "C:\\code\\starfield\\starfield\\starfield.ion"
+void starfield_generate_lods(starfield_Tex (*tex));
+
+#line 19 "C:\\code\\starfield\\starfield\\stars.ion"
 struct starfield_StarsHeader {
     int64_t len;
     int64_t cap;
@@ -968,10 +921,16 @@ noir_float2 starfield_div2(noir_float2 a, noir_float2 b);
 #line 192
 #define STARFIELD_int_23_reciprocal ((1.f) / (STARFIELD_int_23_mask))
 
-#line 819 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 421 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_init_star_type(starfield_StarType (*type));
 
-#line 364
+#line 149
+extern starfield_Color (starfield_star_colors[15]);
+
+#line 166
+#define STARFIELD_star_color_count (((sizeof(starfield_star_colors)) / (sizeof(starfield_Color))))
+
+#line 364 "C:\\code\\starfield\\starfield\\starfield.ion"
 starfield_Color starfield_color_premultiply(starfield_Color c, float alpha);
 
 #line 30
@@ -979,6 +938,12 @@ void (*starfield_xmalloc(size_t size));
 
 #line 20
 void (*starfield_xrealloc(void (*mem), size_t size));
+
+#line 6 "C:\\code\\starfield\\starfield\\math.ion"
+bool starfield_is_power_2(int32_t x);
+
+#line 141 "C:\\code\\starfield\\starfield\\image.ion"
+starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float2 pos);
 
 #line 376 "C:\\code\\starfield\\noir\\noir.ion"
 void noir_reset_digital_button_events(noir_DigitalButton (*button));
@@ -1025,49 +990,19 @@ void noir_update_combination_keys(void);
 #line 8
 bool noir_int2_eq(noir_int2 a, noir_int2 b);
 
+#line 86 "C:\\code\\starfield\\starfield\\starfield.ion"
+noir_float2 starfield_compute_lod_level(noir_int2 dest_size, noir_float2 target_size, noir_int2 src_size);
+
+#line 202
+starfield_Color starfield_tex_lookup_lod(starfield_Tex (*tex), noir_float2 pos, noir_float2 lod);
+
+#line 355
+starfield_Color starfield_color_blend(starfield_Color dest, starfield_Color src);
+
 #line 152 "C:\\code\\starfield\\starfield\\math.ion"
 float starfield_dot2(noir_float2 a, noir_float2 b);
 
-#line 263
-float starfield_smoothstep(float x);
-
-#line 66
-noir_int2 starfield_float2_to_int2(noir_float2 x);
-
-#line 122
-noir_int2 starfield_add2i(noir_int2 a, noir_int2 b);
-
-#line 133 "C:\\code\\starfield\\starfield\\image.ion"
-int starfield_wrapi(int x, int m);
-
-#line 950 "C:\\code\\starfield\\starfield\\starfield.ion"
-float starfield_perlin(noir_float2 p, int gradients_per_side);
-
-#line 160
-starfield_Image starfield_tex_get_lod(starfield_Tex (*tex), noir_int2 lod);
-
-#line 126 "C:\\code\\starfield\\starfield\\math.ion"
-noir_int2 starfield_add2is(noir_int2 a, int s);
-
-#line 118
-noir_int2 starfield_div2is(noir_int2 a, int s);
-
-#line 130
-noir_int2 starfield_sub2i(noir_int2 a, noir_int2 b);
-
-#line 148 "C:\\code\\starfield\\starfield\\starfield.ion"
-void starfield_tex_poke(starfield_Tex (*tex), noir_int2 pos, starfield_Color val);
-
-#line 10 "C:\\code\\starfield\\starfield\\math.ion"
-int starfield_log2i(int x);
-
-#line 51 "C:\\code\\starfield\\starfield\\filter.ion"
-void starfield_blur_horizontal(starfield_Image (*dest), starfield_Image (*src), float radius);
-
-#line 67
-void starfield_blur_vertical(starfield_Image (*dest), starfield_Image (*src), float radius);
-
-#line 319
+#line 319 "C:\\code\\starfield\\starfield\\filter.ion"
 starfield_Image starfield_transform_image(starfield_Image (*src), noir_float2 rotate, noir_float2 scale);
 
 #line 302
@@ -1094,17 +1029,65 @@ starfield_Color starfield_color_sub(starfield_Color a, starfield_Color b);
 #line 383
 float starfield_srgb(float val);
 
+#line 118 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_div2is(noir_int2 a, int s);
+
+#line 130
+noir_int2 starfield_sub2i(noir_int2 a, noir_int2 b);
+
+#line 122
+noir_int2 starfield_add2i(noir_int2 a, noir_int2 b);
+
+#line 148 "C:\\code\\starfield\\starfield\\starfield.ion"
+void starfield_tex_poke(starfield_Tex (*tex), noir_int2 pos, starfield_Color val);
+
+#line 245 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_mod(float x, float m);
+
+#line 178
+noir_float2 starfield_normalise(noir_float2 v);
+
+#line 280
+float starfield_smoothedge(float center, float width, float x);
+
+#line 94
+noir_float2 starfield_add2s(noir_float2 a, float s);
+
+#line 102
+noir_float2 starfield_sub2s(noir_float2 a, float s);
+
+#line 347 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Color starfield_color_mul_rgb1(starfield_Color a, float b);
+
+#line 469
+float starfield_perlin_octaves(noir_float2 p, int grid);
+
+#line 46 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_free_starfield(starfield_Starfield (*starfield));
+
+#line 10 "C:\\code\\starfield\\starfield\\math.ion"
+int starfield_log2i(int x);
+
+#line 160 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Image starfield_tex_get_lod(starfield_Tex (*tex), noir_int2 lod);
+
+#line 51 "C:\\code\\starfield\\starfield\\filter.ion"
+void starfield_blur_horizontal(starfield_Image (*dest), starfield_Image (*src), float radius);
+
+#line 67
+void starfield_blur_vertical(starfield_Image (*dest), starfield_Image (*src), float radius);
+
+#line 66 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_float2_to_int2(noir_float2 x);
+
+#line 133 "C:\\code\\starfield\\starfield\\image.ion"
+int starfield_wrapi(int x, int m);
+
 #line 566 "C:\\code\\starfield\\noir\\noir.ion"
 void noir_update_combination_key(int dest_key, int src_key1, int src_key2);
 
-#line 174 "C:\\code\\starfield\\starfield\\math.ion"
-noir_float2 starfield_mod2s(noir_float2 v, float m);
-
-#line 940 "C:\\code\\starfield\\starfield\\starfield.ion"
-int64_t starfield_hash(noir_int2 p);
-
-#line 46 "C:\\code\\starfield\\starfield\\math.ion"
-int32_t starfield_mini(int32_t a, int32_t b);
+#line 126 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_add2is(noir_int2 a, int s);
 
 #line 269 "C:\\code\\starfield\\starfield\\filter.ion"
 #define STARFIELD_diffraction_iters (4)
@@ -1112,14 +1095,29 @@ int32_t starfield_mini(int32_t a, int32_t b);
 #line 224
 void starfield_diffract_row(float (*dest), float (*src), int len, float inner_radius, float outer_radius);
 
-#line 216
+#line 263 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_smoothstep(float x);
+
+#line 436 "C:\\code\\starfield\\starfield\\starfield.ion"
+float starfield_perlin(noir_float2 p, int gradients_per_side);
+
+#line 46 "C:\\code\\starfield\\starfield\\math.ion"
+int32_t starfield_mini(int32_t a, int32_t b);
+
+#line 216 "C:\\code\\starfield\\starfield\\filter.ion"
 float starfield_diffract_fetch(float (*row), int len, int i);
+
+#line 174 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_mod2s(noir_float2 v, float m);
+
+#line 426 "C:\\code\\starfield\\starfield\\starfield.ion"
+int64_t starfield_hash(noir_int2 p);
 
 // Typeinfo
 #define TYPEID0(index, kind) ((ullong)(index) | ((ullong)(kind) << 24))
 #define TYPEID(index, kind, ...) ((ullong)(index) | ((ullong)sizeof(__VA_ARGS__) << 32) | ((ullong)(kind) << 24))
 
-const TypeInfo *typeinfo_table[673] = {
+const TypeInfo *typeinfo_table[675] = {
     [0] = NULL, // No associated type
     [1] = &(TypeInfo){TYPE_VOID, .name = "void", .size = 0, .align = 0},
     [2] = &(TypeInfo){TYPE_BOOL, .size = sizeof(bool), .align = sizeof(bool), .name = "bool"},
@@ -1403,76 +1401,76 @@ const TypeInfo *typeinfo_table[673] = {
     }},
     [97] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_Star), .align = alignof(starfield_Star), .name = "starfield_Star", .num_fields = 3, .fields = (TypeFieldInfo[]) {
         {"rect", .type = TYPEID(87, TYPE_STRUCT, starfield_Rect), .offset = offsetof(starfield_Star, rect)},
-        {"type", .type = TYPEID(109, TYPE_PTR, starfield_StarType *), .offset = offsetof(starfield_Star, type)},
+        {"type", .type = TYPEID(116, TYPE_PTR, starfield_StarType *), .offset = offsetof(starfield_Star, type)},
         {"color", .type = TYPEID(83, TYPE_STRUCT, starfield_Color), .offset = offsetof(starfield_Star, color)},
     }},
     [98] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(97, TYPE_STRUCT, starfield_Star)},
     [99] = NULL, // Func
     [100] = NULL, // Func
     [101] = NULL, // Func
-    [102] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_Tex), .align = alignof(starfield_Tex), .name = "starfield_Tex", .num_fields = 3, .fields = (TypeFieldInfo[]) {
-        {"pixels", .type = TYPEID(84, TYPE_PTR, starfield_Color *), .offset = offsetof(starfield_Tex, pixels)},
-        {"size", .type = TYPEID(46, TYPE_STRUCT, noir_int2), .offset = offsetof(starfield_Tex, size)},
-        {"lod_levels", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(starfield_Tex, lod_levels)},
-    }},
+    [102] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(96, TYPE_STRUCT, starfield_Starfield)},
     [103] = NULL, // Func
-    [104] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(102, TYPE_STRUCT, starfield_Tex)},
-    [105] = NULL, // Func
+    [104] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_DiffractionArguments), .align = alignof(starfield_DiffractionArguments), .name = "starfield_DiffractionArguments", .num_fields = 4, .fields = (TypeFieldInfo[]) {
+        {"alpha", .type = TYPEID(14, TYPE_FLOAT, float), .offset = offsetof(starfield_DiffractionArguments, alpha)},
+        {"radius", .type = TYPEID(14, TYPE_FLOAT, float), .offset = offsetof(starfield_DiffractionArguments, radius)},
+        {"transform", .type = TYPEID(60, TYPE_STRUCT, noir_float2), .offset = offsetof(starfield_DiffractionArguments, transform)},
+        {"type", .type = TYPEID(105, TYPE_NONE, starfield_DiffractionType), .offset = offsetof(starfield_DiffractionArguments, type)},
+    }},
+    [105] = NULL, // Enum
     [106] = NULL, // Func
     [107] = NULL, // Func
-    [108] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_StarType), .align = alignof(starfield_StarType), .name = "starfield_StarType", .num_fields = 5, .fields = (TypeFieldInfo[]) {
+    [108] = NULL, // Func
+    [109] = NULL, // Func
+    [110] = NULL, // Func
+    [111] = NULL, // Func
+    [112] = NULL, // Func
+    [113] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(17, TYPE_STRUCT, starfield_RGB8)},
+    [114] = NULL, // Func
+    [115] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_StarType), .align = alignof(starfield_StarType), .name = "starfield_StarType", .num_fields = 5, .fields = (TypeFieldInfo[]) {
         {"id", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(starfield_StarType, id)},
         {"size", .type = TYPEID(60, TYPE_STRUCT, noir_float2), .offset = offsetof(starfield_StarType, size)},
         {"nonsquare", .type = TYPEID(2, TYPE_BOOL, bool), .offset = offsetof(starfield_StarType, nonsquare)},
         {"fixed_rotation", .type = TYPEID(2, TYPE_BOOL, bool), .offset = offsetof(starfield_StarType, fixed_rotation)},
-        {"tex", .type = TYPEID(102, TYPE_STRUCT, starfield_Tex), .offset = offsetof(starfield_StarType, tex)},
+        {"tex", .type = TYPEID(119, TYPE_STRUCT, starfield_Tex), .offset = offsetof(starfield_StarType, tex)},
     }},
-    [109] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(108, TYPE_STRUCT, starfield_StarType)},
-    [110] = NULL, // Func
-    [111] = NULL, // Enum
-    [112] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_StarType [14]), .align = alignof(starfield_StarType [14]), .base = TYPEID(108, TYPE_STRUCT, starfield_StarType), .count = 14},
-    [113] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(96, TYPE_STRUCT, starfield_Starfield)},
-    [114] = NULL, // Func
-    [115] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_DiffractionArguments), .align = alignof(starfield_DiffractionArguments), .name = "starfield_DiffractionArguments", .num_fields = 4, .fields = (TypeFieldInfo[]) {
-        {"alpha", .type = TYPEID(14, TYPE_FLOAT, float), .offset = offsetof(starfield_DiffractionArguments, alpha)},
-        {"radius", .type = TYPEID(14, TYPE_FLOAT, float), .offset = offsetof(starfield_DiffractionArguments, radius)},
-        {"transform", .type = TYPEID(60, TYPE_STRUCT, noir_float2), .offset = offsetof(starfield_DiffractionArguments, transform)},
-        {"type", .type = TYPEID(116, TYPE_NONE, starfield_DiffractionType), .offset = offsetof(starfield_DiffractionArguments, type)},
-    }},
-    [116] = NULL, // Enum
+    [116] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(115, TYPE_STRUCT, starfield_StarType)},
     [117] = NULL, // Func
-    [118] = NULL, // Func
-    [119] = NULL, // Func
-    [120] = NULL, // Func
-    [121] = NULL, // Func
+    [118] = NULL, // Enum
+    [119] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_Tex), .align = alignof(starfield_Tex), .name = "starfield_Tex", .num_fields = 3, .fields = (TypeFieldInfo[]) {
+        {"pixels", .type = TYPEID(84, TYPE_PTR, starfield_Color *), .offset = offsetof(starfield_Tex, pixels)},
+        {"size", .type = TYPEID(46, TYPE_STRUCT, noir_int2), .offset = offsetof(starfield_Tex, size)},
+        {"lod_levels", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(starfield_Tex, lod_levels)},
+    }},
+    [120] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_StarType [14]), .align = alignof(starfield_StarType [14]), .base = TYPEID(115, TYPE_STRUCT, starfield_StarType), .count = 14},
+    [121] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [34]), .align = alignof(char [34]), .base = TYPEID(3, TYPE_CHAR, char), .count = 34},
     [122] = NULL, // Func
-    [123] = NULL, // Func
-    [124] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(17, TYPE_STRUCT, starfield_RGB8)},
-    [125] = NULL, // Func
-    [126] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [34]), .align = alignof(char [34]), .base = TYPEID(3, TYPE_CHAR, char), .count = 34},
-    [127] = NULL, // Func
-    [128] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_StarsHeader), .align = alignof(starfield_StarsHeader), .name = "starfield_StarsHeader", .num_fields = 3, .fields = (TypeFieldInfo[]) {
+    [123] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(starfield_StarsHeader), .align = alignof(starfield_StarsHeader), .name = "starfield_StarsHeader", .num_fields = 3, .fields = (TypeFieldInfo[]) {
         {"len", .type = TYPEID(12, TYPE_LLONG, llong), .offset = offsetof(starfield_StarsHeader, len)},
         {"cap", .type = TYPEID(12, TYPE_LLONG, llong), .offset = offsetof(starfield_StarsHeader, cap)},
-        {"data", .type = TYPEID(186, TYPE_ARRAY, starfield_Star [1]), .offset = offsetof(starfield_StarsHeader, data)},
+        {"data", .type = TYPEID(177, TYPE_ARRAY, starfield_Star [1]), .offset = offsetof(starfield_StarsHeader, data)},
     }},
-    [129] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(128, TYPE_STRUCT, starfield_StarsHeader)},
+    [124] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(123, TYPE_STRUCT, starfield_StarsHeader)},
+    [125] = NULL, // Func
+    [126] = NULL, // Func
+    [127] = NULL, // Incomplete: FILE
+    [128] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID0(127, TYPE_NONE)},
+    [129] = NULL, // Func
     [130] = NULL, // Func
     [131] = NULL, // Func
-    [132] = NULL, // Incomplete: FILE
-    [133] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID0(132, TYPE_NONE)},
-    [134] = NULL, // Func
-    [135] = NULL, // Func
+    [132] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [9]), .align = alignof(char [9]), .base = TYPEID(3, TYPE_CHAR, char), .count = 9},
+    [133] = NULL, // Func
+    [134] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [11]), .align = alignof(char [11]), .base = TYPEID(3, TYPE_CHAR, char), .count = 11},
+    [135] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(noir_float2 [128]), .align = alignof(noir_float2 [128]), .base = TYPEID(60, TYPE_STRUCT, noir_float2), .count = 128},
     [136] = NULL, // Func
-    [137] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [9]), .align = alignof(char [9]), .base = TYPEID(3, TYPE_CHAR, char), .count = 9},
-    [138] = NULL, // Func
-    [139] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [11]), .align = alignof(char [11]), .base = TYPEID(3, TYPE_CHAR, char), .count = 11},
-    [140] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(noir_float2 [128]), .align = alignof(noir_float2 [128]), .base = TYPEID(60, TYPE_STRUCT, noir_float2), .count = 128},
+    [137] = &(TypeInfo){TYPE_CONST, .size = 0, .align = 0, .base = TYPEID0(1, TYPE_VOID)},
+    [138] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID0(137, TYPE_CONST)},
+    [139] = NULL, // Func
+    [140] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(87, TYPE_STRUCT, starfield_Rect)},
     [141] = NULL, // Func
-    [142] = &(TypeInfo){TYPE_CONST, .size = 0, .align = 0, .base = TYPEID0(1, TYPE_VOID)},
-    [143] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID0(142, TYPE_CONST)},
+    [142] = NULL, // Func
+    [143] = NULL, // Func
     [144] = NULL, // Func
-    [145] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(87, TYPE_STRUCT, starfield_Rect)},
+    [145] = NULL, // Func
     [146] = NULL, // Func
     [147] = NULL, // Func
     [148] = NULL, // Func
@@ -1480,7 +1478,7 @@ const TypeInfo *typeinfo_table[673] = {
     [150] = NULL, // Func
     [151] = NULL, // Func
     [152] = NULL, // Func
-    [153] = NULL, // Func
+    [153] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(119, TYPE_STRUCT, starfield_Tex)},
     [154] = NULL, // Func
     [155] = NULL, // Func
     [156] = NULL, // Func
@@ -1491,11 +1489,11 @@ const TypeInfo *typeinfo_table[673] = {
     [161] = NULL, // Func
     [162] = NULL, // Func
     [163] = NULL, // Func
-    [164] = NULL, // Func
+    [164] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(14, TYPE_FLOAT, float)},
     [165] = NULL, // Func
     [166] = NULL, // Func
-    [167] = NULL, // Incomplete array type
-    [168] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_Color [15]), .align = alignof(starfield_Color [15]), .base = TYPEID(83, TYPE_STRUCT, starfield_Color), .count = 15},
+    [167] = NULL, // Func
+    [168] = NULL, // Func
     [169] = NULL, // Func
     [170] = NULL, // Func
     [171] = NULL, // Func
@@ -1504,44 +1502,35 @@ const TypeInfo *typeinfo_table[673] = {
     [174] = NULL, // Func
     [175] = NULL, // Func
     [176] = NULL, // Func
-    [177] = NULL, // Func
+    [177] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_Star [1]), .align = alignof(starfield_Star [1]), .base = TYPEID(97, TYPE_STRUCT, starfield_Star), .count = 1},
     [178] = NULL, // Func
-    [179] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(14, TYPE_FLOAT, float)},
+    [179] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [7]), .align = alignof(char [7]), .base = TYPEID(3, TYPE_CHAR, char), .count = 7},
     [180] = NULL, // Func
-    [181] = NULL, // Func
-    [182] = NULL, // Func
-    [183] = NULL, // Func
-    [184] = NULL, // Func
-    [185] = NULL, // Func
-    [186] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_Star [1]), .align = alignof(starfield_Star [1]), .base = TYPEID(97, TYPE_STRUCT, starfield_Star), .count = 1},
-    [187] = NULL, // Func
-    [188] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [7]), .align = alignof(char [7]), .base = TYPEID(3, TYPE_CHAR, char), .count = 7},
-    [189] = NULL, // Func
-    [190] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [18]), .align = alignof(char [18]), .base = TYPEID(3, TYPE_CHAR, char), .count = 18},
-    [191] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_DisplayMode), .align = alignof(SDL_DisplayMode), .name = "SDL_DisplayMode", .num_fields = 5, .fields = (TypeFieldInfo[]) {
+    [181] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [18]), .align = alignof(char [18]), .base = TYPEID(3, TYPE_CHAR, char), .count = 18},
+    [182] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_DisplayMode), .align = alignof(SDL_DisplayMode), .name = "SDL_DisplayMode", .num_fields = 5, .fields = (TypeFieldInfo[]) {
         {"format", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_DisplayMode, format)},
         {"w", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_DisplayMode, w)},
         {"h", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_DisplayMode, h)},
         {"refresh_rate", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_DisplayMode, refresh_rate)},
         {"driverdata", .type = TYPEID(16, TYPE_PTR, void *), .offset = offsetof(SDL_DisplayMode, driverdata)},
     }},
-    [192] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(191, TYPE_STRUCT, SDL_DisplayMode)},
-    [193] = NULL, // Func
-    [194] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [26]), .align = alignof(char [26]), .base = TYPEID(3, TYPE_CHAR, char), .count = 26},
-    [195] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [5]), .align = alignof(char [5]), .base = TYPEID(3, TYPE_CHAR, char), .count = 5},
-    [196] = NULL, // Enum
-    [197] = NULL, // Func
-    [198] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [23]), .align = alignof(char [23]), .base = TYPEID(3, TYPE_CHAR, char), .count = 23},
-    [199] = NULL, // Func
-    [200] = NULL, // Func
-    [201] = NULL, // Incomplete array type
-    [202] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [2]), .align = alignof(char [2]), .base = TYPEID(3, TYPE_CHAR, char), .count = 2},
-    [203] = NULL, // Enum
-    [204] = NULL, // Func
-    [205] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(int [275]), .align = alignof(int [275]), .base = TYPEID(8, TYPE_INT, int), .count = 275},
-    [206] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(8, TYPE_INT, int)},
-    [207] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(int [512]), .align = alignof(int [512]), .base = TYPEID(8, TYPE_INT, int), .count = 512},
-    [208] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_AudioSpec), .align = alignof(SDL_AudioSpec), .name = "SDL_AudioSpec", .num_fields = 9, .fields = (TypeFieldInfo[]) {
+    [183] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(182, TYPE_STRUCT, SDL_DisplayMode)},
+    [184] = NULL, // Func
+    [185] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [26]), .align = alignof(char [26]), .base = TYPEID(3, TYPE_CHAR, char), .count = 26},
+    [186] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [5]), .align = alignof(char [5]), .base = TYPEID(3, TYPE_CHAR, char), .count = 5},
+    [187] = NULL, // Enum
+    [188] = NULL, // Func
+    [189] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [23]), .align = alignof(char [23]), .base = TYPEID(3, TYPE_CHAR, char), .count = 23},
+    [190] = NULL, // Func
+    [191] = NULL, // Func
+    [192] = NULL, // Incomplete array type
+    [193] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [2]), .align = alignof(char [2]), .base = TYPEID(3, TYPE_CHAR, char), .count = 2},
+    [194] = NULL, // Enum
+    [195] = NULL, // Func
+    [196] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(int [275]), .align = alignof(int [275]), .base = TYPEID(8, TYPE_INT, int), .count = 275},
+    [197] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(8, TYPE_INT, int)},
+    [198] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(int [512]), .align = alignof(int [512]), .base = TYPEID(8, TYPE_INT, int), .count = 512},
+    [199] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_AudioSpec), .align = alignof(SDL_AudioSpec), .name = "SDL_AudioSpec", .num_fields = 9, .fields = (TypeFieldInfo[]) {
         {"freq", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_AudioSpec, freq)},
         {"format", .type = TYPEID(7, TYPE_USHORT, ushort), .offset = offsetof(SDL_AudioSpec, format)},
         {"channels", .type = TYPEID(4, TYPE_UCHAR, uchar), .offset = offsetof(SDL_AudioSpec, channels)},
@@ -1549,35 +1538,39 @@ const TypeInfo *typeinfo_table[673] = {
         {"samples", .type = TYPEID(7, TYPE_USHORT, ushort), .offset = offsetof(SDL_AudioSpec, samples)},
         {"padding", .type = TYPEID(7, TYPE_USHORT, ushort), .offset = offsetof(SDL_AudioSpec, padding)},
         {"size", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_AudioSpec, size)},
-        {"callback", .type = TYPEID(210, TYPE_FUNC, void (*)(void *, uchar *, int)), .offset = offsetof(SDL_AudioSpec, callback)},
+        {"callback", .type = TYPEID(201, TYPE_FUNC, void (*)(void *, uchar *, int)), .offset = offsetof(SDL_AudioSpec, callback)},
         {"userdata", .type = TYPEID(16, TYPE_PTR, void *), .offset = offsetof(SDL_AudioSpec, userdata)},
     }},
-    [209] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(4, TYPE_UCHAR, uchar)},
-    [210] = NULL, // Func
-    [211] = &(TypeInfo){TYPE_CONST, .size = sizeof(SDL_AudioSpec const ), .align = alignof(SDL_AudioSpec const ), .base = TYPEID(208, TYPE_STRUCT, SDL_AudioSpec)},
-    [212] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(211, TYPE_CONST, SDL_AudioSpec const )},
-    [213] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(208, TYPE_STRUCT, SDL_AudioSpec)},
+    [200] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(4, TYPE_UCHAR, uchar)},
+    [201] = NULL, // Func
+    [202] = &(TypeInfo){TYPE_CONST, .size = sizeof(SDL_AudioSpec const ), .align = alignof(SDL_AudioSpec const ), .base = TYPEID(199, TYPE_STRUCT, SDL_AudioSpec)},
+    [203] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(202, TYPE_CONST, SDL_AudioSpec const )},
+    [204] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(199, TYPE_STRUCT, SDL_AudioSpec)},
+    [205] = NULL, // Func
+    [206] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [20]), .align = alignof(char [20]), .base = TYPEID(3, TYPE_CHAR, char), .count = 20},
+    [207] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [17]), .align = alignof(char [17]), .base = TYPEID(3, TYPE_CHAR, char), .count = 17},
+    [208] = NULL, // Func
+    [209] = NULL, // Func
+    [210] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [3]), .align = alignof(char [3]), .base = TYPEID(3, TYPE_CHAR, char), .count = 3},
+    [211] = NULL, // Func
+    [212] = NULL, // Incomplete array type
+    [213] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(starfield_Color [15]), .align = alignof(starfield_Color [15]), .base = TYPEID(83, TYPE_STRUCT, starfield_Color), .count = 15},
     [214] = NULL, // Func
-    [215] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [20]), .align = alignof(char [20]), .base = TYPEID(3, TYPE_CHAR, char), .count = 20},
-    [216] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [17]), .align = alignof(char [17]), .base = TYPEID(3, TYPE_CHAR, char), .count = 17},
+    [215] = NULL, // Func
+    [216] = NULL, // Func
     [217] = NULL, // Func
     [218] = NULL, // Func
-    [219] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [3]), .align = alignof(char [3]), .base = TYPEID(3, TYPE_CHAR, char), .count = 3},
-    [220] = NULL, // Func
+    [219] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [16]), .align = alignof(char [16]), .base = TYPEID(3, TYPE_CHAR, char), .count = 16},
+    [220] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(54, TYPE_STRUCT, noir_DigitalButton)},
     [221] = NULL, // Func
-    [222] = NULL, // Func
-    [223] = NULL, // Func
-    [224] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [16]), .align = alignof(char [16]), .base = TYPEID(3, TYPE_CHAR, char), .count = 16},
-    [225] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(54, TYPE_STRUCT, noir_DigitalButton)},
-    [226] = NULL, // Func
-    [227] = &(TypeInfo){TYPE_UNION, .size = sizeof(SDL_Event), .align = alignof(SDL_Event), .name = "SDL_Event", .num_fields = 5, .fields = (TypeFieldInfo[]) {
+    [222] = &(TypeInfo){TYPE_UNION, .size = sizeof(SDL_Event), .align = alignof(SDL_Event), .name = "SDL_Event", .num_fields = 5, .fields = (TypeFieldInfo[]) {
         {"type", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_Event, type)},
-        {"key", .type = TYPEID(228, TYPE_STRUCT, SDL_KeyboardEvent), .offset = offsetof(SDL_Event, key)},
-        {"text", .type = TYPEID(230, TYPE_STRUCT, SDL_TextInputEvent), .offset = offsetof(SDL_Event, text)},
-        {"motion", .type = TYPEID(232, TYPE_STRUCT, SDL_MouseMotionEvent), .offset = offsetof(SDL_Event, motion)},
-        {"button", .type = TYPEID(233, TYPE_STRUCT, SDL_MouseButtonEvent), .offset = offsetof(SDL_Event, button)},
+        {"key", .type = TYPEID(223, TYPE_STRUCT, SDL_KeyboardEvent), .offset = offsetof(SDL_Event, key)},
+        {"text", .type = TYPEID(225, TYPE_STRUCT, SDL_TextInputEvent), .offset = offsetof(SDL_Event, text)},
+        {"motion", .type = TYPEID(227, TYPE_STRUCT, SDL_MouseMotionEvent), .offset = offsetof(SDL_Event, motion)},
+        {"button", .type = TYPEID(228, TYPE_STRUCT, SDL_MouseButtonEvent), .offset = offsetof(SDL_Event, button)},
     }},
-    [228] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_KeyboardEvent), .align = alignof(SDL_KeyboardEvent), .name = "SDL_KeyboardEvent", .num_fields = 8, .fields = (TypeFieldInfo[]) {
+    [223] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_KeyboardEvent), .align = alignof(SDL_KeyboardEvent), .name = "SDL_KeyboardEvent", .num_fields = 8, .fields = (TypeFieldInfo[]) {
         {"type", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_KeyboardEvent, type)},
         {"timestamp", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_KeyboardEvent, timestamp)},
         {"windowID", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_KeyboardEvent, windowID)},
@@ -1585,22 +1578,22 @@ const TypeInfo *typeinfo_table[673] = {
         {"repeat", .type = TYPEID(4, TYPE_UCHAR, uchar), .offset = offsetof(SDL_KeyboardEvent, repeat)},
         {"padding2", .type = TYPEID(4, TYPE_UCHAR, uchar), .offset = offsetof(SDL_KeyboardEvent, padding2)},
         {"padding3", .type = TYPEID(4, TYPE_UCHAR, uchar), .offset = offsetof(SDL_KeyboardEvent, padding3)},
-        {"keysym", .type = TYPEID(229, TYPE_STRUCT, SDL_Keysym), .offset = offsetof(SDL_KeyboardEvent, keysym)},
+        {"keysym", .type = TYPEID(224, TYPE_STRUCT, SDL_Keysym), .offset = offsetof(SDL_KeyboardEvent, keysym)},
     }},
-    [229] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_Keysym), .align = alignof(SDL_Keysym), .name = "SDL_Keysym", .num_fields = 4, .fields = (TypeFieldInfo[]) {
-        {"scancode", .type = TYPEID(203, TYPE_NONE, SDL_Scancode), .offset = offsetof(SDL_Keysym, scancode)},
+    [224] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_Keysym), .align = alignof(SDL_Keysym), .name = "SDL_Keysym", .num_fields = 4, .fields = (TypeFieldInfo[]) {
+        {"scancode", .type = TYPEID(194, TYPE_NONE, SDL_Scancode), .offset = offsetof(SDL_Keysym, scancode)},
         {"sym", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_Keysym, sym)},
         {"mod", .type = TYPEID(7, TYPE_USHORT, ushort), .offset = offsetof(SDL_Keysym, mod)},
         {"unused", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_Keysym, unused)},
     }},
-    [230] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_TextInputEvent), .align = alignof(SDL_TextInputEvent), .name = "SDL_TextInputEvent", .num_fields = 4, .fields = (TypeFieldInfo[]) {
+    [225] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_TextInputEvent), .align = alignof(SDL_TextInputEvent), .name = "SDL_TextInputEvent", .num_fields = 4, .fields = (TypeFieldInfo[]) {
         {"type", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_TextInputEvent, type)},
         {"timestamp", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_TextInputEvent, timestamp)},
         {"windowID", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_TextInputEvent, windowID)},
-        {"text", .type = TYPEID(231, TYPE_ARRAY, char [32]), .offset = offsetof(SDL_TextInputEvent, text)},
+        {"text", .type = TYPEID(226, TYPE_ARRAY, char [32]), .offset = offsetof(SDL_TextInputEvent, text)},
     }},
-    [231] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [32]), .align = alignof(char [32]), .base = TYPEID(3, TYPE_CHAR, char), .count = 32},
-    [232] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_MouseMotionEvent), .align = alignof(SDL_MouseMotionEvent), .name = "SDL_MouseMotionEvent", .num_fields = 9, .fields = (TypeFieldInfo[]) {
+    [226] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [32]), .align = alignof(char [32]), .base = TYPEID(3, TYPE_CHAR, char), .count = 32},
+    [227] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_MouseMotionEvent), .align = alignof(SDL_MouseMotionEvent), .name = "SDL_MouseMotionEvent", .num_fields = 9, .fields = (TypeFieldInfo[]) {
         {"type", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseMotionEvent, type)},
         {"timestamp", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseMotionEvent, timestamp)},
         {"windowID", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseMotionEvent, windowID)},
@@ -1611,7 +1604,7 @@ const TypeInfo *typeinfo_table[673] = {
         {"xrel", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_MouseMotionEvent, xrel)},
         {"yrel", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_MouseMotionEvent, yrel)},
     }},
-    [233] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_MouseButtonEvent), .align = alignof(SDL_MouseButtonEvent), .name = "SDL_MouseButtonEvent", .num_fields = 10, .fields = (TypeFieldInfo[]) {
+    [228] = &(TypeInfo){TYPE_STRUCT, .size = sizeof(SDL_MouseButtonEvent), .align = alignof(SDL_MouseButtonEvent), .name = "SDL_MouseButtonEvent", .num_fields = 10, .fields = (TypeFieldInfo[]) {
         {"type", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseButtonEvent, type)},
         {"timestamp", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseButtonEvent, timestamp)},
         {"windowID", .type = TYPEID(9, TYPE_UINT, uint), .offset = offsetof(SDL_MouseButtonEvent, windowID)},
@@ -1623,20 +1616,25 @@ const TypeInfo *typeinfo_table[673] = {
         {"x", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_MouseButtonEvent, x)},
         {"y", .type = TYPEID(8, TYPE_INT, int), .offset = offsetof(SDL_MouseButtonEvent, y)},
     }},
-    [234] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(227, TYPE_UNION, SDL_Event)},
+    [229] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(222, TYPE_UNION, SDL_Event)},
+    [230] = NULL, // Func
+    [231] = NULL, // Enum
+    [232] = NULL, // Func
+    [233] = NULL, // Func
+    [234] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [21]), .align = alignof(char [21]), .base = TYPEID(3, TYPE_CHAR, char), .count = 21},
     [235] = NULL, // Func
-    [236] = NULL, // Enum
+    [236] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [24]), .align = alignof(char [24]), .base = TYPEID(3, TYPE_CHAR, char), .count = 24},
     [237] = NULL, // Func
     [238] = NULL, // Func
-    [239] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [21]), .align = alignof(char [21]), .base = TYPEID(3, TYPE_CHAR, char), .count = 21},
+    [239] = NULL, // Func
     [240] = NULL, // Func
-    [241] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [24]), .align = alignof(char [24]), .base = TYPEID(3, TYPE_CHAR, char), .count = 24},
-    [242] = NULL, // Func
+    [241] = NULL, // Func
+    [242] = NULL, // Enum
     [243] = NULL, // Func
     [244] = NULL, // Func
     [245] = NULL, // Func
     [246] = NULL, // Func
-    [247] = NULL, // Enum
+    [247] = NULL, // Func
     [248] = NULL, // Func
     [249] = NULL, // Func
     [250] = NULL, // Func
@@ -1656,17 +1654,17 @@ const TypeInfo *typeinfo_table[673] = {
     [264] = NULL, // Func
     [265] = NULL, // Func
     [266] = NULL, // Func
-    [267] = NULL, // Func
-    [268] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(40, TYPE_STRUCT, noir_Event)},
+    [267] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(40, TYPE_STRUCT, noir_Event)},
+    [268] = NULL, // Func
     [269] = NULL, // Func
     [270] = NULL, // Func
     [271] = NULL, // Func
     [272] = NULL, // Func
     [273] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(46, TYPE_STRUCT, noir_int2)},
-    [274] = NULL, // Func
-    [275] = NULL, // No associated type
-    [276] = NULL, // Func
-    [277] = NULL, // No associated type
+    [274] = NULL, // No associated type
+    [275] = NULL, // Func
+    [276] = NULL, // No associated type
+    [277] = NULL, // Func
     [278] = NULL, // Func
     [279] = NULL, // Func
     [280] = NULL, // Func
@@ -1679,17 +1677,17 @@ const TypeInfo *typeinfo_table[673] = {
     [287] = NULL, // Func
     [288] = NULL, // Func
     [289] = NULL, // Func
-    [290] = NULL, // Func
-    [291] = NULL, // Func
+    [290] = NULL, // No associated type
+    [291] = NULL, // No associated type
     [292] = NULL, // Func
     [293] = NULL, // Func
     [294] = NULL, // Func
     [295] = NULL, // Func
     [296] = NULL, // Func
     [297] = NULL, // Func
-    [298] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(15, TYPE_DOUBLE, double)},
+    [298] = NULL, // Func
     [299] = NULL, // Func
-    [300] = NULL, // Func
+    [300] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(15, TYPE_DOUBLE, double)},
     [301] = NULL, // Func
     [302] = NULL, // Func
     [303] = NULL, // Func
@@ -1703,12 +1701,12 @@ const TypeInfo *typeinfo_table[673] = {
     [311] = NULL, // Func
     [312] = NULL, // Func
     [313] = NULL, // Func
-    [314] = &(TypeInfo){TYPE_CONST, .size = sizeof(char (*const )), .align = alignof(char (*const )), .base = TYPEID(18, TYPE_PTR, char *)},
-    [315] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(314, TYPE_CONST, char (*const ))},
-    [316] = NULL, // Func
-    [317] = NULL, // No associated type
+    [314] = NULL, // Func
+    [315] = NULL, // Func
+    [316] = &(TypeInfo){TYPE_CONST, .size = sizeof(char (*const )), .align = alignof(char (*const )), .base = TYPEID(18, TYPE_PTR, char *)},
+    [317] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(316, TYPE_CONST, char (*const ))},
     [318] = NULL, // Func
-    [319] = NULL, // Func
+    [319] = NULL, // No associated type
     [320] = NULL, // Func
     [321] = NULL, // Func
     [322] = NULL, // Func
@@ -1727,16 +1725,16 @@ const TypeInfo *typeinfo_table[673] = {
     [335] = NULL, // Func
     [336] = NULL, // Func
     [337] = NULL, // Func
-    [338] = NULL, // No associated type
+    [338] = NULL, // Func
     [339] = NULL, // Func
-    [340] = NULL, // Func
+    [340] = NULL, // No associated type
     [341] = NULL, // Func
     [342] = NULL, // Func
-    [343] = NULL, // No associated type
-    [344] = NULL, // No associated type
+    [343] = NULL, // Func
+    [344] = NULL, // Func
     [345] = NULL, // No associated type
-    [346] = NULL, // Func
-    [347] = NULL, // Func
+    [346] = NULL, // No associated type
+    [347] = NULL, // No associated type
     [348] = NULL, // Func
     [349] = NULL, // Func
     [350] = NULL, // Func
@@ -1753,14 +1751,14 @@ const TypeInfo *typeinfo_table[673] = {
     [361] = NULL, // Func
     [362] = NULL, // Func
     [363] = NULL, // Func
-    [364] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(6, TYPE_SHORT, short)},
+    [364] = NULL, // Func
     [365] = NULL, // Func
-    [366] = NULL, // Func
+    [366] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(6, TYPE_SHORT, short)},
     [367] = NULL, // Func
-    [368] = &(TypeInfo){TYPE_CONST, .size = sizeof(short const ), .align = alignof(short const ), .base = TYPEID(6, TYPE_SHORT, short)},
-    [369] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(368, TYPE_CONST, short const )},
-    [370] = NULL, // Func
-    [371] = NULL, // Func
+    [368] = NULL, // Func
+    [369] = NULL, // Func
+    [370] = &(TypeInfo){TYPE_CONST, .size = sizeof(short const ), .align = alignof(short const ), .base = TYPEID(6, TYPE_SHORT, short)},
+    [371] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(370, TYPE_CONST, short const )},
     [372] = NULL, // Func
     [373] = NULL, // Func
     [374] = NULL, // Func
@@ -1769,42 +1767,42 @@ const TypeInfo *typeinfo_table[673] = {
     [377] = NULL, // Func
     [378] = NULL, // Func
     [379] = NULL, // Func
-    [380] = NULL, // No associated type
+    [380] = NULL, // Func
     [381] = NULL, // Func
-    [382] = NULL, // Func
-    [383] = NULL, // No associated type
+    [382] = NULL, // No associated type
+    [383] = NULL, // Func
     [384] = NULL, // Func
-    [385] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(12, TYPE_LLONG, llong)},
+    [385] = NULL, // No associated type
     [386] = NULL, // Func
-    [387] = NULL, // No associated type
-    [388] = NULL, // No associated type
-    [389] = NULL, // Func
-    [390] = &(TypeInfo){TYPE_CONST, .size = sizeof(llong const ), .align = alignof(llong const ), .base = TYPEID(12, TYPE_LLONG, llong)},
-    [391] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(390, TYPE_CONST, llong const )},
-    [392] = NULL, // Func
-    [393] = NULL, // Func
+    [387] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(12, TYPE_LLONG, llong)},
+    [388] = NULL, // Func
+    [389] = NULL, // No associated type
+    [390] = NULL, // No associated type
+    [391] = NULL, // Func
+    [392] = &(TypeInfo){TYPE_CONST, .size = sizeof(llong const ), .align = alignof(llong const ), .base = TYPEID(12, TYPE_LLONG, llong)},
+    [393] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(392, TYPE_CONST, llong const )},
     [394] = NULL, // Func
-    [395] = NULL, // No associated type
-    [396] = NULL, // No associated type
+    [395] = NULL, // Func
+    [396] = NULL, // Func
     [397] = NULL, // No associated type
-    [398] = NULL, // Func
-    [399] = NULL, // Func
+    [398] = NULL, // No associated type
+    [399] = NULL, // No associated type
     [400] = NULL, // Func
     [401] = NULL, // Func
     [402] = NULL, // Func
     [403] = NULL, // Func
     [404] = NULL, // Func
     [405] = NULL, // Func
-    [406] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(209, TYPE_PTR, uchar *)},
-    [407] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(9, TYPE_UINT, uint)},
-    [408] = NULL, // Func
-    [409] = NULL, // No associated type
-    [410] = NULL, // No associated type
-    [411] = NULL, // Func
-    [412] = &(TypeInfo){TYPE_CONST, .size = sizeof(uchar const ), .align = alignof(uchar const ), .base = TYPEID(4, TYPE_UCHAR, uchar)},
-    [413] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(412, TYPE_CONST, uchar const )},
-    [414] = NULL, // Func
-    [415] = NULL, // Func
+    [406] = NULL, // Func
+    [407] = NULL, // Func
+    [408] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(200, TYPE_PTR, uchar *)},
+    [409] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(9, TYPE_UINT, uint)},
+    [410] = NULL, // Func
+    [411] = NULL, // No associated type
+    [412] = NULL, // No associated type
+    [413] = NULL, // Func
+    [414] = &(TypeInfo){TYPE_CONST, .size = sizeof(uchar const ), .align = alignof(uchar const ), .base = TYPEID(4, TYPE_UCHAR, uchar)},
+    [415] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(414, TYPE_CONST, uchar const )},
     [416] = NULL, // Func
     [417] = NULL, // Func
     [418] = NULL, // Func
@@ -1826,95 +1824,95 @@ const TypeInfo *typeinfo_table[673] = {
     [434] = NULL, // Func
     [435] = NULL, // Func
     [436] = NULL, // Func
-    [437] = NULL, // No associated type
+    [437] = NULL, // Func
     [438] = NULL, // Func
-    [439] = NULL, // Func
+    [439] = NULL, // No associated type
     [440] = NULL, // Func
     [441] = NULL, // Func
     [442] = NULL, // Func
     [443] = NULL, // Func
     [444] = NULL, // Func
-    [445] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(443, TYPE_FUNC, int (*)(void *, SDL_Event *))},
-    [446] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(16, TYPE_PTR, void *)},
-    [447] = NULL, // Func
-    [448] = NULL, // Func
+    [445] = NULL, // Func
+    [446] = NULL, // Func
+    [447] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(445, TYPE_FUNC, int (*)(void *, SDL_Event *))},
+    [448] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(16, TYPE_PTR, void *)},
     [449] = NULL, // Func
-    [450] = NULL, // No associated type
+    [450] = NULL, // Func
     [451] = NULL, // Func
-    [452] = NULL, // Func
+    [452] = NULL, // No associated type
     [453] = NULL, // Func
     [454] = NULL, // Func
     [455] = NULL, // Func
     [456] = NULL, // Func
     [457] = NULL, // Func
-    [458] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(77, TYPE_STRUCT, SDL_Rect)},
+    [458] = NULL, // Func
     [459] = NULL, // Func
-    [460] = NULL, // Func
-    [461] = NULL, // No associated type
+    [460] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(77, TYPE_STRUCT, SDL_Rect)},
+    [461] = NULL, // Func
     [462] = NULL, // Func
-    [463] = NULL, // Func
+    [463] = NULL, // No associated type
     [464] = NULL, // Func
     [465] = NULL, // Func
     [466] = NULL, // Func
     [467] = NULL, // Func
     [468] = NULL, // Func
     [469] = NULL, // Func
-    [470] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(469, TYPE_FUNC, void (*)(void *, int, SDL_LogPriority, char const (*)))},
+    [470] = NULL, // Func
     [471] = NULL, // Func
-    [472] = NULL, // Func
-    [473] = NULL, // No associated type
+    [472] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(471, TYPE_FUNC, void (*)(void *, int, SDL_LogPriority, char const (*)))},
+    [473] = NULL, // Func
     [474] = NULL, // Func
-    [475] = NULL, // Func
+    [475] = NULL, // No associated type
     [476] = NULL, // Func
     [477] = NULL, // Func
     [478] = NULL, // Func
     [479] = NULL, // Func
     [480] = NULL, // Func
-    [481] = NULL, // No associated type
+    [481] = NULL, // Func
     [482] = NULL, // Func
-    [483] = NULL, // Func
+    [483] = NULL, // No associated type
     [484] = NULL, // Func
     [485] = NULL, // Func
     [486] = NULL, // Func
     [487] = NULL, // Func
-    [488] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(7, TYPE_USHORT, ushort)},
+    [488] = NULL, // Func
     [489] = NULL, // Func
-    [490] = NULL, // Func
-    [491] = NULL, // No associated type
+    [490] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(7, TYPE_USHORT, ushort)},
+    [491] = NULL, // Func
     [492] = NULL, // Func
-    [493] = NULL, // Func
+    [493] = NULL, // No associated type
     [494] = NULL, // Func
-    [495] = NULL, // No associated type
+    [495] = NULL, // Func
     [496] = NULL, // Func
-    [497] = NULL, // Func
-    [498] = NULL, // No associated type
-    [499] = NULL, // No associated type
+    [497] = NULL, // No associated type
+    [498] = NULL, // Func
+    [499] = NULL, // Func
     [500] = NULL, // No associated type
     [501] = NULL, // No associated type
     [502] = NULL, // No associated type
     [503] = NULL, // No associated type
     [504] = NULL, // No associated type
     [505] = NULL, // No associated type
-    [506] = NULL, // Func
-    [507] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(52, TYPE_PTR, SDL_Window *)},
-    [508] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(73, TYPE_PTR, SDL_Renderer *)},
-    [509] = NULL, // Func
-    [510] = NULL, // Func
+    [506] = NULL, // No associated type
+    [507] = NULL, // No associated type
+    [508] = NULL, // Func
+    [509] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(52, TYPE_PTR, SDL_Window *)},
+    [510] = &(TypeInfo){TYPE_PTR, .size = sizeof(void *), .align = alignof(void *), .base = TYPEID(73, TYPE_PTR, SDL_Renderer *)},
     [511] = NULL, // Func
     [512] = NULL, // Func
     [513] = NULL, // Func
-    [514] = NULL, // No associated type
+    [514] = NULL, // Func
     [515] = NULL, // Func
-    [516] = NULL, // Func
+    [516] = NULL, // No associated type
     [517] = NULL, // Func
     [518] = NULL, // Func
     [519] = NULL, // Func
     [520] = NULL, // Func
     [521] = NULL, // Func
     [522] = NULL, // Func
-    [523] = NULL, // No associated type
+    [523] = NULL, // Func
     [524] = NULL, // Func
-    [525] = NULL, // Func
+    [525] = NULL, // No associated type
     [526] = NULL, // Func
     [527] = NULL, // Func
     [528] = NULL, // Func
@@ -1937,9 +1935,9 @@ const TypeInfo *typeinfo_table[673] = {
     [545] = NULL, // Func
     [546] = NULL, // Func
     [547] = NULL, // Func
-    [548] = &(TypeInfo){TYPE_CONST, .size = sizeof(double const ), .align = alignof(double const ), .base = TYPEID(15, TYPE_DOUBLE, double)},
+    [548] = NULL, // Func
     [549] = NULL, // Func
-    [550] = NULL, // Func
+    [550] = &(TypeInfo){TYPE_CONST, .size = sizeof(double const ), .align = alignof(double const ), .base = TYPEID(15, TYPE_DOUBLE, double)},
     [551] = NULL, // Func
     [552] = NULL, // Func
     [553] = NULL, // Func
@@ -1969,16 +1967,16 @@ const TypeInfo *typeinfo_table[673] = {
     [577] = NULL, // Func
     [578] = NULL, // Func
     [579] = NULL, // Func
-    [580] = NULL, // No associated type
-    [581] = NULL, // No associated type
+    [580] = NULL, // Func
+    [581] = NULL, // Func
     [582] = NULL, // No associated type
     [583] = NULL, // No associated type
     [584] = NULL, // No associated type
     [585] = NULL, // No associated type
-    [586] = NULL, // Func
+    [586] = NULL, // No associated type
     [587] = NULL, // No associated type
     [588] = NULL, // Func
-    [589] = NULL, // Func
+    [589] = NULL, // No associated type
     [590] = NULL, // Func
     [591] = NULL, // Func
     [592] = NULL, // Func
@@ -1986,16 +1984,16 @@ const TypeInfo *typeinfo_table[673] = {
     [594] = NULL, // Func
     [595] = NULL, // Func
     [596] = NULL, // Func
-    [597] = NULL, // No associated type
+    [597] = NULL, // Func
     [598] = NULL, // Func
     [599] = NULL, // No associated type
     [600] = NULL, // Func
-    [601] = NULL, // Func
+    [601] = NULL, // No associated type
     [602] = NULL, // Func
     [603] = NULL, // Func
-    [604] = NULL, // No associated type
+    [604] = NULL, // Func
     [605] = NULL, // Func
-    [606] = NULL, // Func
+    [606] = NULL, // No associated type
     [607] = NULL, // Func
     [608] = NULL, // Func
     [609] = NULL, // Func
@@ -2003,9 +2001,9 @@ const TypeInfo *typeinfo_table[673] = {
     [611] = NULL, // Func
     [612] = NULL, // Func
     [613] = NULL, // Func
-    [614] = NULL, // No associated type
+    [614] = NULL, // Func
     [615] = NULL, // Func
-    [616] = NULL, // Func
+    [616] = NULL, // No associated type
     [617] = NULL, // Func
     [618] = NULL, // Func
     [619] = NULL, // Func
@@ -2016,18 +2014,18 @@ const TypeInfo *typeinfo_table[673] = {
     [624] = NULL, // Func
     [625] = NULL, // Func
     [626] = NULL, // Func
-    [627] = NULL, // No associated type
-    [628] = NULL, // No associated type
-    [629] = NULL, // Func
+    [627] = NULL, // Func
+    [628] = NULL, // Func
+    [629] = NULL, // No associated type
     [630] = NULL, // No associated type
-    [631] = NULL, // No associated type
+    [631] = NULL, // Func
     [632] = NULL, // No associated type
     [633] = NULL, // No associated type
     [634] = NULL, // No associated type
     [635] = NULL, // No associated type
     [636] = NULL, // No associated type
-    [637] = NULL, // Func
-    [638] = NULL, // Func
+    [637] = NULL, // No associated type
+    [638] = NULL, // No associated type
     [639] = NULL, // Func
     [640] = NULL, // Func
     [641] = NULL, // Func
@@ -2052,40 +2050,42 @@ const TypeInfo *typeinfo_table[673] = {
     [660] = NULL, // Func
     [661] = NULL, // Func
     [662] = NULL, // Func
-    [663] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [39]), .align = alignof(char [39]), .base = TYPEID(3, TYPE_CHAR, char), .count = 39},
-    [664] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [37]), .align = alignof(char [37]), .base = TYPEID(3, TYPE_CHAR, char), .count = 37},
-    [665] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [38]), .align = alignof(char [38]), .base = TYPEID(3, TYPE_CHAR, char), .count = 38},
-    [666] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [22]), .align = alignof(char [22]), .base = TYPEID(3, TYPE_CHAR, char), .count = 22},
-    [667] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [29]), .align = alignof(char [29]), .base = TYPEID(3, TYPE_CHAR, char), .count = 29},
-    [668] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [10]), .align = alignof(char [10]), .base = TYPEID(3, TYPE_CHAR, char), .count = 10},
-    [669] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [27]), .align = alignof(char [27]), .base = TYPEID(3, TYPE_CHAR, char), .count = 27},
-    [670] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [28]), .align = alignof(char [28]), .base = TYPEID(3, TYPE_CHAR, char), .count = 28},
-    [671] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [15]), .align = alignof(char [15]), .base = TYPEID(3, TYPE_CHAR, char), .count = 15},
-    [672] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [8]), .align = alignof(char [8]), .base = TYPEID(3, TYPE_CHAR, char), .count = 8},
+    [663] = NULL, // Func
+    [664] = NULL, // Func
+    [665] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [39]), .align = alignof(char [39]), .base = TYPEID(3, TYPE_CHAR, char), .count = 39},
+    [666] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [37]), .align = alignof(char [37]), .base = TYPEID(3, TYPE_CHAR, char), .count = 37},
+    [667] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [38]), .align = alignof(char [38]), .base = TYPEID(3, TYPE_CHAR, char), .count = 38},
+    [668] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [22]), .align = alignof(char [22]), .base = TYPEID(3, TYPE_CHAR, char), .count = 22},
+    [669] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [29]), .align = alignof(char [29]), .base = TYPEID(3, TYPE_CHAR, char), .count = 29},
+    [670] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [10]), .align = alignof(char [10]), .base = TYPEID(3, TYPE_CHAR, char), .count = 10},
+    [671] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [27]), .align = alignof(char [27]), .base = TYPEID(3, TYPE_CHAR, char), .count = 27},
+    [672] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [28]), .align = alignof(char [28]), .base = TYPEID(3, TYPE_CHAR, char), .count = 28},
+    [673] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [15]), .align = alignof(char [15]), .base = TYPEID(3, TYPE_CHAR, char), .count = 15},
+    [674] = &(TypeInfo){TYPE_ARRAY, .size = sizeof(char [8]), .align = alignof(char [8]), .base = TYPEID(3, TYPE_CHAR, char), .count = 8},
 };
 
-int num_typeinfos = 673;
+int num_typeinfos = 675;
 const TypeInfo **typeinfos = (const TypeInfo **)typeinfo_table;
 
 // Definitions
-#line 991 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 477
 int main(int argc, char (*(*argv))) {
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    #line 994
+    #line 480
     noir_app.window.size = starfield_ImageSize;
     if (!(noir_app_init())) {
         noir_print_and_clear_error();
         return 1;
     }
-    #line 1000
+    #line 486
     printf("Platform: %s\n", noir_app.platform);
     printf("Display: %d x %d, %d Hz, %.2f DPI\n", noir_app.display.size.x, noir_app.display.size.y, noir_app.display.rate, noir_app.display.dpi);
-    #line 1003
+    #line 489
     SDL_Surface (*surface) = SDL_GetWindowSurface(noir_app.window.sdl);
     SDL_Renderer (*renderer) = SDL_CreateSoftwareRenderer(surface);
     assert((surface->format->format) == (SDL_PIXELFORMAT_RGB888));
     assert((surface->format->BitsPerPixel) == (32));
-    #line 1008
+    #line 494
     char (*starfield_text) = 
         "\n"
         "\xE2\x9C\xBA   \xE3\x80\x80\xE3\x80\x80 \xE3\x80\x80\xE3\x80\x80 \xC2\xB7   \xE2\x8A\xB9\n"
@@ -2093,32 +2093,32 @@ int main(int argc, char (*(*argv))) {
         "  \xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80.  \xE3\x80\x80\n"
         " +  *\xE3\x80\x80  \xE3\x80\x80* \xE3\x80\x80\xE3\x80\x80. \xE3\x80\x80 \xE2\x8B\x86\n"
         "  \xE2\x9C\xAB \xE3\x80\x80\xE3\x80\x80  +\n";
-    #line 1017
+    #line 503
     starfield_init_perlin();
     starfield_Image noise = starfield_make_image((noir_int2){surface->w, surface->h});
     for (starfield_PixelIter it = starfield_pixel_iter_begin(&(noise), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
         starfield_Color c = {(starfield_square(starfield_random_normal())) * (((1) / (2048.f))), (starfield_square(starfield_random_normal())) * (((1) / (2048.f))), (starfield_square(starfield_random_normal())) * (((1) / (2048.f))), 1};
-        #line 1026
+        #line 512
         *(it.pixel) = c;
     }
     starfield_blur(&(noise), 0.1f);
-    #line 1030
+    #line 516
     starfield_diffraction_rotation = starfield_random_unit_vector2();
-    #line 1030
+    #line 516
     starfield_random_unit_vector2();
-    #line 1030
+    #line 516
     starfield_random_unit_vector2();
-    #line 1030
+    #line 516
     starfield_random_unit_vector2();
-    #line 1032
+    #line 518
     starfield_Starfield starfield = starfield_create_starfield(starfield_text);
-    #line 1034
+    #line 520
     float min_t = 1000.f;
     float max_t = 0.f;
     float sum_t = 0.f;
     int n_t = 0;
     double t_reset = starfield_time_now();
-    #line 1040
+    #line 526
     starfield_Image image = starfield_make_image((noir_int2){surface->w, surface->h});
     starfield_Image blurred = starfield_make_image((noir_int2){surface->w, surface->h});
     starfield_Image blurred2 = starfield_make_image((noir_int2){surface->w, surface->h});
@@ -2126,62 +2126,56 @@ int main(int argc, char (*(*argv))) {
         if (noir_app.error) {
             noir_print_and_clear_error();
         }
-        #line 1048
+        #line 534
         if ((!(n_t)) || (noir_app.mouse.left_button.pressed)) {
             starfield_image_copy_to(&(image), &(noise));
-            #line 1051
+            #line 537
             double t0 = starfield_time_now();
             float t0f = (float)(t0);
-            #line 1055
-            starfield_Tex galaxy = starfield_make_tex((noir_int2){512, 512});
-            starfield_draw_galaxy(&(galaxy), (n_t) % (7));
-            #line 1058
-            starfield_draw_tex(&(image), (starfield_Rect){0}, &(galaxy));
-            starfield_free_tex(&(galaxy));
-            #line 1061
-            if (false) {
-                starfield_init_star_type2((starfield_star_types) + (12), true);
-                starfield_draw_starfield(&(image), &(starfield));
-                starfield_diffract(&(image), (starfield_DiffractionArguments){.alpha = 0.1f, .radius = 4, .transform = starfield_diffraction_rotation, .type = starfield_randomn(0, STARFIELD_DiffractionTypeCount)});
-                #line 1071
-                starfield_blur_to(&(blurred), &(image), starfield_randomr(0, 1));
-                starfield_blur_to(&(blurred2), &(image), starfield_randomr(0.5f, 1));
-                for (starfield_PixelIter it = starfield_pixel_iter_begin(&(image), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-                    starfield_Color bp = starfield_image_fetch(&(blurred), it.pixel_pos);
-                    starfield_Color mbp = starfield_color_mul(*(it.pixel), bp);
-                    starfield_Color xbp = starfield_color_lerp(bp, mbp, 0.1f);
-                    #line 1078
-                    starfield_Color bp2 = starfield_image_fetch(&(blurred2), it.pixel_pos);
-                    starfield_Color mbp2 = starfield_color_mul(*(it.pixel), bp2);
-                    starfield_Color xbp2 = starfield_color_lerp(bp2, mbp2, .9f);
-                    *(it.pixel) = starfield_color_add(*(it.pixel), starfield_color_add(xbp, xbp2));
-                }
+            #line 540
+            starfield_draw_starfield(&(image), &(starfield));
+            starfield_diffract(&(image), (starfield_DiffractionArguments){.alpha = 0.1f, .radius = 4, .transform = starfield_diffraction_rotation, .type = starfield_randomn(1, STARFIELD_DiffractionTypeCount)});
+            #line 548
+            starfield_blur_to(&(blurred), &(image), starfield_randomr(0, 1));
+            starfield_blur_to(&(blurred2), &(image), starfield_randomr(0.5f, 1));
+            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(image), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+                starfield_Color bp = starfield_image_fetch(&(blurred), it.pixel_pos);
+                starfield_Color mbp = starfield_color_mul(*(it.pixel), bp);
+                starfield_Color xbp = starfield_color_lerp(bp, mbp, 0.1f);
+                #line 555
+                starfield_Color bp2 = starfield_image_fetch(&(blurred2), it.pixel_pos);
+                starfield_Color mbp2 = starfield_color_mul(*(it.pixel), bp2);
+                starfield_Color xbp2 = starfield_color_lerp(bp2, mbp2, .9f);
+                *(it.pixel) = starfield_color_add(*(it.pixel), starfield_color_add(xbp, xbp2));
             }
+            #line 561
             starfield_image_to_rgb8((starfield_RGB8 *)(surface->pixels), (noir_int2){surface->w, surface->h}, &(image));
-            #line 1086
+            #line 563
             double t1 = starfield_time_now();
-            #line 1088
+            #line 565
             float t = (float)((((t1) - (t0))) * (1000));
             min_t = starfield_min(t, min_t);
             max_t = starfield_max(t, max_t);
             sum_t += t;
             (n_t)++;
-            #line 1094
+            #line 571
             if (noir_app.mouse.left_button.pressed) {
+                starfield_init_star_type_really((starfield_star_types) + (12), true);
+                #line 574
                 printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, (sum_t) / (n_t));
-                #line 1097
+                #line 576
                 free(starfield_stars_header(starfield.stars));
                 starfield = starfield_create_starfield(starfield_text);
                 t_reset = t0;
             }
         }
-        #line 1103
+        #line 582
         SDL_UpdateWindowSurface(noir_app.window.sdl);
-        #line 1105
+        #line 584
         fflush(stdout);
         SDL_Delay(10);
     }
-    #line 1109
+    #line 588
     return 0;
 }
 
@@ -2242,7 +2236,7 @@ void noir_print_and_clear_error(void) {
     }
 }
 
-#line 934 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 420 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_init_perlin(void) {
     for (int i = 0; (i) < (STARFIELD_perlin_gradient_count); (i)++) {
         starfield_perlin_gradients[i] = starfield_random_unit_vector2();
@@ -2349,27 +2343,27 @@ noir_float2 starfield_random_unit_vector2(void) {
     return (noir_float2){cosf(theta), sinf(theta)};
 }
 
-#line 590 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 185 "C:\\code\\starfield\\starfield\\stars.ion"
 starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
-    #line 592
+    #line 187
     starfield_Starfield result = {0};
-    #line 594
+    #line 189
     int width = 0;
     int height = 0;
     int line_width = 0;
     int star_count = 0;
-    #line 599
+    #line 194
     char const ((*c)) = starfield;
     while (*(c)) {
         starfield_Star star = {0};
         c = starfield_consume_star(c, &(star));
-        #line 604
+        #line 199
         if (star.type) {
             if ((star.type->id) == (STARFIELD_StarType_BigSpace)) {
                 line_width += 1;
             } else if ((star.type->id) != (STARFIELD_StarType_Space)) {
                 (star_count)++;
-                #line 610
+                #line 205
                 star.rect.pos = (noir_float2){(((float)(line_width)) + ((starfield_random01()) * (0.5f))) - (.25f), (((float)(height)) + ((starfield_random01()) * (0.5f))) - (.25f)};
                 float x = starfield_clamp(0.66f, 1.33f, starfield_square(starfield_random_normal()));
                 float y = x;
@@ -2379,11 +2373,11 @@ starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
                 star.rect.size = (noir_float2){x, y};
                 star.rect.rot = (star.type->fixed_rotation ? (noir_float2){0} : starfield_random_unit_vector2());
                 star.color = starfield_random_star_color(star.type, (1) + ((x) * (x)));
-                #line 620
+                #line 215
                 starfield_push_star(&(result), star);
             }
         }
-        #line 624
+        #line 219
         if ((*(c)) == ('\n')) {
             height += 6;
             width = starfield_maxi(width, line_width);
@@ -2393,14 +2387,14 @@ starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
             line_width += 2;
         }
     }
-    #line 634
+    #line 229
     width += 8;
     height += 4;
-    #line 637
+    #line 232
     int R = starfield_maxi(width, height);
     int x_pad = (4) + ((((R) - (width))) / (2));
     int y_pad = (4) + ((((R) - (height))) / (2));
-    #line 641
+    #line 236
     for (int i = 0; (i) < (starfield_stars_len(&(result))); (i)++) {
         starfield_Star (*s) = (result.stars) + (i);
         s->rect.pos.x = (((s->rect.pos.x) + (x_pad))) / (R);
@@ -2408,14 +2402,14 @@ starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
         s->rect.size.x = (((s->type->size.x) * (s->type->tex.size.x)) * (s->rect.size.x)) / (starfield_ImageSize.x);
         s->rect.size.y = (((s->type->size.y) * (s->type->tex.size.y)) * (s->rect.size.y)) / (starfield_ImageSize.y);
     }
-    #line 649
+    #line 244
     starfield_Tex star_count_noise = starfield_make_tex((noir_int2){8, 8});
     float density = starfield_square((starfield_random_normal()) + (2));
     for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(&(star_count_noise), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-        #line 653
+        #line 248
         it.pixel->r = (float)(starfield_random_poisson(fabsf((density) + (starfield_random_normal()))));
     }
-    #line 656
+    #line 251
     int tiles = 25;
     float w = (1.f) / (tiles);
     float background_star_size = 0.005f;
@@ -2425,24 +2419,24 @@ starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
             float count = starfield_max(1.f, starfield_tex_lookup(&(star_count_noise), xy).r);
             for (int k = 0; (k) < (count); (k)++) {
                 float size = starfield_max((1.f) / (starfield_ImageSize.x), ((starfield_random_normal()) * (background_star_size)) * ((((1) + (count)) - ((int)(count)))));
-                #line 666
+                #line 261
                 starfield_push_star(&(result), (starfield_Star){.rect = {.pos = starfield_add2(xy, (noir_float2){(((starfield_random01()) - (0.5f))) * (w), (((starfield_random01()) - (0.5f))) * (w)}), .size = {size, size}, .rot = starfield_random_unit_vector2()}, .type = (starfield_star_types) + (1), .color = starfield_random_star_color((starfield_star_types) + (1), (size) * (((16) + ((4) * (count)))))});
             }
-            #line 677
+            #line 272
             xy.x += w;
         }
-        #line 680
+        #line 275
         xy.x = (w) / (2);
         xy.y += w;
     }
-    #line 684
+    #line 279
     starfield_free_tex(&(star_count_noise));
-    #line 686
+    #line 281
     result.star_count = starfield_stars_len(&(result));
     return result;
 }
 
-#line 927
+#line 413 "C:\\code\\starfield\\starfield\\starfield.ion"
 double starfield_time_now(void) {
     ullong ticks = (SDL_GetPerformanceCounter()) - (noir_app.time.sdl_start_ticks);
     return ((double)(ticks)) / ((double)(noir_app.time.ticks_per_sec));
@@ -2474,256 +2468,7 @@ void starfield_image_copy_to(starfield_Image (*dest), starfield_Image (*src)) {
     memcpy(dest->pixels, src->pixels, ((src->size.x) * (src->size.y)) * (sizeof(starfield_Color)));
 }
 
-#line 67 "C:\\code\\starfield\\starfield\\starfield.ion"
-starfield_Tex starfield_make_tex(noir_int2 size) {
-    assert(starfield_is_power_2(size.x));
-    assert((size.x) == (size.y));
-    #line 71
-    void (*pixels) = starfield_xcalloc(((size.x) * (size.y)) * (4), sizeof(starfield_Color));
-    return (starfield_Tex){.size = size, .lod_levels = 1, .pixels = pixels};
-}
-
-#line 709
-void starfield_draw_galaxy(starfield_Tex (*tex), int arms) {
-    starfield_Image (*tex_img) = &((starfield_Image){tex->pixels, tex->size});
-    #line 712
-    float arm_width = (0.0125f) + ((starfield_randomr(-(1), 1)) * (0.01f));
-    arms = starfield_clampi(2, 6, arms);
-    float brightness = starfield_randomr(0.8f, 1.1f);
-    float arm_definition = starfield_randomr((1.f) / (arms), 1);
-    float bar = (starfield_randomr(.05f, .25f)) / (arms);
-    float spiral_expansion = starfield_randomr(1, 1.3f);
-    float tilt = starfield_random01();
-    #line 720
-    starfield_Starfield (*s) = &((starfield_Starfield){0});
-    for (int i = 0; (i) < (30000); (i)++) {
-        float w = arm_width;
-        float x = (starfield_random_normal()) / (8);
-        float y = (starfield_random_normal()) / (8);
-        float rot = 0.f;
-        #line 727
-        if ((arms) > (0)) {
-            x = (starfield_mod((x) + ((w) / (2)), w)) - ((w) / (2));
-            #line 730
-            if ((arms) & (1)) {
-                y = fabsf(y);
-            }
-            #line 734
-            rot = (starfield_randomn(0, arms)) / ((float)(arms));
-            rot += ((starfield_random_normal()) * (0.05f)) * (((1) - (arm_definition)));
-            #line 737
-            x += (((starfield_random_normal()) / (256))) * (((1) - (arm_definition)));
-            y += (((starfield_random_normal()) / (256))) * (((1) - (arm_definition)));
-        }
-        #line 742
-        float mag = (starfield_magnitude2((noir_float2){x, y})) + ((0.05f) * (starfield_random_normal()));
-        noir_float2 xy = starfield_mul2s(starfield_normalise((noir_float2){x, y}), mag);
-        float expand = expf((spiral_expansion) * (((1) + (mag))));
-        #line 746
-        float spin = (((((starfield_random_normal()) / (12)) + (1))) * (mag)) * (expand);
-        spin *= starfield_smoothedge(bar, starfield_randomr(.1f, .3f), mag);
-        spin += rot;
-        noir_float2 spiral_str = starfield_mul2s((noir_float2){cosf((spin) * (STARFIELD_Tau)), sinf((spin) * (STARFIELD_Tau))}, (.5f) * (expand));
-        noir_float2 pos = starfield_rotate(xy, spiral_str);
-        #line 753
-        float z = (((starfield_random_normal()) * (0.01f))) * (((1) - (tilt)));
-        float size = (((((((STARFIELD_Sqrt2) - (starfield_magnitude2(pos))) + (z)) + ((y) * (tilt)))) * (starfield_random01())) * (0.016f)) * (brightness);
-        pos.y *= tilt;
-        pos.y += (.25f) * (z);
-        #line 758
-        starfield_push_star(s, (starfield_Star){.rect = {.pos = starfield_add2s(starfield_mul2s(pos, .51f), 0.5f), .size = {size, size}, .rot = starfield_random_unit_vector2()}, .type = (starfield_star_types) + (1), .color = starfield_random_star_color((starfield_star_types) + (1), 0.45f)});
-    }
-    #line 769
-    starfield_draw_starfield(tex_img, s);
-    #line 771
-    starfield_Image bloom_less = starfield_image_copy(tex_img);
-    starfield_Image bloom_more = starfield_image_copy(tex_img);
-    starfield_blur(&(bloom_less), 3);
-    starfield_blur(&(bloom_more), (20) * (tilt));
-    #line 776
-    for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(tex, (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-        noir_float2 rel = starfield_sub2s(it.pos, 0.5f);
-        float th = starfield_magnitude2(rel);
-        starfield_Color blue = starfield_star_colors[(STARFIELD_star_color_count) - (3)];
-        starfield_Color bl = starfield_image_sample_linear(&(bloom_less), it.pos);
-        starfield_Color bm = starfield_image_sample_linear(&(bloom_more), it.pos);
-        float center_yellow_str = powf((1) - (starfield_clamp01((th) / (((STARFIELD_Sqrt2) / (4))))), 6);
-        starfield_Color arm_color = starfield_color_lerp(blue, starfield_star_colors[5], center_yellow_str);
-        starfield_Color inter_color = starfield_color_mul_rgb1(starfield_color_mul(arm_color, bm), ((starfield_perlin_octaves(it.pos, 40)) * (0.5f)) + (1));
-        starfield_Color matter = starfield_color_mul(bl, arm_color);
-        matter = starfield_color_mul_rgb1(matter, ((starfield_perlin_octaves(it.pos, 32)) * (0.5f)) + (1));
-        matter = starfield_color_blend(inter_color, matter);
-        *(it.pixel) = starfield_color_blend(*(it.pixel), matter);
-    }
-    #line 791
-    starfield_free_starfield(s);
-}
-
-#line 234
-void starfield_draw_tex(starfield_Image (*dest), starfield_Rect target, starfield_Tex (*tex)) {
-    if (starfield_is_zero(&(target), sizeof(target))) {
-        target = starfield_all_rect();
-    }
-    noir_float2 lod = starfield_compute_lod_level(dest->size, target.size, tex->size);
-    for (starfield_PixelIter it = starfield_pixel_iter_begin(dest, target); starfield_pixel_iter_next(&(it));) {
-        starfield_Color rgba = starfield_tex_lookup_lod(tex, it.pos, lod);
-        *(it.pixel) = starfield_color_blend(*(it.pixel), rgba);
-    }
-}
-
-#line 79
-void starfield_free_tex(starfield_Tex (*tex)) {
-    assert(tex->pixels);
-    free(tex->pixels);
-    tex->pixels = 0;
-    tex->size = (noir_int2){0, 0};
-}
-
-#line 823
-void starfield_init_star_type2(starfield_StarType (*type), bool redraw) {
-    int idx = (int32_t)(((type) - (starfield_star_types)));
-    assert((idx) >= (0));
-    assert((idx) < (STARFIELD_StarTypeCount));
-    #line 828
-    if ((type->tex.pixels) && ((redraw) == (false))) {
-        assert((type->tex.size.x) != (0));
-        assert((type->tex.size.y) != (0));
-        return;
-    }
-    #line 834
-    type->id = idx;
-    #line 836
-    switch (idx) {
-    case 0: {
-        type->tex = starfield_make_tex((noir_int2){8, 8});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_outline(type->tex.pixels, type->tex.size, (starfield_Color){0, 1, 0, 0.5f});
-        break;
-    }
-    case 1: {
-        #line 842
-        type->tex = starfield_make_tex((noir_int2){32, 32});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 2: {
-        #line 846
-        type->tex = starfield_make_tex((noir_int2){32, 32});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 3: {
-        #line 850
-        type->tex = starfield_make_tex((noir_int2){32, 32});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 4: {
-        #line 854
-        type->tex = starfield_make_tex((noir_int2){32, 32});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 5: {
-        #line 858
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 6: {
-        #line 862
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){.5f, .5f};
-        starfield_draw_lensed_quasar(&(type->tex));
-        break;
-    }
-    case 7: {
-        #line 866
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){1, 1};
-        type->fixed_rotation = true;
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){.alpha = 0.2f, .radius = .5f, .transform = starfield_rotate(starfield_diffraction_rotation, (noir_float2){STARFIELD_InvSqrt2, STARFIELD_InvSqrt2})});
-        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){.alpha = 0.1f, .radius = .5f, .transform = starfield_rotate(starfield_diffraction_rotation, (noir_float2){cosf((STARFIELD_Pi) / (8)), sinf((STARFIELD_Pi) / (8))})});
-        break;
-    }
-    case 8: {
-        #line 873
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        break;
-    }
-    case 9: {
-        #line 877
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){1, 1};
-        type->fixed_rotation = true;
-        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){2, 2, starfield_diffraction_rotation});
-        break;
-    }
-    case 10: {
-        #line 883
-        type->tex = starfield_make_tex((noir_int2){128, 128});
-        type->size = (noir_float2){1, 1};
-        type->fixed_rotation = true;
-        #line 887
-        type->tex.pixels[(((((type->tex.size.x)) / (2)) - (1))) + ((((((type->tex.size.y)) / (2)) - (1))) * ((type->tex.size.x)))] = (starfield_Color){64, 16, 1, 1};
-        starfield_Image img = starfield_image_copy(&((starfield_Image){type->tex.pixels, type->tex.size}));
-        starfield_diffract(&(img), (starfield_DiffractionArguments){1, 2, starfield_rotate(starfield_diffraction_rotation, (noir_float2){STARFIELD_InvSqrt2, STARFIELD_InvSqrt2})});
-        starfield_blur(&(img), 0.1f);
-        for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(&(type->tex), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-            starfield_Color c = starfield_image_sample_nearest(&(img), it.pos);
-            float str = starfield_clamp01((1) - ((starfield_magnitude2(starfield_sub2(it.pos, (noir_float2){0.5f, 0.5f}))) * (12)));
-            str = ((((str) * (str)) * (str)) * (str)) * (str);
-            starfield_Color to_white = starfield_color_lerp((starfield_Color){1, 1, 1, 1}, (starfield_Color){1, 4, 64, 1}, str);
-            *(it.pixel) = starfield_color_add(*(it.pixel), starfield_color_mul(c, to_white));
-        }
-        break;
-    }
-    case 11: {
-        #line 899
-        type->tex = starfield_make_tex((noir_int2){64, 64});
-        type->size = (noir_float2){1, 1};
-        break;
-    }
-    case 12: {
-        #line 902
-        type->tex = starfield_make_tex((noir_int2){256, 256});
-        type->size = (noir_float2){(1.f) / (3.f), (1.f) / (3.f)};
-        type->nonsquare = true;
-        starfield_draw_galaxy(&(type->tex), starfield_randomn(1, 8));
-        break;
-    }
-    case 13: {
-        #line 907
-        type->tex = starfield_make_tex((noir_int2){8, 8});
-        type->size = (noir_float2){1, 1};
-        starfield_draw_outline(type->tex.pixels, type->tex.size, (starfield_Color){1, 0, 0, 0.5f});
-        break;
-    }
-    default: {
-        #line 910
-        {
-            type->tex = starfield_make_tex((noir_int2){32, 32});
-            type->size = (noir_float2){1, 1};
-            starfield_draw_simple_star(type->tex.pixels, type->tex.size);
-        }
-        break;
-    }
-    }
-    #line 917
-    starfield_generate_lods(&(type->tex));
-}
-
-starfield_StarType (starfield_star_types[STARFIELD_StarTypeCount]) = {0};
-#line 920
+#line 406 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_draw_starfield(starfield_Image (*dest), starfield_Starfield (*starfield)) {
     for (llong i = (starfield_starfield_len(starfield)) - (1); (i) >= (0); (i)--) {
         starfield_Star (*star) = (starfield->stars) + (i);
@@ -2856,7 +2601,151 @@ float starfield_max(float a, float b) {
     return (((a) > (b)) ? a : b);
 }
 
-#line 447 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 425 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_init_star_type_really(starfield_StarType (*type), bool redraw) {
+    int idx = (int32_t)(((type) - (starfield_star_types)));
+    assert((idx) >= (0));
+    assert((idx) < (STARFIELD_StarTypeCount));
+    #line 430
+    if ((type->tex.pixels) && ((redraw) == (false))) {
+        assert((type->tex.size.x) != (0));
+        assert((type->tex.size.y) != (0));
+        return;
+    }
+    #line 436
+    type->id = idx;
+    #line 438
+    switch (idx) {
+    case 0: {
+        type->tex = starfield_make_tex((noir_int2){8, 8});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_outline(type->tex.pixels, type->tex.size, (starfield_Color){0, 1, 0, 0.5f});
+        break;
+    }
+    case 1: {
+        #line 444
+        type->tex = starfield_make_tex((noir_int2){32, 32});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 2: {
+        #line 448
+        type->tex = starfield_make_tex((noir_int2){32, 32});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 3: {
+        #line 452
+        type->tex = starfield_make_tex((noir_int2){32, 32});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 4: {
+        #line 456
+        type->tex = starfield_make_tex((noir_int2){32, 32});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 5: {
+        #line 460
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 6: {
+        #line 464
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){.5f, .5f};
+        starfield_draw_lensed_quasar(&(type->tex));
+        break;
+    }
+    case 7: {
+        #line 468
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){1, 1};
+        type->fixed_rotation = true;
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){.alpha = 0.2f, .radius = .5f, .transform = starfield_rotate(starfield_diffraction_rotation, (noir_float2){STARFIELD_InvSqrt2, STARFIELD_InvSqrt2})});
+        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){.alpha = 0.1f, .radius = .5f, .transform = starfield_rotate(starfield_diffraction_rotation, (noir_float2){cosf((STARFIELD_Pi) / (8)), sinf((STARFIELD_Pi) / (8))})});
+        break;
+    }
+    case 8: {
+        #line 475
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        break;
+    }
+    case 9: {
+        #line 479
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){1, 1};
+        type->fixed_rotation = true;
+        starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        starfield_diffract(&((starfield_Image){type->tex.pixels, type->tex.size}), (starfield_DiffractionArguments){2, 2, starfield_diffraction_rotation});
+        break;
+    }
+    case 10: {
+        #line 485
+        type->tex = starfield_make_tex((noir_int2){128, 128});
+        type->size = (noir_float2){1, 1};
+        type->fixed_rotation = true;
+        #line 489
+        type->tex.pixels[(((((type->tex.size.x)) / (2)) - (1))) + ((((((type->tex.size.y)) / (2)) - (1))) * ((type->tex.size.x)))] = (starfield_Color){64, 16, 1, 1};
+        starfield_Image img = starfield_image_copy(&((starfield_Image){type->tex.pixels, type->tex.size}));
+        starfield_diffract(&(img), (starfield_DiffractionArguments){1, 2, starfield_rotate(starfield_diffraction_rotation, (noir_float2){STARFIELD_InvSqrt2, STARFIELD_InvSqrt2})});
+        starfield_blur(&(img), 0.1f);
+        for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(&(type->tex), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+            starfield_Color c = starfield_image_sample_nearest(&(img), it.pos);
+            float str = starfield_clamp01((1) - ((starfield_magnitude2(starfield_sub2(it.pos, (noir_float2){0.5f, 0.5f}))) * (12)));
+            str = ((((str) * (str)) * (str)) * (str)) * (str);
+            starfield_Color to_white = starfield_color_lerp((starfield_Color){1, 1, 1, 1}, (starfield_Color){1, 4, 64, 1}, str);
+            *(it.pixel) = starfield_color_add(*(it.pixel), starfield_color_mul(c, to_white));
+        }
+        break;
+    }
+    case 11: {
+        #line 501
+        type->tex = starfield_make_tex((noir_int2){64, 64});
+        type->size = (noir_float2){1, 1};
+        break;
+    }
+    case 12: {
+        #line 504
+        type->tex = starfield_make_tex((noir_int2){256, 256});
+        type->size = (noir_float2){(1.f) / (3.f), (1.f) / (3.f)};
+        type->nonsquare = true;
+        starfield_draw_galaxy(&(type->tex), starfield_randomn(1, 8));
+        break;
+    }
+    case 13: {
+        #line 509
+        type->tex = starfield_make_tex((noir_int2){8, 8});
+        type->size = (noir_float2){1, 1};
+        starfield_draw_outline(type->tex.pixels, type->tex.size, (starfield_Color){1, 0, 0, 0.5f});
+        break;
+    }
+    default: {
+        #line 512
+        {
+            type->tex = starfield_make_tex((noir_int2){32, 32});
+            type->size = (noir_float2){1, 1};
+            starfield_draw_simple_star(type->tex.pixels, type->tex.size);
+        }
+        break;
+    }
+    }
+    #line 519
+    starfield_generate_lods(&(type->tex));
+}
+
+starfield_StarType (starfield_star_types[STARFIELD_StarTypeCount]) = {0};
+#line 42
 starfield_StarsHeader (*starfield_stars_header(starfield_Star (*stars))) {
     return (stars ? (starfield_StarsHeader *)(((((char *)(stars))) - (offsetof(starfield_StarsHeader, data)))) : 0);
 }
@@ -3040,15 +2929,15 @@ float starfield_random01(void) {
     return (r) * (STARFIELD_int_23_reciprocal);
 }
 
-#line 492 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 87 "C:\\code\\starfield\\starfield\\stars.ion"
 char const ((*starfield_consume_star(char const ((*c)), starfield_Star (*star)))) {
     int next = 0;
     if ((*(c)) == ('\n')) {
         (c)++;
     }
-    #line 498
+    #line 93
     if ((*(c)) == (' ')) {
-        #line 500
+        #line 95
         star->type = (starfield_star_types) + (STARFIELD_StarType_Space);
         next = 1;
     } else if ((*(c)) == ('*')) {
@@ -3088,7 +2977,7 @@ char const ((*starfield_consume_star(char const ((*c)), starfield_Star (*star)))
         star->type = (starfield_star_types) + (12);
         next = (sizeof("\xE2\x9C\xBA")) - (1);
     } else if ((memcmp(c, "\xE3\x80\x80", (sizeof("\xE3\x80\x80")) - (1))) == (0)) {
-        #line 540
+        #line 135
         star->type = (starfield_star_types) + (STARFIELD_StarType_BigSpace);
         next = (sizeof("\xE3\x80\x80")) - (1);
     } else {
@@ -3096,7 +2985,7 @@ char const ((*starfield_consume_star(char const ((*c)), starfield_Star (*star)))
         star->type = 0;
         next = 1;
     }
-    #line 548
+    #line 143
     starfield_init_star_type(star->type);
     return (c) + (next);
 }
@@ -3106,25 +2995,25 @@ float starfield_clamp(float a, float b, float x) {
     return (((x) < (a)) ? a : (((x) > (b)) ? b : x));
 }
 
-#line 573 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 168 "C:\\code\\starfield\\starfield\\stars.ion"
 starfield_Color starfield_random_star_color(starfield_StarType (*type), float alpha) {
     int offset = 8;
     float r = (offset) + ((starfield_random_normal()) * (((STARFIELD_star_color_count) / (7))));
     float x = starfield_clamp(0, (STARFIELD_star_color_count) - (1), r);
-    #line 578
+    #line 173
     if ((type->id) == (12)) {
         x = starfield_clamp(8, 11, x);
     }
-    #line 582
+    #line 177
     int xi = (int)(x);
     float xf = (x) - (xi);
     starfield_Color color = starfield_color_lerp((starfield_star_colors[xi]), (starfield_star_colors[(xi) + (1)]), xf);
     color = starfield_color_premultiply(color, ((starfield_random01()) * ((((float)(xi)) / (STARFIELD_star_color_count)))) * (alpha));
-    #line 587
+    #line 182
     return color;
 }
 
-#line 464
+#line 59
 void starfield_push_star(starfield_Starfield (*starfield), starfield_Star star) {
     if (!(starfield->stars)) {
         int initial_cap = 32;
@@ -3135,16 +3024,16 @@ void starfield_push_star(starfield_Starfield (*starfield), starfield_Star star) 
         header->len = 0;
         starfield->stars = header->data;
     }
-    #line 475
+    #line 70
     starfield_StarsHeader (*header) = starfield_stars_header(starfield->stars);
-    #line 477
+    #line 72
     if ((header->len) == (header->cap)) {
         llong new_cap = (header->cap) * (2);
         header = starfield_xrealloc(header, ((sizeof(starfield_Star)) * (new_cap)) + (sizeof(starfield_StarsHeader)));
         starfield->stars = header->data;
         header->cap = new_cap;
     }
-    #line 484
+    #line 79
     starfield_init_star_type(star.type);
     starfield->stars[(header->len)++] = star;
 }
@@ -3154,9 +3043,18 @@ int32_t starfield_maxi(int32_t a, int32_t b) {
     return (((a) > (b)) ? a : b);
 }
 
-#line 488 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 83 "C:\\code\\starfield\\starfield\\stars.ion"
 int starfield_stars_len(starfield_Starfield (*starfield)) {
     return (int)(starfield_stars_header(starfield->stars)->len);
+}
+
+#line 67 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Tex starfield_make_tex(noir_int2 size) {
+    assert(starfield_is_power_2(size.x));
+    assert((size.x) == (size.y));
+    #line 71
+    void (*pixels) = starfield_xcalloc(((size.x) * (size.y)) * (4), sizeof(starfield_Color));
+    return (starfield_Tex){.size = size, .lod_levels = 1, .pixels = pixels};
 }
 
 #line 62 "C:\\code\\starfield\\starfield\\image.ion"
@@ -3181,6 +3079,14 @@ int starfield_random_poisson(float alpha) {
 #line 198 "C:\\code\\starfield\\starfield\\starfield.ion"
 starfield_Color starfield_tex_lookup(starfield_Tex (*tex), noir_float2 pos) {
     return starfield_image_sample_linear(&((starfield_Image){tex->pixels, tex->size}), pos);
+}
+
+#line 79
+void starfield_free_tex(starfield_Tex (*tex)) {
+    assert(tex->pixels);
+    free(tex->pixels);
+    tex->pixels = 0;
+    tex->size = (noir_int2){0, 0};
 }
 
 #line 36 "C:\\code\\starfield\\noir\\noir.ion"
@@ -3391,293 +3297,13 @@ void noir_update_audio(void) {
     noir_app.audio.synced_play = noir_app.audio.play;
 }
 
-#line 6 "C:\\code\\starfield\\starfield\\math.ion"
-bool starfield_is_power_2(int32_t x) {
-    return ((x) != (0)) && (((x) & (((x) - (1)))) == (0));
-}
-
-#line 245
-float starfield_mod(float x, float m) {
-    if ((x) < (0)) {
-        x = (m) - (x);
-    }
-    float r = (x) / (m);
-    float q = (r) - ((int)(r));
-    float p = (q) * (m);
-    return p;
-}
-
-#line 166
-float starfield_magnitude2(noir_float2 v) {
-    return sqrtf(starfield_dot2(v, v));
-}
-
-#line 78
-noir_float2 starfield_mul2s(noir_float2 a, float s) {
-    return (noir_float2){(a.x) * (s), (a.y) * (s)};
-}
-
-#line 178
-noir_float2 starfield_normalise(noir_float2 v) {
-    float m = starfield_magnitude2(v);
-    return (noir_float2){(v.x) / (m), (v.y) / (m)};
-}
-
-#line 280
-float starfield_smoothedge(float center, float width, float x) {
-    return starfield_smoothstep(((((1.f) / (width))) * (((x) - (center)))) + (0.5f));
-}
-
-#line 262 "C:\\code\\starfield\\starfield\\starfield.ion"
-noir_float2 starfield_rotate(noir_float2 v, noir_float2 cos_sin_theta) {
-    return (noir_float2){((v.x) * (cos_sin_theta.x)) - ((v.y) * (cos_sin_theta.y)), ((v.x) * (cos_sin_theta.y)) + ((v.y) * (cos_sin_theta.x))};
-}
-
-#line 94 "C:\\code\\starfield\\starfield\\math.ion"
-noir_float2 starfield_add2s(noir_float2 a, float s) {
-    return (noir_float2){(a.x) + (s), (a.y) + (s)};
-}
-
-#line 25 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Image starfield_image_copy(starfield_Image (*img)) {
-    assert(img->pixels);
-    starfield_Image result = starfield_make_image(img->size);
-    memcpy(result.pixels, img->pixels, ((img->size.x) * (img->size.y)) * (sizeof(starfield_Color)));
-    return result;
-}
-
-#line 102 "C:\\code\\starfield\\starfield\\math.ion"
-noir_float2 starfield_sub2s(noir_float2 a, float s) {
-    return (noir_float2){(a.x) - (s), (a.y) - (s)};
-}
-
-starfield_Color (starfield_star_colors[15]) = {{(0xff) / (255.f), (0x1) / (255.f), 0.f, 1.f}, {(0xff) / (255.f), (0xf) / (255.f), 0.f, 1.f}, {(0xff) / (255.f), (0x29) / (255.f), (0x3) / (255.f), 1.f}, {(0xff) / (255.f), (0x49) / (255.f), (0xd) / (255.f), 1.f}, {(0xff) / (255.f), (0x6a) / (255.f), (0x1f) / (255.f), 1.f}, {(0xff) / (255.f), (0xa6) / (255.f), (0x59) / (255.f), 1.f}, {(0xff) / (255.f), (0xc0) / (255.f), (0x7f) / (255.f), 1.f}, {(0xff) / (255.f), (0xd8) / (255.f), (0xa8) / (255.f), 1.f}, {(0xff) / (255.f), (0xed) / (255.f), (0xd3) / (255.f), 1.f}, {1, 1, 1, 1.f}, {(0xdb) / (255.f), (0xe9) / (255.f), (0xff) / (255.f), 1.f}, {(0x8e) / (255.f), (0xb4) / (255.f), (0xff) / (255.f), 1.f}, {(0x6e) / (255.f), (0x9a) / (255.f), (0xff) / (255.f), 1.f}, {(0x45) / (255.f), (0x73) / (255.f), (0xff) / (255.f), 1.f}, {(0x2f) / (255.f), (0x5c) / (255.f), (0xff) / (255.f), 1.f}};
-#line 141 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float2 pos) {
-    if ((img->pixels) == (0)) {
-        return (starfield_Color){0};
-    }
-    #line 146
-    pos.x = (((pos.x) * (img->size.x))) - (0.5f);
-    pos.y = (((pos.y) * (img->size.y))) - (0.5f);
-    #line 149
-    noir_int2 vi = starfield_float2_to_int2(pos);
-    noir_float2 vf = {(pos.x) - (vi.x), (pos.y) - (vi.y)};
-    #line 152
-    noir_int2 a = vi;
-    noir_int2 b = starfield_add2i(a, (noir_int2){1, 0});
-    noir_int2 c = starfield_add2i(a, (noir_int2){0, 1});
-    noir_int2 d = starfield_add2i(a, (noir_int2){1, 1});
-    #line 157
-    a.x = starfield_wrapi(a.x, img->size.x);
-    b.x = starfield_wrapi(b.x, img->size.x);
-    c.x = starfield_wrapi(c.x, img->size.x);
-    d.x = starfield_wrapi(d.x, img->size.x);
-    a.y = starfield_wrapi(a.y, img->size.y);
-    b.y = starfield_wrapi(b.y, img->size.y);
-    c.y = starfield_wrapi(c.y, img->size.y);
-    d.y = starfield_wrapi(d.y, img->size.y);
-    #line 166
-    starfield_Color A = img->pixels[(a.x) + ((a.y) * (img->size.x))];
-    starfield_Color B = img->pixels[(b.x) + ((b.y) * (img->size.x))];
-    starfield_Color C = img->pixels[(c.x) + ((c.y) * (img->size.x))];
-    starfield_Color D = img->pixels[(d.x) + ((d.y) * (img->size.x))];
-    #line 171
-    starfield_Color AB = starfield_color_lerp(A, B, vf.x);
-    starfield_Color CD = starfield_color_lerp(C, D, vf.x);
-    starfield_Color ABCD = starfield_color_lerp(AB, CD, vf.y);
-    #line 175
-    return ABCD;
-}
-
-#line 38 "C:\\code\\starfield\\starfield\\math.ion"
-float starfield_clamp01(float x) {
-    return starfield_clamp(0, 1, x);
-}
-
-#line 347 "C:\\code\\starfield\\starfield\\starfield.ion"
-starfield_Color starfield_color_mul_rgb1(starfield_Color a, float b) {
-    return (starfield_Color){(a.r) * (b), (a.g) * (b), (a.b) * (b), a.a};
-}
-
-#line 983
-float starfield_perlin_octaves(noir_float2 p, int grid) {
-    return (((((((1) / (((((.5f) + (.25f)) + (.125f)) + (.0625f))))) * (starfield_perlin(p, grid))) * (0.5f)) + ((starfield_perlin(starfield_mul2s(p, 1.5f), grid)) * (0.25f))) + ((starfield_perlin(starfield_mul2s(p, 3.f), grid)) * (0.125f))) + ((starfield_perlin(starfield_mul2s(p, 4.2f), grid)) * (0.0625f));
-}
-
-#line 355
-starfield_Color starfield_color_blend(starfield_Color dest, starfield_Color src) {
-    return (starfield_Color){(src.r) + (((dest.r) * (((1.f) - (src.a))))), (src.g) + (((dest.g) * (((1.f) - (src.a))))), (src.b) + (((dest.b) * (((1.f) - (src.a))))), (src.a) + (((dest.a) * (((1.f) - (src.a)))))};
-}
-
-#line 451
-void starfield_free_starfield(starfield_Starfield (*starfield)) {
-    starfield_StarsHeader (*h) = starfield_stars_header(starfield->stars);
-    if (h) {
-        free(h);
-        starfield->star_count = 0;
-    }
-}
-
-#line 86
-noir_float2 starfield_compute_lod_level(noir_int2 dest_size, noir_float2 target_size, noir_int2 src_size) {
-    float step_x = fabsf((src_size.x) / (((dest_size.x) * (target_size.x))));
-    float step_y = fabsf((src_size.y) / (((dest_size.y) * (target_size.y))));
-    return (noir_float2){starfield_max(0, log2f(step_x)), starfield_max(0, log2f(step_y))};
-}
-
-#line 202
-starfield_Color starfield_tex_lookup_lod(starfield_Tex (*tex), noir_float2 pos, noir_float2 lod) {
-    starfield_Color result = {0};
-    if ((lod.x) == (lod.y)) {
-        noir_int2 lodi = starfield_float2_to_int2(lod);
-        noir_float2 lodf = {(lod.x) - (lodi.x), (lod.x) - (lodi.x)};
-        starfield_Image a_lod = starfield_tex_get_lod(tex, lodi);
-        starfield_Image b_lod = starfield_tex_get_lod(tex, starfield_add2is(lodi, 1));
-        starfield_Color a = starfield_image_sample_linear(&(a_lod), pos);
-        if ((lodf.x) > (0.0001f)) {
-            starfield_Color b = starfield_image_sample_linear(&(b_lod), pos);
-            return starfield_color_lerp(a, b, lodf.x);
-        }
-        #line 215
-        return a;
-    }
-    #line 218
-    noir_int2 lodi = starfield_float2_to_int2(lod);
-    noir_float2 lodf = {(lod.x) - (lodi.x), (lod.y) - (lodi.y)};
-    starfield_Image a_lod = starfield_tex_get_lod(tex, lodi);
-    starfield_Image b_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){1, 0}));
-    starfield_Image c_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){0, 1}));
-    starfield_Image d_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){1, 1}));
-    starfield_Color a = starfield_image_sample_linear(&(a_lod), pos);
-    starfield_Color b = starfield_image_sample_linear(&(b_lod), pos);
-    starfield_Color c = starfield_image_sample_linear(&(c_lod), pos);
-    starfield_Color d = starfield_image_sample_linear(&(d_lod), pos);
-    starfield_Color ab = starfield_color_lerp(a, b, lodf.x);
-    starfield_Color cd = starfield_color_lerp(c, d, lodf.x);
-    starfield_Color abcd = starfield_color_lerp(ab, cd, lodf.y);
-    return abcd;
-}
-
-#line 697
-void starfield_draw_outline(starfield_Color (*buffer), noir_int2 size, starfield_Color color) {
-    for (int i = 0; (i) < (size.x); (i)++) {
-        buffer[i] = color;
-        buffer[(i) + ((((size.x) - (1))) * (size.y))] = color;
-    }
-    #line 703
-    for (int i = 0; (i) < (size.y); (i)++) {
-        buffer[(i) * (size.x)] = color;
-        buffer[((i) * (size.x)) + (((size.x) - (1)))] = color;
-    }
-}
-
-#line 691
-void starfield_draw_simple_star(starfield_Color (*buffer), noir_int2 size) {
-    size.x -= 1;
-    size.y -= 1;
-    buffer[((size.x) / (2)) + (((size.x) * (size.y)) / (2))] = (starfield_Color){64, 64, 64, 1};
-}
-
-#line 794
-void starfield_draw_lensed_quasar(starfield_Tex (*tex)) {
-    noir_int2 center = starfield_div2is(tex->size, 2);
-    #line 797
-    int width = (tex->size.x) / ((int)((2) + ((starfield_random01()) * (8))));
-    int height = (tex->size.y) / ((int)((2) + ((starfield_random01()) * (8))));
-    #line 800
-    noir_int2 top = starfield_sub2i(center, (noir_int2){width, 0});
-    noir_int2 right = starfield_add2i(center, (noir_int2){0, height});
-    noir_int2 bottom = starfield_add2i(center, (noir_int2){width, 0});
-    noir_int2 left = starfield_sub2i(center, (noir_int2){0, height});
-    #line 805
-    starfield_Color lum = {16.f, 16.f, 16.f, 1.f};
-    #line 807
-    tex->pixels[(center.x) + ((tex->size.x) * (center.y))] = (starfield_Color){lum.r, lum.g, (lum.b) * (1.25f), lum.a};
-    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), 2);
-    #line 810
-    starfield_tex_poke(tex, top, lum);
-    starfield_tex_poke(tex, right, lum);
-    starfield_tex_poke(tex, bottom, lum);
-    starfield_tex_poke(tex, left, lum);
-    #line 815
-    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), .25f);
-    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), .25f);
-}
-
-#line 215 "C:\\code\\starfield\\starfield\\image.ion"
-starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos) {
-    if ((((img->pixels) == (0)) || ((img->size.x) == (0))) || ((img->size.y) == (0))) {
-        return (starfield_Color){0};
-    }
-    #line 220
-    noir_int2 p = {(int)(roundf(((pos.x) * (img->size.x)) - (0.5f))), (int)(roundf(((pos.y) * (img->size.y)) - (0.5f)))};
-    return starfield_image_fetch(img, p);
-}
-
-#line 93 "C:\\code\\starfield\\starfield\\starfield.ion"
-void starfield_generate_lods(starfield_Tex (*tex)) {
-    assert((tex->size.x) == (tex->size.y));
-    tex->lod_levels = starfield_maxi(1, starfield_log2i(tex->size.x));
-    #line 97
-    starfield_Image blurry = starfield_image_copy(&((starfield_Image){tex->pixels, tex->size}));
-    #line 99
-    noir_int2 size = tex->size;
-    for (int i = 0; (i) < (tex->lod_levels); (i)++) {
-        assert((size.x) >= (1));
-        assert((size.y) >= (1));
-        #line 104
-        if ((i) > (0)) {
-            #line 106
-            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){(i) - (1), (i) - (1)});
-            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
-            #line 109
-            starfield_blur_to(&(blurry_subrect), &(prev_lod), .707f);
-            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){i, i});
-            #line 112
-            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
-                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
-            }
-        }
-        #line 118
-        for (int j = (i) + (1); (j) < (tex->lod_levels); (j)++) {
-            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){(j) - (1), i});
-            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
-            #line 122
-            starfield_blur_horizontal(&(blurry_subrect), &(prev_lod), 0.5f);
-            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){j, i});
-            #line 125
-            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
-                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
-            }
-        }
-        #line 131
-        for (int k = (i) + (1); (k) < (tex->lod_levels); (k)++) {
-            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){i, (k) - (1)});
-            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
-            #line 135
-            starfield_blur_vertical(&(blurry_subrect), &(prev_lod), 0.5f);
-            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){i, k});
-            #line 138
-            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
-                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
-                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
-            }
-        }
-    }
-    #line 145
-    starfield_free_image(&(blurry));
-}
-
-#line 459
+#line 54 "C:\\code\\starfield\\starfield\\stars.ion"
 int64_t starfield_starfield_len(starfield_Starfield (*starfield)) {
     starfield_StarsHeader (*h) = starfield_stars_header(starfield->stars);
     return (h ? h->len : 0);
 }
 
-#line 245
+#line 245 "C:\\code\\starfield\\starfield\\starfield.ion"
 void starfield_draw_tex_multiply(starfield_Image (*dest), starfield_Rect target, starfield_Tex (*tex), starfield_Color multiply_color) {
     noir_float2 lod = starfield_compute_lod_level(dest->size, target.size, tex->size);
     for (starfield_PixelIter it = starfield_pixel_iter_begin(dest, target); starfield_pixel_iter_next(&(it));) {
@@ -3710,7 +3336,12 @@ noir_float2 starfield_bounds_after_transform(noir_float2 transform) {
     return (noir_float2){x, y};
 }
 
-#line 367
+#line 166 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_magnitude2(noir_float2 v) {
+    return sqrtf(starfield_dot2(v, v));
+}
+
+#line 367 "C:\\code\\starfield\\starfield\\filter.ion"
 void starfield_apply_diffraction(starfield_Image (*dest), starfield_Color alpha, float radius, noir_float2 transform, noir_float2 transformed_bounds, float (*scratch), float (*transpose_scratch)) {
     noir_float2 rotation = {1, 0};
     #line 370
@@ -3763,7 +3394,17 @@ void starfield_apply_diffraction(starfield_Image (*dest), starfield_Color alpha,
     free(planes);
 }
 
-#line 184 "C:\\code\\starfield\\starfield\\math.ion"
+#line 262 "C:\\code\\starfield\\starfield\\starfield.ion"
+noir_float2 starfield_rotate(noir_float2 v, noir_float2 cos_sin_theta) {
+    return (noir_float2){((v.x) * (cos_sin_theta.x)) - ((v.y) * (cos_sin_theta.y)), ((v.x) * (cos_sin_theta.y)) + ((v.y) * (cos_sin_theta.x))};
+}
+
+#line 78 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_mul2s(noir_float2 a, float s) {
+    return (noir_float2){(a.x) * (s), (a.y) * (s)};
+}
+
+#line 184
 uint32_t starfield_random(void) {
     starfield_random_state ^= (starfield_random_state) << (13);
     starfield_random_state ^= (starfield_random_state) >> (17);
@@ -3830,6 +3471,213 @@ starfield_RGB8 starfield_color_to_rgb8(starfield_Color color) {
     return result;
 }
 
+#line 292 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_draw_outline(starfield_Color (*buffer), noir_int2 size, starfield_Color color) {
+    for (int i = 0; (i) < (size.x); (i)++) {
+        buffer[i] = color;
+        buffer[(i) + ((((size.x) - (1))) * (size.y))] = color;
+    }
+    #line 298
+    for (int i = 0; (i) < (size.y); (i)++) {
+        buffer[(i) * (size.x)] = color;
+        buffer[((i) * (size.x)) + (((size.x) - (1)))] = color;
+    }
+}
+
+#line 286
+void starfield_draw_simple_star(starfield_Color (*buffer), noir_int2 size) {
+    size.x -= 1;
+    size.y -= 1;
+    buffer[((size.x) / (2)) + (((size.x) * (size.y)) / (2))] = (starfield_Color){64, 64, 64, 1};
+}
+
+#line 396
+void starfield_draw_lensed_quasar(starfield_Tex (*tex)) {
+    noir_int2 center = starfield_div2is(tex->size, 2);
+    #line 399
+    int width = (tex->size.x) / ((int)((2) + ((starfield_random01()) * (8))));
+    int height = (tex->size.y) / ((int)((2) + ((starfield_random01()) * (8))));
+    #line 402
+    noir_int2 top = starfield_sub2i(center, (noir_int2){width, 0});
+    noir_int2 right = starfield_add2i(center, (noir_int2){0, height});
+    noir_int2 bottom = starfield_add2i(center, (noir_int2){width, 0});
+    noir_int2 left = starfield_sub2i(center, (noir_int2){0, height});
+    #line 407
+    starfield_Color lum = {16.f, 16.f, 16.f, 1.f};
+    #line 409
+    tex->pixels[(center.x) + ((tex->size.x) * (center.y))] = (starfield_Color){lum.r, lum.g, (lum.b) * (1.25f), lum.a};
+    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), 2);
+    #line 412
+    starfield_tex_poke(tex, top, lum);
+    starfield_tex_poke(tex, right, lum);
+    starfield_tex_poke(tex, bottom, lum);
+    starfield_tex_poke(tex, left, lum);
+    #line 417
+    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), .25f);
+    starfield_blur(&((starfield_Image){tex->pixels, tex->size}), .25f);
+}
+
+#line 25 "C:\\code\\starfield\\starfield\\image.ion"
+starfield_Image starfield_image_copy(starfield_Image (*img)) {
+    assert(img->pixels);
+    starfield_Image result = starfield_make_image(img->size);
+    memcpy(result.pixels, img->pixels, ((img->size.x) * (img->size.y)) * (sizeof(starfield_Color)));
+    return result;
+}
+
+#line 215
+starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos) {
+    if ((((img->pixels) == (0)) || ((img->size.x) == (0))) || ((img->size.y) == (0))) {
+        return (starfield_Color){0};
+    }
+    #line 220
+    noir_int2 p = {(int)(roundf(((pos.x) * (img->size.x)) - (0.5f))), (int)(roundf(((pos.y) * (img->size.y)) - (0.5f)))};
+    return starfield_image_fetch(img, p);
+}
+
+#line 38 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_clamp01(float x) {
+    return starfield_clamp(0, 1, x);
+}
+
+#line 304 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_draw_galaxy(starfield_Tex (*tex), int arms) {
+    starfield_Image (*tex_img) = &((starfield_Image){tex->pixels, tex->size});
+    #line 307
+    float arm_width = (0.0125f) + ((starfield_randomr(-(1), 1)) * (0.01f));
+    arms = starfield_clampi(2, 6, arms);
+    float brightness = starfield_randomr(0.8f, 1.1f);
+    float arm_definition = starfield_randomr((1.f) / (arms), 1);
+    float bar = (starfield_randomr(.05f, .25f)) / (arms);
+    float spiral_expansion = starfield_randomr(1, 1.3f);
+    float tilt = starfield_random01();
+    #line 315
+    starfield_Starfield (*s) = &((starfield_Starfield){0});
+    for (int i = 0; (i) < (30000); (i)++) {
+        float w = arm_width;
+        float x = (starfield_random_normal()) / (8);
+        float y = (starfield_random_normal()) / (8);
+        float rot = 0.f;
+        #line 322
+        if ((arms) > (0)) {
+            x = (starfield_mod((x) + ((w) / (2)), w)) - ((w) / (2));
+            #line 325
+            if ((arms) & (1)) {
+                y = fabsf(y);
+            }
+            #line 329
+            rot = (starfield_randomn(0, arms)) / ((float)(arms));
+            rot += ((starfield_random_normal()) * (0.05f)) * (((1) - (arm_definition)));
+            #line 332
+            x += (((starfield_random_normal()) / (256))) * (((1) - (arm_definition)));
+            y += (((starfield_random_normal()) / (256))) * (((1) - (arm_definition)));
+        }
+        #line 337
+        float mag = (starfield_magnitude2((noir_float2){x, y})) + ((0.05f) * (starfield_random_normal()));
+        noir_float2 xy = starfield_mul2s(starfield_normalise((noir_float2){x, y}), mag);
+        float expand = expf((spiral_expansion) * (((1) + (mag))));
+        #line 341
+        float spin = (((((starfield_random_normal()) / (12)) + (1))) * (mag)) * (expand);
+        spin *= starfield_smoothedge(bar, starfield_randomr(.1f, .3f), mag);
+        spin += rot;
+        noir_float2 spiral_str = starfield_mul2s((noir_float2){cosf((spin) * (STARFIELD_Tau)), sinf((spin) * (STARFIELD_Tau))}, (.5f) * (expand));
+        noir_float2 pos = starfield_rotate(xy, spiral_str);
+        #line 348
+        float z = (((starfield_random_normal()) * (0.01f))) * (((1) - (tilt)));
+        float size = (((((((STARFIELD_Sqrt2) - (starfield_magnitude2(pos))) + (z)) + ((y) * (tilt)))) * (starfield_random01())) * (0.016f)) * (brightness);
+        pos.y *= tilt;
+        pos.y += (.25f) * (z);
+        #line 353
+        starfield_push_star(s, (starfield_Star){.rect = {.pos = starfield_add2s(starfield_mul2s(pos, .51f), 0.5f), .size = {size, size}, .rot = starfield_random_unit_vector2()}, .type = (starfield_star_types) + (1), .color = starfield_random_star_color((starfield_star_types) + (1), 0.45f)});
+    }
+    #line 364
+    starfield_draw_starfield(tex_img, s);
+    #line 366
+    starfield_Image bloom_less = starfield_image_copy(tex_img);
+    starfield_Image bloom_more = starfield_image_copy(tex_img);
+    starfield_blur(&(bloom_less), 3);
+    starfield_blur(&(bloom_more), (20) * (tilt));
+    float bloom_amount = starfield_randomr(.2f, .7f);
+    #line 372
+    for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(tex, (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+        noir_float2 rel = starfield_sub2s(it.pos, 0.5f);
+        float th = starfield_magnitude2(rel);
+        starfield_Color blue = starfield_star_colors[(STARFIELD_star_color_count) - (3)];
+        starfield_Color bl = starfield_image_sample_linear(&(bloom_less), it.pos);
+        starfield_Color bm = starfield_image_sample_linear(&(bloom_more), it.pos);
+        #line 380
+        bl.a = 1;
+        bm.a = 1;
+        #line 383
+        float center_yellow_str = powf((1) - (starfield_clamp01((th) / (((STARFIELD_Sqrt2) / (4))))), 6);
+        starfield_Color arm_color = starfield_color_lerp(blue, starfield_star_colors[5], center_yellow_str);
+        starfield_Color inter_color = starfield_color_mul_rgb1(starfield_color_mul(arm_color, bm), ((starfield_perlin_octaves(it.pos, 40)) * (0.5f)) + (1));
+        starfield_Color matter = starfield_color_mul(bl, arm_color);
+        matter = starfield_color_mul_rgb1(matter, ((starfield_perlin_octaves(it.pos, 32)) * (0.5f)) + (1));
+        matter = starfield_color_blend(inter_color, matter);
+        matter.a = bloom_amount;
+        *(it.pixel) = starfield_color_blend(*(it.pixel), matter);
+    }
+    #line 393
+    starfield_free_starfield(s);
+}
+
+#line 93 "C:\\code\\starfield\\starfield\\starfield.ion"
+void starfield_generate_lods(starfield_Tex (*tex)) {
+    assert((tex->size.x) == (tex->size.y));
+    tex->lod_levels = starfield_maxi(1, starfield_log2i(tex->size.x));
+    #line 97
+    starfield_Image blurry = starfield_image_copy(&((starfield_Image){tex->pixels, tex->size}));
+    #line 99
+    noir_int2 size = tex->size;
+    for (int i = 0; (i) < (tex->lod_levels); (i)++) {
+        assert((size.x) >= (1));
+        assert((size.y) >= (1));
+        #line 104
+        if ((i) > (0)) {
+            #line 106
+            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){(i) - (1), (i) - (1)});
+            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
+            #line 109
+            starfield_blur_to(&(blurry_subrect), &(prev_lod), .707f);
+            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){i, i});
+            #line 112
+            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
+                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
+            }
+        }
+        #line 118
+        for (int j = (i) + (1); (j) < (tex->lod_levels); (j)++) {
+            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){(j) - (1), i});
+            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
+            #line 122
+            starfield_blur_horizontal(&(blurry_subrect), &(prev_lod), 0.5f);
+            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){j, i});
+            #line 125
+            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
+                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
+            }
+        }
+        #line 131
+        for (int k = (i) + (1); (k) < (tex->lod_levels); (k)++) {
+            starfield_Image prev_lod = starfield_tex_get_lod(tex, (noir_int2){i, (k) - (1)});
+            starfield_Image blurry_subrect = {blurry.pixels, prev_lod.size};
+            #line 135
+            starfield_blur_vertical(&(blurry_subrect), &(prev_lod), 0.5f);
+            starfield_Image lod = starfield_tex_get_lod(tex, (noir_int2){i, k});
+            #line 138
+            for (starfield_PixelIter it = starfield_pixel_iter_begin(&(lod), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+                assert(starfield_is_zero(it.pixel, sizeof(starfield_Color)));
+                *(it.pixel) = starfield_image_sample_nearest(&(blurry_subrect), it.pos);
+            }
+        }
+    }
+    #line 145
+    starfield_free_image(&(blurry));
+}
+
 char (*noir_default_window_title) = "Noir";
 noir_int2 noir_default_window_size = {800, 600};
 int (noir_noir_key_to_sdl_scancode[NOIR_NUM_KEYS]) = {[NOIR_KEY_RETURN] = SDL_SCANCODE_RETURN, [NOIR_KEY_SPACE] = SDL_SCANCODE_SPACE, [NOIR_KEY_BACKSPACE] = SDL_SCANCODE_BACKSPACE, [NOIR_KEY_TAB] = SDL_SCANCODE_TAB, [NOIR_KEY_ESCAPE] = SDL_SCANCODE_ESCAPE, [NOIR_KEY_LEFT] = SDL_SCANCODE_LEFT, [NOIR_KEY_RIGHT] = SDL_SCANCODE_RIGHT, [NOIR_KEY_UP] = SDL_SCANCODE_UP, [NOIR_KEY_DOWN] = SDL_SCANCODE_DOWN, [NOIR_KEY_LSHIFT] = SDL_SCANCODE_LSHIFT, [NOIR_KEY_RSHIFT] = SDL_SCANCODE_RSHIFT, [NOIR_KEY_LCTRL] = SDL_SCANCODE_LCTRL, [NOIR_KEY_RCTRL] = SDL_SCANCODE_RCTRL, [NOIR_KEY_LALT] = SDL_SCANCODE_LALT, [NOIR_KEY_RALT] = SDL_SCANCODE_RALT};
@@ -3851,12 +3699,13 @@ noir_float2 starfield_div2(noir_float2 a, noir_float2 b) {
     return (noir_float2){(a.x) / (b.x), (a.y) / (b.y)};
 }
 
-#line 819 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 421 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_init_star_type(starfield_StarType (*type)) {
-    starfield_init_star_type2(type, false);
+    starfield_init_star_type_really(type, false);
 }
 
-#line 364
+starfield_Color (starfield_star_colors[15]) = {{(0xff) / (255.f), (0x1) / (255.f), 0.f, 1.f}, {(0xff) / (255.f), (0xf) / (255.f), 0.f, 1.f}, {(0xff) / (255.f), (0x29) / (255.f), (0x3) / (255.f), 1.f}, {(0xff) / (255.f), (0x49) / (255.f), (0xd) / (255.f), 1.f}, {(0xff) / (255.f), (0x6a) / (255.f), (0x1f) / (255.f), 1.f}, {(0xff) / (255.f), (0xa6) / (255.f), (0x59) / (255.f), 1.f}, {(0xff) / (255.f), (0xc0) / (255.f), (0x7f) / (255.f), 1.f}, {(0xff) / (255.f), (0xd8) / (255.f), (0xa8) / (255.f), 1.f}, {(0xff) / (255.f), (0xed) / (255.f), (0xd3) / (255.f), 1.f}, {1, 1, 1, 1.f}, {(0xdb) / (255.f), (0xe9) / (255.f), (0xff) / (255.f), 1.f}, {(0x8e) / (255.f), (0xb4) / (255.f), (0xff) / (255.f), 1.f}, {(0x6e) / (255.f), (0x9a) / (255.f), (0xff) / (255.f), 1.f}, {(0x45) / (255.f), (0x73) / (255.f), (0xff) / (255.f), 1.f}, {(0x2f) / (255.f), (0x5c) / (255.f), (0xff) / (255.f), 1.f}};
+#line 364 "C:\\code\\starfield\\starfield\\starfield.ion"
 starfield_Color starfield_color_premultiply(starfield_Color c, float alpha) {
     return (starfield_Color){(c.r) * (alpha), (c.g) * (alpha), (c.b) * (alpha), (c.a) * (alpha)};
 }
@@ -3882,6 +3731,49 @@ void (*starfield_xrealloc(void (*mem), size_t size)) {
         exit(1);
     }
     return result;
+}
+
+#line 6 "C:\\code\\starfield\\starfield\\math.ion"
+bool starfield_is_power_2(int32_t x) {
+    return ((x) != (0)) && (((x) & (((x) - (1)))) == (0));
+}
+
+#line 141 "C:\\code\\starfield\\starfield\\image.ion"
+starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float2 pos) {
+    if ((img->pixels) == (0)) {
+        return (starfield_Color){0};
+    }
+    #line 146
+    pos.x = (((pos.x) * (img->size.x))) - (0.5f);
+    pos.y = (((pos.y) * (img->size.y))) - (0.5f);
+    #line 149
+    noir_int2 vi = starfield_float2_to_int2(pos);
+    noir_float2 vf = {(pos.x) - (vi.x), (pos.y) - (vi.y)};
+    #line 152
+    noir_int2 a = vi;
+    noir_int2 b = starfield_add2i(a, (noir_int2){1, 0});
+    noir_int2 c = starfield_add2i(a, (noir_int2){0, 1});
+    noir_int2 d = starfield_add2i(a, (noir_int2){1, 1});
+    #line 157
+    a.x = starfield_wrapi(a.x, img->size.x);
+    b.x = starfield_wrapi(b.x, img->size.x);
+    c.x = starfield_wrapi(c.x, img->size.x);
+    d.x = starfield_wrapi(d.x, img->size.x);
+    a.y = starfield_wrapi(a.y, img->size.y);
+    b.y = starfield_wrapi(b.y, img->size.y);
+    c.y = starfield_wrapi(c.y, img->size.y);
+    d.y = starfield_wrapi(d.y, img->size.y);
+    #line 166
+    starfield_Color A = img->pixels[(a.x) + ((a.y) * (img->size.x))];
+    starfield_Color B = img->pixels[(b.x) + ((b.y) * (img->size.x))];
+    starfield_Color C = img->pixels[(c.x) + ((c.y) * (img->size.x))];
+    starfield_Color D = img->pixels[(d.x) + ((d.y) * (img->size.x))];
+    #line 171
+    starfield_Color AB = starfield_color_lerp(A, B, vf.x);
+    starfield_Color CD = starfield_color_lerp(C, D, vf.x);
+    starfield_Color ABCD = starfield_color_lerp(AB, CD, vf.y);
+    #line 175
+    return ABCD;
 }
 
 #line 376 "C:\\code\\starfield\\noir\\noir.ion"
@@ -3919,177 +3811,57 @@ bool noir_int2_eq(noir_int2 a, noir_int2 b) {
     return ((a.x) == (b.x)) && ((a.y) == (b.y));
 }
 
+#line 86 "C:\\code\\starfield\\starfield\\starfield.ion"
+noir_float2 starfield_compute_lod_level(noir_int2 dest_size, noir_float2 target_size, noir_int2 src_size) {
+    float step_x = fabsf((src_size.x) / (((dest_size.x) * (target_size.x))));
+    float step_y = fabsf((src_size.y) / (((dest_size.y) * (target_size.y))));
+    return (noir_float2){starfield_max(0, log2f(step_x)), starfield_max(0, log2f(step_y))};
+}
+
+#line 202
+starfield_Color starfield_tex_lookup_lod(starfield_Tex (*tex), noir_float2 pos, noir_float2 lod) {
+    starfield_Color result = {0};
+    if ((lod.x) == (lod.y)) {
+        noir_int2 lodi = starfield_float2_to_int2(lod);
+        noir_float2 lodf = {(lod.x) - (lodi.x), (lod.x) - (lodi.x)};
+        starfield_Image a_lod = starfield_tex_get_lod(tex, lodi);
+        starfield_Image b_lod = starfield_tex_get_lod(tex, starfield_add2is(lodi, 1));
+        starfield_Color a = starfield_image_sample_linear(&(a_lod), pos);
+        if ((lodf.x) > (0.0001f)) {
+            starfield_Color b = starfield_image_sample_linear(&(b_lod), pos);
+            return starfield_color_lerp(a, b, lodf.x);
+        }
+        #line 215
+        return a;
+    }
+    #line 218
+    noir_int2 lodi = starfield_float2_to_int2(lod);
+    noir_float2 lodf = {(lod.x) - (lodi.x), (lod.y) - (lodi.y)};
+    starfield_Image a_lod = starfield_tex_get_lod(tex, lodi);
+    starfield_Image b_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){1, 0}));
+    starfield_Image c_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){0, 1}));
+    starfield_Image d_lod = starfield_tex_get_lod(tex, starfield_add2i(lodi, (noir_int2){1, 1}));
+    starfield_Color a = starfield_image_sample_linear(&(a_lod), pos);
+    starfield_Color b = starfield_image_sample_linear(&(b_lod), pos);
+    starfield_Color c = starfield_image_sample_linear(&(c_lod), pos);
+    starfield_Color d = starfield_image_sample_linear(&(d_lod), pos);
+    starfield_Color ab = starfield_color_lerp(a, b, lodf.x);
+    starfield_Color cd = starfield_color_lerp(c, d, lodf.x);
+    starfield_Color abcd = starfield_color_lerp(ab, cd, lodf.y);
+    return abcd;
+}
+
+#line 355
+starfield_Color starfield_color_blend(starfield_Color dest, starfield_Color src) {
+    return (starfield_Color){(src.r) + (((dest.r) * (((1.f) - (src.a))))), (src.g) + (((dest.g) * (((1.f) - (src.a))))), (src.b) + (((dest.b) * (((1.f) - (src.a))))), (src.a) + (((dest.a) * (((1.f) - (src.a)))))};
+}
+
 #line 152 "C:\\code\\starfield\\starfield\\math.ion"
 float starfield_dot2(noir_float2 a, noir_float2 b) {
     return ((a.x) * (b.x)) + ((a.y) * (b.y));
 }
 
-#line 263
-float starfield_smoothstep(float x) {
-    x = starfield_clamp01(x);
-    return ((x) * (x)) * (((3) - ((2) * (x))));
-}
-
-#line 66
-noir_int2 starfield_float2_to_int2(noir_float2 x) {
-    return (noir_int2){(int32_t)(x.x), (int32_t)(x.y)};
-}
-
-#line 122
-noir_int2 starfield_add2i(noir_int2 a, noir_int2 b) {
-    return (noir_int2){(a.x) + (b.x), (a.y) + (b.y)};
-}
-
-#line 133 "C:\\code\\starfield\\starfield\\image.ion"
-int starfield_wrapi(int x, int m) {
-    int result = (x) % (m);
-    if ((result) < (0)) {
-        result += m;
-    }
-    return result;
-}
-
-#line 950 "C:\\code\\starfield\\starfield\\starfield.ion"
-float starfield_perlin(noir_float2 p, int gradients_per_side) {
-    float grid = (float)(gradients_per_side);
-    #line 953
-    p.x = starfield_mod((p.x) * (grid), grid);
-    p.y = starfield_mod((p.y) * (grid), grid);
-    #line 956
-    noir_int2 a = starfield_float2_to_int2(p);
-    noir_int2 b = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 0}), grid));
-    noir_int2 c = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){0, 1}), grid));
-    noir_int2 d = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 1}), grid));
-    #line 961
-    noir_float2 A = starfield_perlin_gradients[(starfield_hash(a)) & (((STARFIELD_perlin_gradient_count) - (1)))];
-    noir_float2 B = starfield_perlin_gradients[(starfield_hash(b)) & (((STARFIELD_perlin_gradient_count) - (1)))];
-    noir_float2 C = starfield_perlin_gradients[(starfield_hash(c)) & (((STARFIELD_perlin_gradient_count) - (1)))];
-    noir_float2 D = starfield_perlin_gradients[(starfield_hash(d)) & (((STARFIELD_perlin_gradient_count) - (1)))];
-    #line 966
-    noir_float2 pp = {(p.x) - ((int)(p.x)), (p.y) - ((int)(p.y))};
-    #line 968
-    float u00 = starfield_dot2(A, starfield_sub2(pp, (noir_float2){0, 0}));
-    float u10 = starfield_dot2(B, starfield_sub2(pp, (noir_float2){1, 0}));
-    float u01 = starfield_dot2(C, starfield_sub2(pp, (noir_float2){0, 1}));
-    float u11 = starfield_dot2(D, starfield_sub2(pp, (noir_float2){1, 1}));
-    #line 973
-    float x = ((((-(2)) * (pp.x)) * (pp.x)) * (pp.x)) + (((3) * (pp.x)) * (pp.x));
-    float y = ((((-(2)) * (pp.y)) * (pp.y)) * (pp.y)) + (((3) * (pp.y)) * (pp.y));
-    #line 976
-    float ab = starfield_lerp(u00, u10, x);
-    float cd = starfield_lerp(u01, u11, x);
-    float abcd = starfield_lerp(ab, cd, y);
-    #line 980
-    return abcd;
-}
-
-#line 160
-starfield_Image starfield_tex_get_lod(starfield_Tex (*tex), noir_int2 lod) {
-    #line 165
-    assert((lod.x) >= (0));
-    assert((lod.y) >= (0));
-    #line 168
-    if (((lod.x) >= (tex->lod_levels)) || ((lod.y) >= (tex->lod_levels))) {
-        return (starfield_Image){0};
-    }
-    #line 172
-    int square_level = starfield_mini(lod.x, lod.y);
-    noir_int2 square_size = {(tex->size.x) >> (square_level), (tex->size.y) >> (square_level)};
-    int square_area = (square_size.x) * (square_size.y);
-    starfield_Image square_lod = {((tex->pixels) + (((tex->size.x) * (tex->size.y)) * (4))) - ((square_area) * (4)), square_size};
-    #line 177
-    noir_int2 lod_size = {(tex->size.x) >> (lod.x), (tex->size.y) >> (lod.y)};
-    assert(((lod_size.x) == (square_lod.size.x)) || ((lod_size.y) == (square_lod.size.y)));
-    #line 182
-    int denom_bit = (abs((lod.x) - (lod.y))) - (1);
-    int numer = (((1) << (denom_bit))) - (1);
-    #line 185
-    starfield_Color (*pixels) = square_lod.pixels;
-    if ((lod.x) > (lod.y)) {
-        pixels += (square_area) + (((((numer) * (square_area))) >> (denom_bit)));
-        assert((pixels) < ((square_lod.pixels) + ((square_area) * (2))));
-    } else if ((lod.y) > (lod.x)) {
-        pixels += ((square_area) * (2)) + (((((numer) * (square_area))) >> (denom_bit)));
-        assert((pixels) < ((square_lod.pixels) + ((square_area) * (4))));
-    }
-    #line 194
-    assert((pixels) < ((tex->pixels) + (((tex->size.x) * (tex->size.y)) * (4))));
-    return (starfield_Image){pixels, lod_size};
-}
-
-#line 126 "C:\\code\\starfield\\starfield\\math.ion"
-noir_int2 starfield_add2is(noir_int2 a, int s) {
-    return (noir_int2){(a.x) + (s), (a.y) + (s)};
-}
-
-#line 118
-noir_int2 starfield_div2is(noir_int2 a, int s) {
-    return (noir_int2){(a.x) / (s), (a.y) / (s)};
-}
-
-#line 130
-noir_int2 starfield_sub2i(noir_int2 a, noir_int2 b) {
-    return (noir_int2){(a.x) - (b.x), (a.y) - (b.y)};
-}
-
-#line 148 "C:\\code\\starfield\\starfield\\starfield.ion"
-void starfield_tex_poke(starfield_Tex (*tex), noir_int2 pos, starfield_Color val) {
-    assert((tex->lod_levels) == (1));
-    #line 152
-    pos.x = starfield_clampi(0, (tex->size.x) - (1), pos.x);
-    pos.y = starfield_clampi(0, (tex->size.y) - (1), pos.y);
-    int idx = (pos.x) + ((tex->size.x) * (pos.y));
-    #line 156
-    tex->pixels[idx] = val;
-}
-
-#line 10 "C:\\code\\starfield\\starfield\\math.ion"
-int starfield_log2i(int x) {
-    return (int)(SDL_MostSignificantBitIndex32((uint32_t)(x)));
-}
-
-#line 51 "C:\\code\\starfield\\starfield\\filter.ion"
-void starfield_blur_horizontal(starfield_Image (*dest), starfield_Image (*src), float radius) {
-    assert((src->size.x) == (dest->size.x));
-    assert((src->size.y) == (dest->size.y));
-    starfield_Color (*scratch) = starfield_xcalloc(src->size.x, sizeof(starfield_Color));
-    #line 56
-    for (int y = 0; (y) < (src->size.y); (y)++) {
-        starfield_Color (*row_src) = (src->pixels) + ((y) * (src->size.x));
-        starfield_Color (*row_dest) = (dest->pixels) + ((y) * (dest->size.x));
-        starfield_blur_row(row_dest, row_src, src->size.x, radius);
-        starfield_blur_row(scratch, row_dest, src->size.x, radius);
-        starfield_blur_row(row_dest, scratch, src->size.x, radius);
-    }
-    #line 64
-    free(scratch);
-}
-
-void starfield_blur_vertical(starfield_Image (*dest), starfield_Image (*src), float radius) {
-    assert((src->size.x) == (dest->size.x));
-    assert((src->size.y) == (dest->size.y));
-    starfield_Color (*scratch) = starfield_xcalloc((src->size.y) * (2), sizeof(starfield_Color));
-    starfield_Color (*scratch_a) = scratch;
-    starfield_Color (*scratch_b) = (scratch) + (src->size.y);
-    #line 74
-    for (int x = 0; (x) < (src->size.x); (x)++) {
-        for (int i = 0; (i) < (src->size.y); (i)++) {
-            scratch_a[i] = src->pixels[(x) + ((i) * (src->size.x))];
-        }
-        #line 79
-        starfield_blur_row(scratch_b, scratch_a, src->size.y, radius);
-        starfield_blur_row(scratch_a, scratch_b, src->size.y, radius);
-        starfield_blur_row(scratch_b, scratch_a, src->size.y, radius);
-        #line 83
-        for (int i = 0; (i) < (dest->size.y); (i)++) {
-            dest->pixels[(x) + ((i) * (dest->size.x))] = scratch_b[i];
-        }
-    }
-    #line 88
-    free(scratch);
-}
-
-#line 319
+#line 319 "C:\\code\\starfield\\starfield\\filter.ion"
 starfield_Image starfield_transform_image(starfield_Image (*src), noir_float2 rotate, noir_float2 scale) {
     noir_int2 size = {(int)((scale.x) * (src->size.x)), (int)((scale.y) * (src->size.y))};
     starfield_Image result = starfield_make_image(size);
@@ -4222,30 +3994,185 @@ float starfield_srgb(float val) {
     return ((1.055f) * (powf(val, (1.f) / (2.4f)))) - (0.055f);
 }
 
+#line 118 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_div2is(noir_int2 a, int s) {
+    return (noir_int2){(a.x) / (s), (a.y) / (s)};
+}
+
+#line 130
+noir_int2 starfield_sub2i(noir_int2 a, noir_int2 b) {
+    return (noir_int2){(a.x) - (b.x), (a.y) - (b.y)};
+}
+
+#line 122
+noir_int2 starfield_add2i(noir_int2 a, noir_int2 b) {
+    return (noir_int2){(a.x) + (b.x), (a.y) + (b.y)};
+}
+
+#line 148 "C:\\code\\starfield\\starfield\\starfield.ion"
+void starfield_tex_poke(starfield_Tex (*tex), noir_int2 pos, starfield_Color val) {
+    assert((tex->lod_levels) == (1));
+    #line 152
+    pos.x = starfield_clampi(0, (tex->size.x) - (1), pos.x);
+    pos.y = starfield_clampi(0, (tex->size.y) - (1), pos.y);
+    int idx = (pos.x) + ((tex->size.x) * (pos.y));
+    #line 156
+    tex->pixels[idx] = val;
+}
+
+#line 245 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_mod(float x, float m) {
+    if ((x) < (0)) {
+        x = (m) - (x);
+    }
+    float r = (x) / (m);
+    float q = (r) - ((int)(r));
+    float p = (q) * (m);
+    return p;
+}
+
+#line 178
+noir_float2 starfield_normalise(noir_float2 v) {
+    float m = starfield_magnitude2(v);
+    return (noir_float2){(v.x) / (m), (v.y) / (m)};
+}
+
+#line 280
+float starfield_smoothedge(float center, float width, float x) {
+    return starfield_smoothstep(((((1.f) / (width))) * (((x) - (center)))) + (0.5f));
+}
+
+#line 94
+noir_float2 starfield_add2s(noir_float2 a, float s) {
+    return (noir_float2){(a.x) + (s), (a.y) + (s)};
+}
+
+#line 102
+noir_float2 starfield_sub2s(noir_float2 a, float s) {
+    return (noir_float2){(a.x) - (s), (a.y) - (s)};
+}
+
+#line 347 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Color starfield_color_mul_rgb1(starfield_Color a, float b) {
+    return (starfield_Color){(a.r) * (b), (a.g) * (b), (a.b) * (b), a.a};
+}
+
+#line 469
+float starfield_perlin_octaves(noir_float2 p, int grid) {
+    return (((((((1) / (((((.5f) + (.25f)) + (.125f)) + (.0625f))))) * (starfield_perlin(p, grid))) * (0.5f)) + ((starfield_perlin(starfield_mul2s(p, 1.5f), grid)) * (0.25f))) + ((starfield_perlin(starfield_mul2s(p, 3.f), grid)) * (0.125f))) + ((starfield_perlin(starfield_mul2s(p, 4.2f), grid)) * (0.0625f));
+}
+
+#line 46 "C:\\code\\starfield\\starfield\\stars.ion"
+void starfield_free_starfield(starfield_Starfield (*starfield)) {
+    starfield_StarsHeader (*h) = starfield_stars_header(starfield->stars);
+    if (h) {
+        free(h);
+        starfield->star_count = 0;
+    }
+}
+
+#line 10 "C:\\code\\starfield\\starfield\\math.ion"
+int starfield_log2i(int x) {
+    return (int)(SDL_MostSignificantBitIndex32((uint32_t)(x)));
+}
+
+#line 160 "C:\\code\\starfield\\starfield\\starfield.ion"
+starfield_Image starfield_tex_get_lod(starfield_Tex (*tex), noir_int2 lod) {
+    #line 165
+    assert((lod.x) >= (0));
+    assert((lod.y) >= (0));
+    #line 168
+    if (((lod.x) >= (tex->lod_levels)) || ((lod.y) >= (tex->lod_levels))) {
+        return (starfield_Image){0};
+    }
+    #line 172
+    int square_level = starfield_mini(lod.x, lod.y);
+    noir_int2 square_size = {(tex->size.x) >> (square_level), (tex->size.y) >> (square_level)};
+    int square_area = (square_size.x) * (square_size.y);
+    starfield_Image square_lod = {((tex->pixels) + (((tex->size.x) * (tex->size.y)) * (4))) - ((square_area) * (4)), square_size};
+    #line 177
+    noir_int2 lod_size = {(tex->size.x) >> (lod.x), (tex->size.y) >> (lod.y)};
+    assert(((lod_size.x) == (square_lod.size.x)) || ((lod_size.y) == (square_lod.size.y)));
+    #line 182
+    int denom_bit = (abs((lod.x) - (lod.y))) - (1);
+    int numer = (((1) << (denom_bit))) - (1);
+    #line 185
+    starfield_Color (*pixels) = square_lod.pixels;
+    if ((lod.x) > (lod.y)) {
+        pixels += (square_area) + (((((numer) * (square_area))) >> (denom_bit)));
+        assert((pixels) < ((square_lod.pixels) + ((square_area) * (2))));
+    } else if ((lod.y) > (lod.x)) {
+        pixels += ((square_area) * (2)) + (((((numer) * (square_area))) >> (denom_bit)));
+        assert((pixels) < ((square_lod.pixels) + ((square_area) * (4))));
+    }
+    #line 194
+    assert((pixels) < ((tex->pixels) + (((tex->size.x) * (tex->size.y)) * (4))));
+    return (starfield_Image){pixels, lod_size};
+}
+
+#line 51 "C:\\code\\starfield\\starfield\\filter.ion"
+void starfield_blur_horizontal(starfield_Image (*dest), starfield_Image (*src), float radius) {
+    assert((src->size.x) == (dest->size.x));
+    assert((src->size.y) == (dest->size.y));
+    starfield_Color (*scratch) = starfield_xcalloc(src->size.x, sizeof(starfield_Color));
+    #line 56
+    for (int y = 0; (y) < (src->size.y); (y)++) {
+        starfield_Color (*row_src) = (src->pixels) + ((y) * (src->size.x));
+        starfield_Color (*row_dest) = (dest->pixels) + ((y) * (dest->size.x));
+        starfield_blur_row(row_dest, row_src, src->size.x, radius);
+        starfield_blur_row(scratch, row_dest, src->size.x, radius);
+        starfield_blur_row(row_dest, scratch, src->size.x, radius);
+    }
+    #line 64
+    free(scratch);
+}
+
+void starfield_blur_vertical(starfield_Image (*dest), starfield_Image (*src), float radius) {
+    assert((src->size.x) == (dest->size.x));
+    assert((src->size.y) == (dest->size.y));
+    starfield_Color (*scratch) = starfield_xcalloc((src->size.y) * (2), sizeof(starfield_Color));
+    starfield_Color (*scratch_a) = scratch;
+    starfield_Color (*scratch_b) = (scratch) + (src->size.y);
+    #line 74
+    for (int x = 0; (x) < (src->size.x); (x)++) {
+        for (int i = 0; (i) < (src->size.y); (i)++) {
+            scratch_a[i] = src->pixels[(x) + ((i) * (src->size.x))];
+        }
+        #line 79
+        starfield_blur_row(scratch_b, scratch_a, src->size.y, radius);
+        starfield_blur_row(scratch_a, scratch_b, src->size.y, radius);
+        starfield_blur_row(scratch_b, scratch_a, src->size.y, radius);
+        #line 83
+        for (int i = 0; (i) < (dest->size.y); (i)++) {
+            dest->pixels[(x) + ((i) * (dest->size.x))] = scratch_b[i];
+        }
+    }
+    #line 88
+    free(scratch);
+}
+
+#line 66 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_float2_to_int2(noir_float2 x) {
+    return (noir_int2){(int32_t)(x.x), (int32_t)(x.y)};
+}
+
+#line 133 "C:\\code\\starfield\\starfield\\image.ion"
+int starfield_wrapi(int x, int m) {
+    int result = (x) % (m);
+    if ((result) < (0)) {
+        result += m;
+    }
+    return result;
+}
+
 #line 566 "C:\\code\\starfield\\noir\\noir.ion"
 void noir_update_combination_key(int dest_key, int src_key1, int src_key2) {
     noir_update_digital_button(&(noir_app.keys[dest_key]), (noir_app.keys[src_key1].down) || (noir_app.keys[src_key2].down));
 }
 
-#line 174 "C:\\code\\starfield\\starfield\\math.ion"
-noir_float2 starfield_mod2s(noir_float2 v, float m) {
-    return (noir_float2){starfield_mod(v.x, m), starfield_mod(v.y, m)};
-}
-
-#line 940 "C:\\code\\starfield\\starfield\\starfield.ion"
-int64_t starfield_hash(noir_int2 p) {
-    llong h = 1099511628211;
-    uchar (*b) = (uint8_t *)(&(p));
-    for (int i = 0; (i) < (sizeof(p)); (i)++) {
-        h ^= b[i];
-        h *= 0xcbf29ce484222325;
-    }
-    return h;
-}
-
-#line 46 "C:\\code\\starfield\\starfield\\math.ion"
-int32_t starfield_mini(int32_t a, int32_t b) {
-    return (((a) < (b)) ? a : b);
+#line 126 "C:\\code\\starfield\\starfield\\math.ion"
+noir_int2 starfield_add2is(noir_int2 a, int s) {
+    return (noir_int2){(a.x) + (s), (a.y) + (s)};
 }
 
 #line 224 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -4293,13 +4220,74 @@ void starfield_diffract_row(float (*dest), float (*src), int len, float inner_ra
     }
 }
 
-#line 216
+#line 263 "C:\\code\\starfield\\starfield\\math.ion"
+float starfield_smoothstep(float x) {
+    x = starfield_clamp01(x);
+    return ((x) * (x)) * (((3) - ((2) * (x))));
+}
+
+#line 436 "C:\\code\\starfield\\starfield\\starfield.ion"
+float starfield_perlin(noir_float2 p, int gradients_per_side) {
+    float grid = (float)(gradients_per_side);
+    #line 439
+    p.x = starfield_mod((p.x) * (grid), grid);
+    p.y = starfield_mod((p.y) * (grid), grid);
+    #line 442
+    noir_int2 a = starfield_float2_to_int2(p);
+    noir_int2 b = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 0}), grid));
+    noir_int2 c = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){0, 1}), grid));
+    noir_int2 d = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 1}), grid));
+    #line 447
+    noir_float2 A = starfield_perlin_gradients[(starfield_hash(a)) & (((STARFIELD_perlin_gradient_count) - (1)))];
+    noir_float2 B = starfield_perlin_gradients[(starfield_hash(b)) & (((STARFIELD_perlin_gradient_count) - (1)))];
+    noir_float2 C = starfield_perlin_gradients[(starfield_hash(c)) & (((STARFIELD_perlin_gradient_count) - (1)))];
+    noir_float2 D = starfield_perlin_gradients[(starfield_hash(d)) & (((STARFIELD_perlin_gradient_count) - (1)))];
+    #line 452
+    noir_float2 pp = {(p.x) - ((int)(p.x)), (p.y) - ((int)(p.y))};
+    #line 454
+    float u00 = starfield_dot2(A, starfield_sub2(pp, (noir_float2){0, 0}));
+    float u10 = starfield_dot2(B, starfield_sub2(pp, (noir_float2){1, 0}));
+    float u01 = starfield_dot2(C, starfield_sub2(pp, (noir_float2){0, 1}));
+    float u11 = starfield_dot2(D, starfield_sub2(pp, (noir_float2){1, 1}));
+    #line 459
+    float x = ((((-(2)) * (pp.x)) * (pp.x)) * (pp.x)) + (((3) * (pp.x)) * (pp.x));
+    float y = ((((-(2)) * (pp.y)) * (pp.y)) * (pp.y)) + (((3) * (pp.y)) * (pp.y));
+    #line 462
+    float ab = starfield_lerp(u00, u10, x);
+    float cd = starfield_lerp(u01, u11, x);
+    float abcd = starfield_lerp(ab, cd, y);
+    #line 466
+    return abcd;
+}
+
+#line 46 "C:\\code\\starfield\\starfield\\math.ion"
+int32_t starfield_mini(int32_t a, int32_t b) {
+    return (((a) < (b)) ? a : b);
+}
+
+#line 216 "C:\\code\\starfield\\starfield\\filter.ion"
 float starfield_diffract_fetch(float (*row), int len, int i) {
     if (((i) < (0)) || ((i) >= (len))) {
         return (float){0};
     }
     #line 221
     return row[i];
+}
+
+#line 174 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_mod2s(noir_float2 v, float m) {
+    return (noir_float2){starfield_mod(v.x, m), starfield_mod(v.y, m)};
+}
+
+#line 426 "C:\\code\\starfield\\starfield\\starfield.ion"
+int64_t starfield_hash(noir_int2 p) {
+    llong h = 1099511628211;
+    uchar (*b) = (uint8_t *)(&(p));
+    for (int i = 0; (i) < (sizeof(p)); (i)++) {
+        h ^= b[i];
+        h *= 0xcbf29ce484222325;
+    }
+    return h;
 }
 
 // Foreign source files
