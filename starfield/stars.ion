@@ -494,14 +494,13 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     tex_preprocess(&type.tex);
 }
 
-func random_warp(p: float2, scale: float): float2 {
-    q := mul2s(p, 4);
-    a := perlin_gradient(float2_to_int2(add2(q, { 0, 0 })));
-    b := perlin_gradient(float2_to_int2(add2(q, { 1, 0 })));
-    c := perlin_gradient(float2_to_int2(add2(q, { 0, 1 })));
-    d := perlin_gradient(float2_to_int2(add2(q, { 1, 1 })));
+func random_warp_one(p: float2, scale: float): float2 {
+    a := perlin_gradient(float2_to_int2(add2(p, { 0, 0 })));
+    b := perlin_gradient(float2_to_int2(add2(p, { 1, 0 })));
+    c := perlin_gradient(float2_to_int2(add2(p, { 0, 1 })));
+    d := perlin_gradient(float2_to_int2(add2(p, { 1, 1 })));
 
-    r := float2 { q.x - int(q.x), q.y - int(q.y) };
+    r := float2 { p.x - int(p.x), p.y - int(p.y) };
 
     x := r.x*r.x*(3. - 2.*r.x);
     y := r.y*r.y*(3. - 2.*r.y);
@@ -510,11 +509,25 @@ func random_warp(p: float2, scale: float): float2 {
     cd := lerp2(c, d, x);
     abcd := lerp2(ab, cd, y);
 
-    return add2(p, mul2s(abcd, scale));
+    return mul2s(abcd, scale);
+}
+
+func random_warp(p: float2, scale: float): float2 {
+    a := 1.;
+    b := a*.5;
+    c := b*.5;
+    d := c*.5;
+
+    q := mul2s(p, 4);
+    return add2(p, mul2s(add2(random_warp_one(q, a),
+                         add2(random_warp_one(mul2s(q, 2), b),
+                         add2(random_warp_one(mul2s(q, 4), c),
+                              random_warp_one(mul2s(q, 8), d)))),
+                    scale / (a+b+c+d)));
 }
 
 func draw_nebula(img: Image*, density: Tex*) {
-    nebula := make_image(img.size);
+    nebula := make_image(div2is(img.size, 2));
 
     c := random_random_star_color({ 0,3 });
     //  c := Color {1,1,1,1};
@@ -522,10 +535,9 @@ func draw_nebula(img: Image*, density: Tex*) {
     more_entropy = random();
     pop_random_state();
 
-    turbulence := randomr(0, 0.2);
+    turbulence :=  randomr(0., 0.2);
     detail := random_normal();
-    // negative_space := (random() & 1) ? 1. : -1.;
-    negative_space := 1.;
+    negative_space := (random() & 1) ? 1. : -1.;
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
