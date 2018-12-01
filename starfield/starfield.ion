@@ -648,7 +648,8 @@ func time_now(): double {
 }
 
 func perlin_gradient(p: int2): float2 {
-    push_random_state((:uint32)more_entropy ^ hash_int2_u32(p));
+    // p can be {0, 0}, so we add rather than xor
+    push_random_state((:uint32)more_entropy + hash_int2_u32(p));
     result := random_unit_vector2();
     pop_random_state();
     return result;
@@ -694,7 +695,7 @@ func perlin_octaves(p: float2, grid_size: float): float {
 }
 
 func worley_distance(square: int2, p: float2, poisson_alpha: float): float {
-    push_random_state((:uint32)more_entropy ^ hash_int2_u32(square));
+    push_random_state((:uint32)more_entropy + hash_int2_u32(square));
 
     s := int2_to_float2(square);
     k := random_poisson(poisson_alpha);

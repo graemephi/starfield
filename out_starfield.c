@@ -104,7 +104,7 @@ struct starfield_RGB8 {
     uint8_t padding;
 };
 
-#line 746
+#line 747
 int main(int argc, char (*(*argv)));
 
 #line 1 "C:\\code\\cloned\\bitwise\\ion\\system_packages\\builtin\\config_win32.ion"
@@ -541,7 +541,7 @@ bool noir_app_update(void);
 #line 21 "C:\\code\\starfield\\starfield\\image.ion"
 void starfield_image_clear(starfield_Image (*img));
 
-#line 562 "C:\\code\\starfield\\starfield\\stars.ion"
+#line 567 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_draw_starfield(starfield_Image (*dest), starfield_Starfield (*starfield));
 
 #line 351 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -786,7 +786,7 @@ void noir_update_clipboard(void);
 #line 257
 void noir_update_audio(void);
 
-#line 555 "C:\\code\\starfield\\starfield\\stars.ion"
+#line 560 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_draw_stars(starfield_Image (*dest), starfield_Starfield (*starfield));
 
 #line 516
@@ -1003,16 +1003,19 @@ void starfield_push_random_state(uint32_t seed);
 #line 214
 void starfield_pop_random_state(void);
 
-#line 688 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 689 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_perlin_octaves(noir_float2 p, float grid_size);
 
 #line 497 "C:\\code\\starfield\\starfield\\stars.ion"
 noir_float2 starfield_random_warp(noir_float2 p, float scale);
 
-#line 738 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 739 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_worley_octaves(noir_float2 p, float grid_size, float poisson_alpha);
 
-#line 265 "C:\\code\\starfield\\starfield\\math.ion"
+#line 106 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_add2s(noir_float2 a, float s);
+
+#line 265
 float starfield_remap(float a, float b, float m, float n, float x);
 
 #line 554 "C:\\code\\starfield\\starfield\\starfield.ion"
@@ -1075,9 +1078,6 @@ noir_float2 starfield_normalise2(noir_float2 v);
 #line 311
 float starfield_smoothedge(float center, float width, float x);
 
-#line 106
-noir_float2 starfield_add2s(noir_float2 a, float s);
-
 #line 114
 noir_float2 starfield_sub2s(noir_float2 a, float s);
 
@@ -1117,7 +1117,7 @@ extern uint32_t (*starfield_random_stack);
 #line 143 "C:\\code\\starfield\\starfield\\starfield.ion"
 uint32_t starfield_buf_u32_pop(uint32_t (*buf));
 
-#line 657
+#line 658
 float starfield_perlin(noir_float2 p, float grid_size);
 
 #line 650
@@ -1126,7 +1126,7 @@ noir_float2 starfield_perlin_gradient(noir_int2 p);
 #line 269 "C:\\code\\starfield\\starfield\\math.ion"
 noir_float2 starfield_lerp2(noir_float2 a, noir_float2 b, float t);
 
-#line 721 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 722 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_worley(noir_float2 p, float grid_size, float poisson_alpha);
 
 #line 269 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -1168,7 +1168,7 @@ noir_float2 starfield_mod2s(noir_float2 v, float m);
 #line 162 "C:\\code\\starfield\\starfield\\starfield.ion"
 uint32_t starfield_hash_int2_u32(noir_int2 p);
 
-#line 696
+#line 697
 float starfield_worley_distance(noir_int2 square, noir_float2 p, float poisson_alpha);
 
 #line 216 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -2172,24 +2172,24 @@ int num_typeinfos = 702;
 const TypeInfo **typeinfos = (const TypeInfo **)typeinfo_table;
 
 // Definitions
-#line 746 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 747 "C:\\code\\starfield\\starfield\\starfield.ion"
 int main(int argc, char (*(*argv))) {
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    #line 749
+    #line 750
     noir_app.window.size = starfield_ImageSize;
     if (!(noir_app_init())) {
         noir_print_and_clear_error();
         return 1;
     }
-    #line 755
+    #line 756
     printf("Platform: %s\n", noir_app.platform);
     printf("Display: %d x %d, %d Hz, %.2f DPI\n", noir_app.display.size.x, noir_app.display.size.y, noir_app.display.rate, noir_app.display.dpi);
-    #line 758
+    #line 759
     SDL_Surface (*surface) = SDL_GetWindowSurface(noir_app.window.sdl);
     SDL_Renderer (*renderer) = SDL_CreateSoftwareRenderer(surface);
     assert((surface->format->format) == (SDL_PIXELFORMAT_RGB888));
     assert((surface->format->BitsPerPixel) == (32));
-    #line 763
+    #line 764
     char (*starfield_text) = 
         "\n"
         "\xE2\x9C\xBA   \xE3\x80\x80\xE3\x80\x80 \xE3\x80\x80\xE3\x80\x80 \xC2\xB7   \xE2\x8A\xB9\n"
@@ -2197,20 +2197,20 @@ int main(int argc, char (*(*argv))) {
         "  \xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80\xE3\x80\x80.  \xE3\x80\x80\n"
         " +  *\xE3\x80\x80  \xE3\x80\x80* \xE3\x80\x80\xE3\x80\x80. \xE3\x80\x80 \xE2\x8B\x86\n"
         "  \xE2\x9C\xAB \xE3\x80\x80\xE3\x80\x80  +\n";
-    #line 771
+    #line 772
     starfield_random_state = (uint32_t)(starfield_hash(starfield_text, sizeof(starfield_text)));
     starfield_more_entropy = starfield_hash((starfield_text) + ((sizeof(starfield_text)) / (2)), (sizeof(starfield_text)) / (2));
-    #line 774
+    #line 775
     starfield_diffraction_rotation = starfield_random_unit_vector2();
-    #line 776
+    #line 777
     starfield_Starfield starfield = starfield_create_starfield(starfield_text);
-    #line 778
+    #line 779
     float min_t = 100000.f;
     float max_t = 0.f;
     float sum_t = 0.f;
     int n_t = 0;
     double t_reset = starfield_time_now();
-    #line 784
+    #line 785
     starfield_Image image = starfield_make_image((noir_int2){surface->w, surface->h});
     starfield_Image blurred = starfield_make_image((noir_int2){surface->w, surface->h});
     starfield_Image blurred2 = starfield_make_image((noir_int2){surface->w, surface->h});
@@ -2218,58 +2218,58 @@ int main(int argc, char (*(*argv))) {
         if (noir_app.error) {
             noir_print_and_clear_error();
         }
-        #line 792
+        #line 793
         if ((!(n_t)) || (noir_app.mouse.left_button.pressed)) {
             double t0 = starfield_time_now();
             float t0f = (float)(t0);
-            #line 796
+            #line 797
             starfield_image_clear(&(image));
-            #line 798
+            #line 799
             starfield_draw_starfield(&(image), &(starfield));
-            #line 800
+            #line 801
             starfield_diffract(&(image), (starfield_DiffractionArguments){.alpha = 0.1f, .radius = 4, .transform = starfield_diffraction_rotation, .type = starfield_randomn(1, STARFIELD_DiffractionTypeCount)});
-            #line 807
+            #line 808
             starfield_blur_to(&(blurred), &(image), starfield_randomr(0, 1));
             starfield_blur_to(&(blurred2), &(image), starfield_randomr(0.5f, 2));
             for (starfield_PixelIter it = starfield_pixel_iter_begin(&(image), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
                 starfield_Color bp = starfield_image_fetch(&(blurred), it.pixel_pos);
                 starfield_Color mbp = starfield_color_mul(*(it.pixel), bp);
                 starfield_Color xbp = starfield_color_lerp(bp, mbp, 0.1f);
-                #line 814
+                #line 815
                 starfield_Color bp2 = starfield_image_fetch(&(blurred2), it.pixel_pos);
                 starfield_Color mbp2 = starfield_color_mul(*(it.pixel), bp2);
                 starfield_Color xbp2 = starfield_color_lerp(bp2, mbp2, .9f);
                 *(it.pixel) = starfield_color_add(*(it.pixel), starfield_color_add(xbp, xbp2));
             }
-            #line 820
+            #line 821
             starfield_image_to_rgb8((starfield_RGB8 *)(surface->pixels), (noir_int2){surface->w, surface->h}, &(image));
-            #line 822
+            #line 823
             double t1 = starfield_time_now();
-            #line 824
+            #line 825
             float t = (float)((((t1) - (t0))) * (1000));
             min_t = starfield_min(t, min_t);
             max_t = starfield_max(t, max_t);
             sum_t += t;
             (n_t)++;
-            #line 830
+            #line 831
             if (noir_app.mouse.left_button.pressed) {
-                #line 832
+                #line 833
                 starfield_init_star_type_really((starfield_star_types) + (12), true);
-                #line 834
+                #line 835
                 printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, (sum_t) / (n_t));
-                #line 836
+                #line 837
                 starfield_free_starfield(&(starfield));
                 starfield = starfield_create_starfield(starfield_text);
                 t_reset = t0;
             }
         }
-        #line 842
+        #line 843
         SDL_UpdateWindowSurface(noir_app.window.sdl);
-        #line 844
+        #line 845
         fflush(stdout);
         SDL_Delay(10);
     }
-    #line 848
+    #line 849
     return 0;
 }
 
@@ -2410,7 +2410,7 @@ starfield_Starfield starfield_create_starfield(char const ((*starfield))) {
         s->rect.size.y = (((s->type->size.y) * (s->type->tex.size.y)) * (s->rect.size.y)) / (starfield_ImageSize.y);
     }
     #line 225
-    starfield_Tex star_count_noise = starfield_make_tex((noir_int2){16, 16});
+    starfield_Tex star_count_noise = starfield_make_tex((noir_int2){8, 8});
     float density = starfield_square((starfield_random_normal()) + (2));
     for (starfield_PixelIter it = starfield_pixel_iter_begin_tex(&(star_count_noise), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
         #line 229
@@ -2477,7 +2477,7 @@ void starfield_image_clear(starfield_Image (*img)) {
     memset(img->pixels, 0, ((img->size.x) * (img->size.y)) * (sizeof(starfield_Color)));
 }
 
-#line 562 "C:\\code\\starfield\\starfield\\stars.ion"
+#line 567 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_draw_starfield(starfield_Image (*dest), starfield_Starfield (*starfield)) {
     starfield_draw_stars(dest, starfield);
     starfield_draw_nebula(dest, &(starfield->density));
@@ -3312,7 +3312,7 @@ void noir_update_audio(void) {
     noir_app.audio.synced_play = noir_app.audio.play;
 }
 
-#line 555 "C:\\code\\starfield\\starfield\\stars.ion"
+#line 560 "C:\\code\\starfield\\starfield\\stars.ion"
 void starfield_draw_stars(starfield_Image (*dest), starfield_Starfield (*starfield)) {
     for (llong i = (starfield_starfield_len(starfield)) - (1); (i) >= (0); (i)--) {
         starfield_Star (*star) = (starfield->stars) + (i);
@@ -3324,39 +3324,45 @@ void starfield_draw_stars(starfield_Image (*dest), starfield_Starfield (*starfie
 void starfield_draw_nebula(starfield_Image (*img), starfield_Tex (*density)) {
     starfield_Image nebula = starfield_make_image(img->size);
     #line 519
-    starfield_Color c = starfield_random_random_star_color((noir_float2){4, 10});
+    starfield_Color c = starfield_random_random_star_color((noir_float2){0, 3});
     #line 521
     starfield_push_random_state((uint32_t)(starfield_more_entropy));
     starfield_more_entropy = starfield_random();
     starfield_pop_random_state();
     #line 525
     float turbulence = starfield_randomr(0, 0.2f);
-    #line 527
+    float detail = starfield_random_normal();
+    #line 528
+    float negative_space = 1.f;
+    #line 530
     for (starfield_PixelIter it = starfield_pixel_iter_begin(&(nebula), (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
         float d = (starfield_tex_lookup(density, it.pos).r) * (.1f);
         float p = ((starfield_perlin_octaves(it.pos, 5)) * (.5f)) + (.5f);
         noir_float2 pos = starfield_random_warp(it.pos, ((d) * (turbulence)) * (((1) - (p))));
         float w1 = starfield_clamp_low(0, starfield_worley_octaves(pos, 5, 2));
-        float w2 = (4) * (starfield_clamp_low(0, starfield_worley_octaves(pos, 10, 2)));
-        float w = ((w1) * (w1)) * (w2);
+        float w2 = (4) * (starfield_clamp_low(0, starfield_worley_octaves(starfield_add2s(pos, 1.2341f), 5, 2)));
+        float w3 = (6) * (starfield_clamp_low(0, starfield_worley_octaves(starfield_add2s(pos, 2.341f), (10) + (detail), 2)));
+        float w = ((w1) * (w1)) * (((w2) * (w3)));
         *(it.pixel) = starfield_color_mul1(c, starfield_clamp_low(0, starfield_remap(0, 1, 0, w, p)));
     }
-    #line 537
+    #line 541
     starfield_Image blur_nebula = starfield_image_copy(&(nebula));
     starfield_blur(&(blur_nebula), 9);
-    #line 540
+    #line 544
     for (starfield_PixelIter it = starfield_pixel_iter_begin(img, (starfield_Rect){0}); starfield_pixel_iter_next(&(it));) {
+        float d = starfield_clamp01((starfield_tex_lookup(density, it.pos).r) * (0.05f));
         starfield_Color n = starfield_image_sample_linear(&(nebula), it.pos);
         starfield_Color nb = starfield_image_sample_linear(&(blur_nebula), it.pos);
         starfield_Color nnb = starfield_color_mul(n, nb);
-        starfield_Color x = starfield_color_lerp(nb, nnb, 0.6f);
+        starfield_Color x = starfield_color_lerp(nb, nnb, .4f);
         starfield_Color y = starfield_color_add(n, x);
-        starfield_Color z = starfield_color_pow(y, 1.2f);
-        #line 548
+        starfield_Color z = starfield_color_pow(y, (1) + ((d) * (negative_space)));
+        #line 553
         *(it.pixel) = starfield_color_blend(*(it.pixel), starfield_color_premultiply(z));
     }
-    #line 551
+    #line 556
     starfield_free_image(&(nebula));
+    starfield_free_image(&(blur_nebula));
 }
 
 #line 315 "C:\\code\\starfield\\starfield\\filter.ion"
@@ -3918,7 +3924,7 @@ void starfield_pop_random_state(void) {
     starfield_random_state = starfield_buf_u32_pop(starfield_random_stack);
 }
 
-#line 688 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 689 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_perlin_octaves(noir_float2 p, float grid_size) {
     return (((((((1) / (((((.5f) + (.25f)) + (.125f)) + (.0625f))))) * (starfield_perlin(p, grid_size))) * (0.5f)) + ((starfield_perlin(starfield_mul2s(p, 1.5f), grid_size)) * (0.25f))) + ((starfield_perlin(starfield_mul2s(p, 3.f), grid_size)) * (0.125f))) + ((starfield_perlin(starfield_mul2s(p, 4.2f), grid_size)) * (0.0625f));
 }
@@ -3943,12 +3949,17 @@ noir_float2 starfield_random_warp(noir_float2 p, float scale) {
     return starfield_add2(p, starfield_mul2s(abcd, scale));
 }
 
-#line 738 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 739 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_worley_octaves(noir_float2 p, float grid_size, float poisson_alpha) {
     return (((((((1) / (((((.5f) + (.25f)) + (.125f)) + (.0625f))))) * (starfield_worley(p, grid_size, poisson_alpha))) * (0.5f)) + ((starfield_worley(starfield_mul2s(p, 1.5f), grid_size, poisson_alpha)) * (0.25f))) + ((starfield_worley(starfield_mul2s(p, 3.f), grid_size, poisson_alpha)) * (0.125f))) + ((starfield_worley(starfield_mul2s(p, 4.2f), grid_size, poisson_alpha)) * (0.0625f));
 }
 
-#line 265 "C:\\code\\starfield\\starfield\\math.ion"
+#line 106 "C:\\code\\starfield\\starfield\\math.ion"
+noir_float2 starfield_add2s(noir_float2 a, float s) {
+    return (noir_float2){(a.x) + (s), (a.y) + (s)};
+}
+
+#line 265
 float starfield_remap(float a, float b, float m, float n, float x) {
     return starfield_lerp(m, n, (((x) - (a))) / (((b) - (a))));
 }
@@ -4158,11 +4169,6 @@ float starfield_smoothedge(float center, float width, float x) {
     return starfield_smoothstep(((((1.f) / (width))) * (((x) - (center)))) + (0.5f));
 }
 
-#line 106
-noir_float2 starfield_add2s(noir_float2 a, float s) {
-    return (noir_float2){(a.x) + (s), (a.y) + (s)};
-}
-
 #line 114
 noir_float2 starfield_sub2s(noir_float2 a, float s) {
     return (noir_float2){(a.x) - (s), (a.y) - (s)};
@@ -4331,41 +4337,42 @@ uint32_t starfield_buf_u32_pop(uint32_t (*buf)) {
     return (p ? *(p) : 0);
 }
 
-#line 657
+#line 658
 float starfield_perlin(noir_float2 p, float grid_size) {
     p.x = starfield_mod((p.x) * (grid_size), grid_size);
     p.y = starfield_mod((p.y) * (grid_size), grid_size);
-    #line 661
+    #line 662
     noir_int2 a = starfield_float2_to_int2(p);
     noir_int2 b = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 0}), grid_size));
     noir_int2 c = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){0, 1}), grid_size));
     noir_int2 d = starfield_float2_to_int2(starfield_mod2s(starfield_add2(p, (noir_float2){1, 1}), grid_size));
-    #line 666
+    #line 667
     noir_float2 A = starfield_perlin_gradient(a);
     noir_float2 B = starfield_perlin_gradient(b);
     noir_float2 C = starfield_perlin_gradient(c);
     noir_float2 D = starfield_perlin_gradient(d);
-    #line 671
+    #line 672
     noir_float2 pp = {(p.x) - ((int)(p.x)), (p.y) - ((int)(p.y))};
-    #line 673
+    #line 674
     float u00 = starfield_dot2(A, starfield_sub2(pp, (noir_float2){0, 0}));
     float u10 = starfield_dot2(B, starfield_sub2(pp, (noir_float2){1, 0}));
     float u01 = starfield_dot2(C, starfield_sub2(pp, (noir_float2){0, 1}));
     float u11 = starfield_dot2(D, starfield_sub2(pp, (noir_float2){1, 1}));
-    #line 678
+    #line 679
     float x = ((pp.x) * (pp.x)) * (((3.f) - ((2.f) * (pp.x))));
     float y = ((pp.y) * (pp.y)) * (((3.f) - ((2.f) * (pp.y))));
-    #line 681
+    #line 682
     float ab = starfield_lerp(u00, u10, x);
     float cd = starfield_lerp(u01, u11, x);
     float abcd = starfield_lerp(ab, cd, y);
-    #line 685
+    #line 686
     return abcd;
 }
 
 #line 650
 noir_float2 starfield_perlin_gradient(noir_int2 p) {
-    starfield_push_random_state(((uint32_t)(starfield_more_entropy)) ^ (starfield_hash_int2_u32(p)));
+    #line 652
+    starfield_push_random_state(((uint32_t)(starfield_more_entropy)) + (starfield_hash_int2_u32(p)));
     noir_float2 result = starfield_random_unit_vector2();
     starfield_pop_random_state();
     return result;
@@ -4376,11 +4383,11 @@ noir_float2 starfield_lerp2(noir_float2 a, noir_float2 b, float t) {
     return (noir_float2){((((1) - (t))) * (a.x)) + ((t) * (b.x)), ((((1) - (t))) * (a.y)) + ((t) * (b.y))};
 }
 
-#line 721 "C:\\code\\starfield\\starfield\\starfield.ion"
+#line 722 "C:\\code\\starfield\\starfield\\starfield.ion"
 float starfield_worley(noir_float2 p, float grid_size, float poisson_alpha) {
     p = starfield_mul2s(p, grid_size);
     noir_int2 pi = starfield_float2_to_int2(p);
-    #line 725
+    #line 726
     float result = starfield_worley_distance(starfield_add2i(pi, (noir_int2){-(1), -(1)}), p, poisson_alpha);
     result = starfield_min(result, starfield_worley_distance(starfield_add2i(pi, (noir_int2){0, -(1)}), p, poisson_alpha));
     result = starfield_min(result, starfield_worley_distance(starfield_add2i(pi, (noir_int2){1, -(1)}), p, poisson_alpha));
@@ -4390,7 +4397,7 @@ float starfield_worley(noir_float2 p, float grid_size, float poisson_alpha) {
     result = starfield_min(result, starfield_worley_distance(starfield_add2i(pi, (noir_int2){-(1), 1}), p, poisson_alpha));
     result = starfield_min(result, starfield_worley_distance(starfield_add2i(pi, (noir_int2){0, 1}), p, poisson_alpha));
     result = starfield_min(result, starfield_worley_distance(starfield_add2i(pi, (noir_int2){1, 1}), p, poisson_alpha));
-    #line 735
+    #line 736
     return result;
 }
 
@@ -4577,15 +4584,15 @@ uint32_t starfield_hash_int2_u32(noir_int2 p) {
     return (uint32_t)((((h) >> (32))) ^ (h));
 }
 
-#line 696
+#line 697
 float starfield_worley_distance(noir_int2 square, noir_float2 p, float poisson_alpha) {
-    starfield_push_random_state(((uint32_t)(starfield_more_entropy)) ^ (starfield_hash_int2_u32(square)));
-    #line 699
+    starfield_push_random_state(((uint32_t)(starfield_more_entropy)) + (starfield_hash_int2_u32(square)));
+    #line 700
     noir_float2 s = starfield_int2_to_float2(square);
     int k = starfield_random_poisson(poisson_alpha);
     float max_distance = (2) * (STARFIELD_Sqrt2);
     float result = max_distance;
-    #line 704
+    #line 705
     if ((k) > (0)) {
         noir_float2 min_point = starfield_add2(s, (noir_float2){starfield_random01(), starfield_random01()});
         result = starfield_distance2(min_point, p);
@@ -4598,7 +4605,7 @@ float starfield_worley_distance(noir_int2 square, noir_float2 p, float poisson_a
             }
         }
     }
-    #line 717
+    #line 718
     starfield_pop_random_state();
     return starfield_clamp(0, max_distance, result);
 }

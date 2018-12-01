@@ -222,7 +222,7 @@ func create_starfield(starfield: char const*): Starfield {
         s.rect.size.y = s.type.size.y * s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
-    star_count_noise := make_tex({ 16, 16 });
+    star_count_noise := make_tex({ 8, 8 });
     density := square(random_normal() + 2);
     for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
@@ -516,21 +516,25 @@ func random_warp(p: float2, scale: float): float2 {
 func draw_nebula(img: Image*, density: Tex*) {
     nebula := make_image(img.size);
 
-    c := random_random_star_color({ 4, 10 });
+    c := random_random_star_color({ 0,3 });
     //  c := Color {1,1,1,1};
     push_random_state((:uint32)more_entropy);
     more_entropy = random();
     pop_random_state();
 
     turbulence := randomr(0, 0.2);
+    detail := random_normal();
+    // negative_space := (random() & 1) ? 1. : -1.;
+    negative_space := 1.;
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
         p := perlin_octaves(it.pos, 5) * .5 + .5;
         pos := random_warp(it.pos, d * turbulence*(1 - p));
         w1 := clamp_low(0, worley_octaves(pos, 5, 2));
-        w2 := 4*clamp_low(0, worley_octaves(pos, 10, 2));
-        w := w1*w1*w2;
+        w2 := 4*clamp_low(0, worley_octaves(add2s(pos, 1.2341), 5, 2));
+        w3 := 6*clamp_low(0, worley_octaves(add2s(pos, 2.341), 10 + detail, 2));
+        w := w1*w1*(w2*w3);
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
     }
 
@@ -538,18 +542,19 @@ func draw_nebula(img: Image*, density: Tex*) {
     blur(&blur_nebula, 9);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
+        d := clamp01(tex_lookup(density, it.pos).r * 0.05);
         n := image_sample_linear(&nebula, it.pos);
         nb := image_sample_linear(&blur_nebula, it.pos);
         nnb := color_mul(n, nb);
-        x := color_lerp(nb, nnb, 0.6);
+        x := color_lerp(nb, nnb, .4);
         y := color_add(n, x);
-        z := color_pow(y, 1.2);
+        z := color_pow(y, 1 + d * negative_space);
 
         *it.pixel = color_blend(*it.pixel, color_premultiply(z));
     }
 
     free_image(&nebula);
-    // free_image(&blur_nebula);
+    free_image(&blur_nebula);
 }
 
 func draw_stars(dest: Image*, starfield: Starfield*) {
