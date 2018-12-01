@@ -35,6 +35,14 @@ func clampi(a: int32, b: int32, x: int32): int32 {
                      x;
 }
 
+func clampi_low(a: int, x: int): int {
+    return maxi(a, x);
+}
+
+func clampi_high(b: int, x: int): int {
+    return mini(b, x);
+}
+
 func clamp01(x: float): float {
     return clamp(0, 1, x);
 }
@@ -53,6 +61,10 @@ func max(a: float, b: float): float {
 
 func min(a: float, b: float): float {
     return (a < b) ? a : b;
+}
+
+func safe_div(a: float, b: float): float {
+    return b == 0 ? b : a / b;
 }
 
 func min4(a: float, b: float, c: float, d: float): float {
@@ -164,7 +176,8 @@ func distance2(a: float2, b: float2): float {
 }
 
 func magnitude2(v: float2): float {
-    return sqrt(dot2(v, v));
+    vv := dot2(v, v);
+    return vv ? sqrt(vv) : 0;
 }
 
 func magnitude2i(v: int2): float {
@@ -175,7 +188,11 @@ func mod2s(v: float2, m: float): float2 {
     return { mod(v.x, m), mod(v.y, m) };
 }
 
-func normalise(v: float2): float2 {
+func floor2(v: float2): float2 {
+    return { floor(v.x), floor(v.y) };
+}
+
+func normalise2(v: float2): float2 {
     m := magnitude2(v);
     return { v.x / m, v.y / m };
 }
@@ -186,6 +203,16 @@ func random(): uint32 {
     random_state ^= random_state >> 17;
     random_state ^= random_state << 5;
     return random_state;
+}
+
+var random_stack: uint32* = 0;
+func push_random_state(seed: uint32) {
+    buf_u32_push(&random_stack, random_state);
+    random_state = seed;
+}
+
+func pop_random_state() {
+    random_state = buf_u32_pop(random_stack);
 }
 
 const int_23_mask = 0b00000000_011111111111111111111111;
@@ -233,6 +260,10 @@ func random_normal(): float {
 
 func lerp(a: float, b: float, t: float): float {
     return (1 - t)*a + t*b;
+}
+
+func remap(a: float, b: float, m: float, n: float, x: float): float {
+    return lerp(m, n, (x - a) / (b - a));
 }
 
 func lerp2(a: float2, b: float2, t: float): float2 {

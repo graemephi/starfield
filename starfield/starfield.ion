@@ -1,3 +1,7 @@
+// TODO
+//
+// https://images.nasa.gov/details-PIA08653.html
+
 import libc { ... }
 import sdl { ... }
 import noir { ... }
@@ -48,6 +52,213 @@ func xcalloc(count: usize, size: usize): void* {
     return result;
 }
 
+func is_zero(buf: void const*, len: usize): bool {
+    p := (:char const*)buf;
+    if (*p) {
+        return false;
+    }
+
+    return memcmp(p + 1, buf, len - 1) == 0;
+}
+
+func is_equal(a: void const*, b: void const*, len: usize): bool {
+    return memcmp(a, b, len) == 0;
+}
+
+struct BufHeader {
+    len: ssize;
+    cap: ssize;
+    data: uint8[1];
+}
+
+func buf_header(buf: void*): BufHeader* {
+    return buf ? (:BufHeader*)((:uint8*)buf - offsetof(BufHeader, data)) : 0;
+}
+
+func buf_len(buf: void*): ssize {
+    return buf ? buf_header(buf).len : 0;
+}
+
+func buf_cap(buf: void*): ssize {
+    return buf ? buf_header(buf).cap : 0;
+}
+
+func buf_free(buf: void*) {
+    h := buf_header(buf);
+    if (h) {
+        free(h);
+    }
+}
+
+func buf_fit(buf: void**, len: ssize) {
+    #assert(buf);
+    #assert(len);
+
+    if (!*buf) {
+        initial_cap := 32*len;
+        alloc_size := len*initial_cap + sizeof(BufHeader);
+        header: BufHeader* = xmalloc(alloc_size);
+        header.cap = initial_cap;
+        header.len = 0;
+        *buf = header.data;
+    }
+
+    header := buf_header(*buf);
+
+    if (header.len + len >= header.cap) {
+        new_cap := header.cap * 2;
+        header = xrealloc(header, len*new_cap + sizeof(BufHeader));
+        header.cap = new_cap;
+        *buf = header.data;
+    }
+}
+
+func buf_push(buf: void**, data: void*, len: ssize): void* {
+    buf_fit(buf, len);
+    #assert(*buf);
+    header := buf_header(*buf);
+    slot := header.data + header.len;
+    memcpy(slot, data, len);
+    header.len += len;
+    #assert(header.len <= header.cap);
+    return slot;
+}
+
+func buf_pop(buf: void*, len: ssize): void* {
+    header := buf_header(buf);
+    if (header.len > 0) {
+        #assert(header.len >= len);
+        result := header.data + (header.len - len);
+        header.len -= len;
+        return result;
+    }
+
+    return 0;
+}
+
+func buf_u32_push(buf: uint32**, v: uint32) {
+    buf_push((:void**)buf, &v, sizeof(v));
+}
+
+func buf_u32_pop(buf: uint32*): uint32 {
+    p: uint32* = buf_pop(buf, sizeof(uint32));
+    return p ? *p : 0;
+}
+
+func hash(p: void*, len: ssize): usize {
+    h := 1099511628211u;
+    b := (:uint8*)p;
+    for (i := 0; i < len; i++) {
+        h ^= b[i];
+        h *= 0xcbf29ce484222325u;
+    }
+    return h;
+}
+
+func hash_int2(p: int2): usize {
+    return hash(&p, sizeof(p));
+}
+
+func hash_int2_u32(p: int2): uint32 {
+    h := hash_int2(p);
+    return uint32((h >> 32) ^ h);
+}
+
+struct HashTable {
+    values, keys: usize*;
+}
+
+struct HashTableResult {
+    value: usize;
+    valid: bool;
+}
+
+func hashtable_set(table: HashTable*, key: usize, value: usize) {
+    buf_fit((:void**)&table.keys, sizeof(usize));
+    buf_fit((:void**)&table.values, sizeof(usize));
+
+    slots := buf_cap(table.keys) / sizeof(usize);
+    key_hash := hash(&key, sizeof(key));
+    idx := key_hash % slots;
+
+    while (false == (table.keys[idx] == (:usize)key && table.values[idx] == (:usize)value)) {
+        idx++;
+        if (idx == slots) {
+            idx = 0;
+        }
+        #assert(idx * sizeof(usize) < buf_cap(table.keys));
+    }
+
+    table.keys[idx] = key;
+    table.values[idx] = value;
+    buf_header(table.keys).len++;
+    buf_header(table.values).len++;
+}
+
+func hashtable_get(table: HashTable*, key: usize): HashTableResult {
+    #assert(table);
+
+    if (table.keys == 0) {
+        return {};
+    }
+
+    slots := buf_cap(table.keys) / sizeof(usize);
+    key_hash := hash(&key, sizeof(key));
+    idx: ssize = key_hash % slots;
+
+    while (table.keys[idx] && table.keys[idx] != key) {
+        idx++;
+
+        if (idx == slots) {
+            idx = 0;
+        }
+    }
+
+    result := HashTableResult {
+        valid = table.keys[idx] == key
+    };
+
+    if (result.valid) {
+        result.value = table.values[idx];
+    }
+
+    return result;
+}
+
+struct Map {
+    table: HashTable;
+    values: uint8*;
+    elem_len: ssize;
+}
+
+func map_get_idx(map: Map*, key_hash: usize): ssize {
+    idx := hashtable_get(&map.table, key_hash);
+    return idx.valid ? idx.value : -1;
+}
+
+func map_get(map: Map*, key_hash: usize): void* {
+    idx := hashtable_get(&map.table, key_hash);
+    value := idx.valid ? map.values + (idx.value * map.elem_len) : 0;
+    return value;
+}
+
+func map_set(map: Map*, key_hash: usize, value: void*, value_len: ssize) {
+    if (map.elem_len != value_len) {
+        #assert(map.elem_len == 0);
+        map.elem_len = value_len;
+    }
+
+    old_value := map_get(map, key_hash);
+
+    if (old_value == 0) {
+        value_ptr := buf_push((:void**)&map.values, value, value_len);
+        table_value := (:usize)((:uint8*)value_ptr - map.values);
+        hashtable_set(&map.table, key_hash, table_value);
+    } else {
+        memcpy(old_value, value, value_len);
+    }
+}
+
 struct Color {
     r, g, b, a: float;
 }
@@ -57,11 +268,16 @@ struct RGB8 {
     padding: uint8;
 } #static_assert(sizeof(RGB8) == 4)
 
-
 struct Tex {
     pixels: Color*;
     size: int2;
     lod_levels: int;
+}
+
+struct Rect {
+    pos: float2; // center
+    size: float2; // width, height
+    rot: float2; // cos theta, sin theta
 }
 
 func make_tex(size: int2): Tex {
@@ -145,6 +361,17 @@ func generate_lods(tex: Tex*) {
     free_image(&blurry);
 }
 
+func tex_premultiply_alpha(tex: Tex*) {
+    for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
+        *it.pixel = color_premultiply(*it.pixel);
+    }
+}
+
+func tex_preprocess(tex: Tex*) {
+    tex_premultiply_alpha(tex);
+    generate_lods(tex);
+}
+
 func tex_poke(tex: Tex*, pos: int2, val: Color) {
     #assert(tex.lod_levels == 1);
 
@@ -155,7 +382,6 @@ func tex_poke(tex: Tex*, pos: int2, val: Color) {
 
     tex.pixels[idx] = val;
 }
-
 
 func tex_get_lod(tex: Tex*, lod: int2): Image {
     // Pixels are laid out as: Series of decreasing mips
@@ -232,9 +458,6 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
 }
 
 func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
-    if (is_zero(&target, sizeof(target))) {
-        target = all_rect();
-    }
     lod := compute_lod_level(dest.size, target.size, tex.size);
     for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
         rgba := tex_lookup_lod(tex, it.pos, lod);
@@ -246,7 +469,11 @@ func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Co
     lod := compute_lod_level(dest.size, target.size, tex.size);
     for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
         rgba := tex_lookup_lod(tex, it.pos, lod);
-        rgba = color_mul(rgba, multiply_color);
+        if (rgba.a) {
+            rgba = color_mul1_rgb(rgba, 1. / rgba.a);
+            rgba = color_mul(rgba, multiply_color);
+            rgba = color_premultiply(rgba);
+        }
         *it.pixel = color_blend(*it.pixel, rgba);
     }
 }
@@ -272,10 +499,14 @@ func all_rect(): Rect {
 }
 
 func rotate(v: float2, cos_sin_theta: float2): float2 {
-    return float2 {
-        v.x * cos_sin_theta.x - v.y * cos_sin_theta.y,
-        v.x * cos_sin_theta.y + v.y * cos_sin_theta.x
-    };
+    if (cos_sin_theta.x || cos_sin_theta.y) {
+        return float2 {
+            v.x * cos_sin_theta.x - v.y * cos_sin_theta.y,
+            v.x * cos_sin_theta.y + v.y * cos_sin_theta.x
+        };
+    }
+
+    return v;
 }
 
 func rotate_theta(v: float2, theta: float): float2 {
@@ -320,6 +551,15 @@ func color_lerp(a: Color, b: Color, t: float): Color {
     };
 }
 
+func color_pow(a: Color, p: float): Color {
+    return Color {
+        pow(a.r, p),
+        pow(a.g, p),
+        pow(a.b, p),
+        pow(a.a, p)
+    };
+}
+
 func color_add(a: Color, b: Color): Color {
     return Color {
         a.r + b.r,
@@ -356,7 +596,7 @@ func color_mul1(a: Color, b: float): Color {
     };
 }
 
-func color_mul_rgb1(a: Color, b: float): Color {
+func color_mul1_rgb(a: Color, b: float): Color {
     return Color {
         a.r * b,
         a.g * b,
@@ -364,6 +604,7 @@ func color_mul_rgb1(a: Color, b: float): Color {
         a.a
     };
 }
+
 func color_blend(dest: Color, src: Color): Color {
     return Color {
         src.r + (dest.r * (1. - src.a)),
@@ -373,23 +614,8 @@ func color_blend(dest: Color, src: Color): Color {
     };
 }
 
-func color_premultiply(c: Color, alpha: float): Color {
-    return Color {
-        c.r * alpha,
-        c.g * alpha,
-        c.b * alpha,
-        c.a * alpha
-    };
-}
-
-
-func is_zero(buf: void const*, len: usize): bool {
-    p := (:char const*)buf;
-    if (*p) {
-        return false;
-    }
-
-    return memcmp(p + 1, buf, len - 1) == 0;
+func color_premultiply(c: Color): Color {
+    return color_mul1_rgb(c, c.a);
 }
 
 func srgb(val: float): float {
@@ -412,47 +638,35 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-// Set in main, used for anything that should be aligned with diffraction.
+// Unique for each image.
 var diffraction_rotation: float2 = {};
+var more_entropy: usize = 1;
 
 func time_now(): double {
     ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;
     return double(ticks) / double(app.time.ticks_per_sec);
 }
 
-const perlin_gradient_count = 128;
-var perlin_gradients: float2[perlin_gradient_count];
-func init_perlin() {
-    for (i := 0; i < perlin_gradient_count; i++) {
-        perlin_gradients[i] =  random_unit_vector2();
-    }
+func perlin_gradient(p: int2): float2 {
+    push_random_state((:uint32)more_entropy ^ hash_int2_u32(p));
+    result := random_unit_vector2();
+    pop_random_state();
+    return result;
 }
 
-func hash(p: int2): int64 {
-    h := 1099511628211;
-    b := (:uint8*)&p;
-    for (i := 0; i < sizeof(p); i++) {
-        h ^= b[i];
-        h *= 0xcbf29ce484222325;
-    }
-    return h;
-}
-
-func perlin(p: float2, gradients_per_side: int): float {
-    grid := float(gradients_per_side);
-
-    p.x = mod(p.x * grid, grid);
-    p.y = mod(p.y * grid, grid);
+func perlin(p: float2, grid_size: float): float {
+    p.x = mod(p.x * grid_size, grid_size);
+    p.y = mod(p.y * grid_size, grid_size);
 
     a := float2_to_int2(p);
-    b := float2_to_int2(mod2s(add2(p, {1, 0}), grid));
-    c := float2_to_int2(mod2s(add2(p, {0, 1}), grid));
-    d := float2_to_int2(mod2s(add2(p, {1, 1}), grid));
+    b := float2_to_int2(mod2s(add2(p, {1, 0}), grid_size));
+    c := float2_to_int2(mod2s(add2(p, {0, 1}), grid_size));
+    d := float2_to_int2(mod2s(add2(p, {1, 1}), grid_size));
 
-    A := perlin_gradients[hash(a) & (perlin_gradient_count - 1)];
-    B := perlin_gradients[hash(b) & (perlin_gradient_count - 1)];
-    C := perlin_gradients[hash(c) & (perlin_gradient_count - 1)];
-    D := perlin_gradients[hash(d) & (perlin_gradient_count - 1)];
+    A := perlin_gradient(a);
+    B := perlin_gradient(b);
+    C := perlin_gradient(c);
+    D := perlin_gradient(d);
 
     pp: float2 = { p.x - int(p.x), p.y - int(p.y) };
 
@@ -461,8 +675,8 @@ func perlin(p: float2, gradients_per_side: int): float {
     u01 := dot2(C, sub2(pp, {0,1}));
     u11 := dot2(D, sub2(pp, {1,1}));
 
-    x := -2*pp.x*pp.x*pp.x + 3*pp.x*pp.x;
-    y := -2*pp.y*pp.y*pp.y + 3*pp.y*pp.y;
+    x := pp.x*pp.x*(3. - 2.*pp.x);
+    y := pp.y*pp.y*(3. - 2.*pp.y);
 
     ab := lerp(u00, u10, x);
     cd := lerp(u01, u11, x);
@@ -471,12 +685,62 @@ func perlin(p: float2, gradients_per_side: int): float {
     return abcd;
 }
 
-func perlin_octaves(p: float2, grid: int): float {
+func perlin_octaves(p: float2, grid_size: float): float {
    return (1 / (.5+.25+.125+.0625)) *
-      perlin(p, grid) * 0.5
-    + perlin(mul2s(p, 1.5), grid) * 0.25
-    + perlin(mul2s(p, 3.), grid) * 0.125
-    + perlin(mul2s(p, 4.2), grid) * 0.0625;
+      perlin(p, grid_size) * 0.5
+    + perlin(mul2s(p, 1.5), grid_size) * 0.25
+    + perlin(mul2s(p, 3.), grid_size) * 0.125
+    + perlin(mul2s(p, 4.2), grid_size) * 0.0625;
+}
+
+func worley_distance(square: int2, p: float2, poisson_alpha: float): float {
+    push_random_state((:uint32)more_entropy ^ hash_int2_u32(square));
+
+    s := int2_to_float2(square);
+    k := random_poisson(poisson_alpha);
+    max_distance := 2*Sqrt2;
+    result := max_distance;
+
+    if (k > 0) {
+        min_point := add2(s, { random01(), random01() });
+        result = distance2(min_point, p);
+        for (i := 1; i < k; i++) {
+            new_point := add2(s, { random01(), random01() });
+            d := distance_squared2(new_point, p);
+            if (d < result) {
+                result = d;
+                min_point = new_point;
+            }
+        }
+    }
+
+    pop_random_state();
+    return clamp(0, max_distance, result);
+}
+
+func worley(p: float2, grid_size: float, poisson_alpha: float): float {
+    p = mul2s(p, grid_size);
+    pi := float2_to_int2(p);
+
+    result :=            worley_distance(add2i(pi, {-1, -1}), p, poisson_alpha);
+    result = min(result, worley_distance(add2i(pi, { 0, -1}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, { 1, -1}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, {-1,  0}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, { 0,  0}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, { 1,  0}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, {-1,  1}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, { 0,  1}), p, poisson_alpha));
+    result = min(result, worley_distance(add2i(pi, { 1,  1}), p, poisson_alpha));
+
+    return result;
+}
+
+func worley_octaves(p: float2, grid_size: float, poisson_alpha: float): float {
+   return (1 / (.5+.25+.125+.0625)) *
+      worley(p, grid_size, poisson_alpha) * 0.5
+    + worley(mul2s(p, 1.5), grid_size, poisson_alpha) * 0.25
+    + worley(mul2s(p, 3.), grid_size, poisson_alpha) * 0.125
+    + worley(mul2s(p, 4.2), grid_size, poisson_alpha) * 0.0625;
 }
 
 func main(argc: int, argv: char**): int {
@@ -504,25 +768,14 @@ func main(argc: int, argv: char**): int {
   ✫ 　　  +
 """;
 
-    // Todo: init after seeding random
-    init_perlin();
-    noise := make_image({ surface.w, surface.h });
-    for (it := pixel_iter_begin(&noise, {}); pixel_iter_next(&it)) {
-        c := Color {
-            square(random_normal()) * (1 / 2048.),
-            square(random_normal()) * (1 / 2048.),
-            square(random_normal()) * (1 / 2048.),
-            1
-        };
-        *it.pixel = c;
-    }
-    blur(&noise, 0.1);
+    random_state = (:uint32)hash(starfield_text, sizeof(starfield_text));
+    more_entropy = hash(starfield_text + sizeof(starfield_text) / 2, sizeof(starfield_text) / 2);
 
-    diffraction_rotation = random_unit_vector2();random_unit_vector2();random_unit_vector2();random_unit_vector2();
+    diffraction_rotation = random_unit_vector2();
 
     starfield := create_starfield(starfield_text);
 
-    min_t := 1000.;
+    min_t := 100000.;
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
@@ -537,12 +790,13 @@ func main(argc: int, argv: char**): int {
         }
 
         if (!n_t || app.mouse.left_button.pressed) {
-            image_copy_to(&image, &noise);
-
             t0 := time_now();
             t0f := float(t0);
 
+            image_clear(&image);
+
             draw_starfield(&image, &starfield);
+
             diffract(&image, {
                 alpha = 0.1,
                 radius = 4,
@@ -551,7 +805,7 @@ func main(argc: int, argv: char**): int {
             });
 
             blur_to(&blurred, &image, randomr(0, 1)); // ~1.33
-            blur_to(&blurred2, &image, randomr(0.5,1)); // ~2
+            blur_to(&blurred2, &image, randomr(0.5,2)); // ~2
             for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
                 bp := image_fetch(&blurred, it.pixel_pos);
                 mbp := color_mul(*it.pixel, bp);
@@ -563,7 +817,7 @@ func main(argc: int, argv: char**): int {
                 *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
             }
 
-            image_to_rgb8((:RGB8*)surface.pixels,  { surface.w, surface.h }, &image);
+            image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
 
             t1 := time_now();
 
@@ -574,11 +828,12 @@ func main(argc: int, argv: char**): int {
             n_t++;
 
             if (app.mouse.left_button.pressed) {
+                // Regen galaxy every time
                 init_star_type_really(star_types + 12, true);
 
                 printf("min %.2fms max %.2fms avg %.2fms\n", min_t, max_t, sum_t/n_t);
 
-                free(stars_header(starfield.stars));
+                free_starfield(&starfield);
                 starfield = create_starfield(starfield_text);
                 t_reset = t0;
             }

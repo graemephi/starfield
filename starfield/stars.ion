@@ -31,57 +31,25 @@ struct Star {
 struct Starfield {
     stars: Star*;
     star_count: int32;
-}
-
-struct Rect {
-    pos: float2; // center
-    size: float2; // width, height
-    rot: float2; // cos theta, sin theta
-}
-
-func stars_header(stars: Star*): StarsHeader* {
-    return stars ? (:StarsHeader*)(((:char*)stars) - offsetof(StarsHeader, data)) : 0;
+    density: Tex;
 }
 
 func free_starfield(starfield: Starfield*) {
-    h := stars_header(starfield.stars);
-    if (h) {
-        free(h);
-        starfield.star_count = 0;
+    buf_free(starfield.stars);
+    if (starfield.density.pixels) {
+        free_tex(&starfield.density);
     }
+    starfield.stars = 0;
+    starfield.star_count = 0;
 }
 
 func starfield_len(starfield: Starfield*): int64 {
-    h := stars_header(starfield.stars);
-    return h ? h.len : 0;
+    h := buf_header(starfield.stars);
+    return h ? h.len / sizeof(Star) : 0;
 }
 
-func push_star(starfield: Starfield*, star: Star) {
-    if (!starfield.stars) {
-        initial_cap := 32;
-        alloc_size := sizeof(Star)*initial_cap + sizeof(StarsHeader);
-        header: StarsHeader* = xmalloc(alloc_size);
-        memset(header, 0, alloc_size);
-        header.cap = initial_cap;
-        header.len = 0;
-        starfield.stars = header.data;
-    }
-
-    header := stars_header(starfield.stars);
-
-    if (header.len == header.cap) {
-        new_cap := header.cap * 2;
-        header = xrealloc(header, sizeof(Star)*new_cap + sizeof(StarsHeader));
-        starfield.stars = header.data;
-        header.cap = new_cap;
-    }
-
-    init_star_type(star.type);
-    starfield.stars[header.len++] = star;
-}
-
-func stars_len(starfield: Starfield*): int {
-    return (:int)stars_header(starfield.stars).len;
+func push_star(starfield: Starfield*, star: Star*) {
+    buf_push((:void**)&starfield.stars, (:char*)star, sizeof(Star));
 }
 
 func consume_star(c: char const*, star: Star*): char const* {
@@ -144,7 +112,6 @@ func consume_star(c: char const*, star: Star*): char const* {
     return c + next;
 }
 
-// https://en.wikipedia.org/wiki/Stellar_classification#cite_note-9
 // https://en.wikipedia.org/wiki/File:TernaryColorTmap.PNG
 var star_colors: Color[] = {
     { 0xff / 255., 0x01 / 255., 0.,          1. },
@@ -163,12 +130,26 @@ var star_colors: Color[] = {
     { 0x45 / 255., 0x73 / 255., 0xff / 255., 1. },
     { 0x2f / 255., 0x5c / 255., 0xff / 255., 1. },
 };
-const star_color_count = (sizeof(star_colors)/sizeof(Color));
+const StarColorCount = (sizeof(star_colors)/sizeof(Color));
+
+func random_random_star_color(range: float2): Color {
+    min := range.x;
+    max := range.y ? range.y : StarColorCount - 1;
+
+    offset := 8;
+    r := offset + random_normal() * (StarColorCount / 7);
+    x := clamp(min, max, r);
+
+    xi := int(x);
+    xf := x - xi;
+    color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
+    return color;
+}
 
 func random_star_color(type: StarType*, alpha: float): Color {
     offset := 8;
-    r := offset + random_normal() * (star_color_count / 7);
-    x := clamp(0, star_color_count - 1, r);
+    r := offset + random_normal() * (StarColorCount / 7);
+    x := clamp(0, StarColorCount - 1, r);
 
     if (type.id == 12) {
         x = clamp(8, 11, x);
@@ -177,7 +158,7 @@ func random_star_color(type: StarType*, alpha: float): Color {
     xi := int(x);
     xf := x - xi;
     color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
-    color = color_premultiply(color, random01() * (float(xi) / star_color_count) * alpha);
+    color = color_mul1(color, random01() * (float(xi) / StarColorCount) * alpha);
 
     return color;
 }
@@ -212,7 +193,7 @@ func create_starfield(starfield: char const*): Starfield {
                 star.rect.rot = star.type.fixed_rotation ? {} : random_unit_vector2();
                 star.color = random_star_color(star.type, 1 + x*x);
 
-                push_star(&result, star);
+                push_star(&result, &star);
             }
         }
 
@@ -233,7 +214,7 @@ func create_starfield(starfield: char const*): Starfield {
     x_pad := 4 + (R - width) / 2;
     y_pad := 4 + (R - height) / 2;
 
-    for (i := 0; i < stars_len(&result); i++) {
+    for (i := 0; i < starfield_len(&result); i++) {
         s := result.stars + i;
         s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
@@ -241,11 +222,11 @@ func create_starfield(starfield: char const*): Starfield {
         s.rect.size.y = s.type.size.y * s.type.tex.size.y * s.rect.size.y / ImageSize.y;
     }
 
-    star_count_noise := make_tex({ 8, 8 });
+    star_count_noise := make_tex({ 16, 16 });
     density := square(random_normal() + 2);
     for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
-        it.pixel.r = (:float)random_poisson(fabs(density + random_normal()));
+        it.pixel.r = (:float)random_poisson(clamp_low(0, density + random_normal()));
     }
 
     tiles := 25;
@@ -258,14 +239,14 @@ func create_starfield(starfield: char const*): Starfield {
             for (k := 0; k < count; k++) {
                 size := max(1. / ImageSize.x, random_normal()*background_star_size*(1 + count - int(count)));
 
-                push_star(&result, {
+                push_star(&result, &{
                     rect = {
                         pos = add2(xy, {(random01() - 0.5) * w, (random01() - 0.5) * w}),
                         size = { size, size },
                         rot = random_unit_vector2()
                     },
                     type = star_types + 1,
-                    color = random_star_color(star_types + 1, size*(16+4*count))
+                    color = random_star_color(star_types + 1, 3*size*(16+4*count))
                 });
             }
 
@@ -276,9 +257,8 @@ func create_starfield(starfield: char const*): Starfield {
         xy.y += w;
     }
 
-    free_tex(&star_count_noise);
-
-    result.star_count = stars_len(&result);
+    result.density = star_count_noise;
+    result.star_count = (:int)starfield_len(&result);
     return result;
 }
 
@@ -323,62 +303,69 @@ func draw_galaxy(tex: Tex*, arms: int) {
 
         // Rotate the arms more towards the edge
         mag := magnitude2({x, y}) + 0.05*random_normal();
-        xy := mul2s(normalise({ x, y }), mag);
+        xy := mul2s(normalise2({ x, y }), mag);
         expand := exp(spiral_expansion*(1+mag));
-
         spin := (random_normal() / 12 + 1)*mag*expand;
+
+        // Bar
         spin *= smoothedge(bar, randomr(.1, .3), mag);
+
+        // Arms
         spin += rot;
+
         spiral_str := mul2s({ cos(spin * Tau), sin(spin * Tau) }, .5*expand);
         pos := rotate(xy, spiral_str);
 
-        // Dim large/bright stars towards the edge
+        // Fake 3D
         z := (random_normal() * 0.01) * (1 - tilt);
-        size := (Sqrt2 - magnitude2(pos) + z + y * tilt) * random01() * 0.016 * brightness;
         pos.y *= tilt;
         pos.y += .25 * z;
 
-        push_star(s, {
+        // Dim large/bright stars towards the edge
+        size := (Sqrt2 - magnitude2(pos) + z + y * tilt) * random01() * 0.016 * brightness;
+
+        push_star(s, &{
             rect = {
                 pos = add2s(mul2s(pos, .51), 0.5),
                 size = { size, size },
                 rot = random_unit_vector2()
             },
             type = star_types + 1,
-            color = random_star_color(star_types + 1, 0.45)
+            color = random_star_color(star_types + 1, 0.66)
         });
     }
 
-    draw_starfield(tex_img, s);
+    draw_stars(tex_img, s);
 
     bloom_less := image_copy(tex_img);
     bloom_more := image_copy(tex_img);
     blur(&bloom_less, 3);
     blur(&bloom_more, 20 * tilt);
-    bloom_amount := randomr(.2, .7);
+    bloom_amount := randomr(.4, .8);
+
+    blue := star_colors[StarColorCount - 3];
+    yellow := star_colors[5];
 
     for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
         rel := sub2s(it.pos, 0.5);
         th := magnitude2(rel);
-        blue := star_colors[star_color_count - 3];
         bl := image_sample_linear(&bloom_less, it.pos);
         bm := image_sample_linear(&bloom_more, it.pos);
 
-        // Empty (black) space is transparent.
-        bl.a = 1;
-        bm.a = 1;
-
         center_yellow_str := pow(1 - clamp01(th / (Sqrt2/4)), 6);
-        arm_color := color_lerp(blue, star_colors[5], center_yellow_str);
-        inter_color := color_mul_rgb1(color_mul(arm_color, bm), perlin_octaves(it.pos, 40) * 0.5 + 1);
+        arm_color := color_lerp(blue, yellow, center_yellow_str);
+        inter_color := color_mul1_rgb(color_mul(arm_color, bm), perlin_octaves(it.pos, 40) * 0.5 + 1);
         matter := color_mul(bl, arm_color);
-        matter = color_mul_rgb1(matter, perlin_octaves(it.pos, 32) * 0.5 + 1);
-        matter = color_blend(inter_color, matter);
+        matter = color_mul1_rgb(matter, perlin_octaves(it.pos, 32) * 0.5 + 1);
+        matter = color_add(inter_color, matter);
         matter.a = bloom_amount;
+
         *it.pixel = color_blend(*it.pixel, matter);
     }
 
     free_starfield(s);
+    free_image(&bloom_less);
+    free_image(&bloom_more);
 }
 
 func draw_lensed_quasar(tex: Tex*) {
@@ -504,12 +491,75 @@ func init_star_type_really(type: StarType*, redraw: bool) {
         }
     }
 
-    generate_lods(&type.tex);
+    tex_preprocess(&type.tex);
 }
 
-func draw_starfield(dest: Image*, starfield: Starfield*) {
+func random_warp(p: float2, scale: float): float2 {
+    q := mul2s(p, 4);
+    a := perlin_gradient(float2_to_int2(add2(q, { 0, 0 })));
+    b := perlin_gradient(float2_to_int2(add2(q, { 1, 0 })));
+    c := perlin_gradient(float2_to_int2(add2(q, { 0, 1 })));
+    d := perlin_gradient(float2_to_int2(add2(q, { 1, 1 })));
+
+    r := float2 { q.x - int(q.x), q.y - int(q.y) };
+
+    x := r.x*r.x*(3. - 2.*r.x);
+    y := r.y*r.y*(3. - 2.*r.y);
+
+    ab := lerp2(a, b, x);
+    cd := lerp2(c, d, x);
+    abcd := lerp2(ab, cd, y);
+
+    return add2(p, mul2s(abcd, scale));
+}
+
+func draw_nebula(img: Image*, density: Tex*) {
+    nebula := make_image(img.size);
+
+    c := random_random_star_color({ 4, 10 });
+    //  c := Color {1,1,1,1};
+    push_random_state((:uint32)more_entropy);
+    more_entropy = random();
+    pop_random_state();
+
+    turbulence := randomr(0, 0.2);
+
+    for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
+        d := tex_lookup(density, it.pos).r * .1;
+        p := perlin_octaves(it.pos, 5) * .5 + .5;
+        pos := random_warp(it.pos, d * turbulence*(1 - p));
+        w1 := clamp_low(0, worley_octaves(pos, 5, 2));
+        w2 := 4*clamp_low(0, worley_octaves(pos, 10, 2));
+        w := w1*w1*w2;
+        *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
+    }
+
+    blur_nebula := image_copy(&nebula);
+    blur(&blur_nebula, 9);
+
+    for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
+        n := image_sample_linear(&nebula, it.pos);
+        nb := image_sample_linear(&blur_nebula, it.pos);
+        nnb := color_mul(n, nb);
+        x := color_lerp(nb, nnb, 0.6);
+        y := color_add(n, x);
+        z := color_pow(y, 1.2);
+
+        *it.pixel = color_blend(*it.pixel, color_premultiply(z));
+    }
+
+    free_image(&nebula);
+    // free_image(&blur_nebula);
+}
+
+func draw_stars(dest: Image*, starfield: Starfield*) {
     for (i := starfield_len(starfield) - 1; i >= 0; i--) {
         star := starfield.stars + i;
         draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
     }
+}
+
+func draw_starfield(dest: Image*, starfield: Starfield*) {
+    draw_stars(dest, starfield);
+    draw_nebula(dest, &starfield.density);
 }
