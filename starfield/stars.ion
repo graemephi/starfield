@@ -512,13 +512,13 @@ func random_warp_one(p: float2, scale: float): float2 {
     return mul2s(abcd, scale);
 }
 
-func random_warp(p: float2, scale: float): float2 {
+func random_warp(p: float2, freq: float, scale: float): float2 {
     a := 1.;
     b := a*.5;
     c := b*.5;
     d := c*.5;
 
-    q := mul2s(p, 4);
+    q := mul2s(p, freq);
     return add2(p, mul2s(add2(random_warp_one(q, a),
                          add2(random_warp_one(mul2s(q, 2), b),
                          add2(random_warp_one(mul2s(q, 4), c),
@@ -529,38 +529,42 @@ func random_warp(p: float2, scale: float): float2 {
 func draw_nebula(img: Image*, density: Tex*) {
     nebula := make_image(div2is(img.size, 2));
 
-    c := random_random_star_color({ 0,3 });
+    c := random_random_star_color({ 0, 4 });
     //  c := Color {1,1,1,1};
     push_random_state((:uint32)more_entropy);
     more_entropy = random();
     pop_random_state();
 
-    turbulence :=  randomr(0., 0.2);
-    detail := random_normal();
+    turbulence  := randomr(0., 0.2);
+    turbulence2 := randomr(turbulence, 0.4);
+    detail := random_normal()*2;
     negative_space := (random() & 1) ? 1. : -1.;
+    sparsity := randomr(0.3, 0.9);
+    fade := random01();
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
         p := perlin_octaves(it.pos, 5) * .5 + .5;
-        pos := random_warp(it.pos, d * turbulence*(1 - p));
-        w1 := clamp_low(0, worley_octaves(pos, 5, 2));
-        w2 := 4*clamp_low(0, worley_octaves(add2s(pos, 1.2341), 5, 2));
-        w3 := 6*clamp_low(0, worley_octaves(add2s(pos, 2.341), 10 + detail, 2));
-        w := w1*w1*(w2*w3);
+        warp_scale := d * turbulence*(1 - p);
+        w1 := worley_octaves(random_warp(add2s(it.pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
+        w2 := 2*worley_octaves(random_warp(add2s(it.pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
+        w3 := 4*worleyf2_octaves(random_warp(add2s(it.pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
+        w := w1*w1*w2*w3;
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
     }
 
     blur_nebula := image_copy(&nebula);
-    blur(&blur_nebula, 9);
+    blur(&blur_nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
-        d := clamp01(tex_lookup(density, it.pos).r * 0.05);
+        d := tex_lookup(density, it.pos).r * 0.05;
         n := image_sample_linear(&nebula, it.pos);
         nb := image_sample_linear(&blur_nebula, it.pos);
         nnb := color_mul(n, nb);
-        x := color_lerp(nb, nnb, .4);
+        x := color_lerp(nb, nnb, sparsity);
         y := color_add(n, x);
-        z := color_pow(y, 1 + d * negative_space);
+        z := color_pow(y, 2 + d * negative_space);
+        z.a *= .333;
 
         *it.pixel = color_blend(*it.pixel, color_premultiply(z));
     }

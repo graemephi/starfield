@@ -404,9 +404,9 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
             pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), offset);
 
             if (inside_normal_rect(pos)) {
-                it.pixel.r += alpha.r*sample_linear(red, img.size, pos);
-                it.pixel.g += alpha.g*sample_linear(green, img.size, pos);
-                it.pixel.b += alpha.b*sample_linear(blue, img.size, pos);
+                it.pixel.r += alpha.r*sample_linear(red, img.size, pos, Edge_Wrap);
+                it.pixel.g += alpha.g*sample_linear(green, img.size, pos, Edge_Wrap);
+                it.pixel.b += alpha.b*sample_linear(blue, img.size, pos, Edge_Wrap);
             }
         }
 
@@ -417,7 +417,6 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
 }
 
 func diffract(img: Image*, args: DiffractionArguments) {
-    // Convenience for random selection.
     if (args.type == Diffraction_None) {
         return;
     }

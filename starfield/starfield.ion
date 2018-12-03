@@ -422,7 +422,9 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
-    return image_sample_linear(&{tex.pixels, tex.size}, pos);
+    // Todo: Make edge behaviour configurable? We only use this for looking up
+    // low resolution noise right now...
+    return image_sample_linear_edge(&{tex.pixels, tex.size}, pos, Edge_Wrap);
 }
 
 func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
@@ -496,6 +498,10 @@ func all_rect(): Rect {
         size = { 1, 1 },
         rot = { 1, 0 }
     };
+}
+
+func rotation(theta: float): float2 {
+    return { cos(theta), sin(theta) };
 }
 
 func rotate(v: float2, cos_sin_theta: float2): float2 {
@@ -703,20 +709,18 @@ func worley_distance(square: int2, p: float2, poisson_alpha: float): float {
     result := max_distance;
 
     if (k > 0) {
-        min_point := add2(s, { random01(), random01() });
-        result = distance2(min_point, p);
+        result = distance2(add2(s, { random01(), random01() }), p);
         for (i := 1; i < k; i++) {
             new_point := add2(s, { random01(), random01() });
             d := distance_squared2(new_point, p);
             if (d < result) {
                 result = d;
-                min_point = new_point;
             }
         }
     }
 
     pop_random_state();
-    return clamp(0, max_distance, result);
+    return result;
 }
 
 func worley(p: float2, grid_size: float, poisson_alpha: float): float {
@@ -733,7 +737,41 @@ func worley(p: float2, grid_size: float, poisson_alpha: float): float {
     result = min(result, worley_distance(add2i(pi, { 0,  1}), p, poisson_alpha));
     result = min(result, worley_distance(add2i(pi, { 1,  1}), p, poisson_alpha));
 
-    return result;
+    return sqrt(result);
+}
+
+func worleyf2(p01: float2, grid_size: float, poisson_alpha: float): float {
+    p := mul2s(p01, grid_size);
+    pi := float2_to_int2(p);
+
+    f1 := 2*Sqrt2;
+    f2 := f1;
+    // max_distance := 2*Sqrt2;
+
+    for (i := -1; i <= 1; i++) {
+        for (j := -1; j <= 1; j++) {
+            pi_ij := add2i(pi, { i, j });
+            p_ij := int2_to_float2(pi_ij);
+            push_random_state((:uint32)more_entropy + hash_int2_u32(pi_ij));
+
+            k := random_poisson(poisson_alpha);
+
+            for (m := 0; m < k; m++) {
+                d := distance_squared2(p, add2(p_ij, { random01(), random01() }));
+                if (d < f1) {
+                    f2 = f1;
+                    f1 = d;
+                } else if (d < f2) {
+                    f2 = d;
+                }
+            }
+
+            pop_random_state();
+        }
+    }
+    #assert(f1 <= f2);
+
+    return sqrt(f2);
 }
 
 func worley_octaves(p: float2, grid_size: float, poisson_alpha: float): float {
@@ -744,7 +782,18 @@ func worley_octaves(p: float2, grid_size: float, poisson_alpha: float): float {
     + worley(mul2s(p, 4.2), grid_size, poisson_alpha) * 0.0625;
 }
 
+func worleyf2_octaves(p: float2, grid_size: float, poisson_alpha: float): float {
+   return (1 / (.5+.25+.125+.0625)) *
+      worleyf2(p, grid_size, poisson_alpha) * 0.5
+    + worleyf2(mul2s(p, 1.5), grid_size, poisson_alpha) * 0.25
+    + worleyf2(mul2s(p, 3.), grid_size, poisson_alpha) * 0.125
+    + worleyf2(mul2s(p, 4.2), grid_size, poisson_alpha) * 0.0625;
+}
+
 func main(argc: int, argv: char**): int {
+    if (true) {
+        test_iterator();
+    }
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
     app.window.size = ImageSize;

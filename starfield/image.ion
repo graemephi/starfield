@@ -72,12 +72,13 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     x_max := 1.;
     y_min := 0.;
     y_max := 1.;
+    start_pos := clamp2(0, 1,  rect_absolute(rect, {0, 0}));
 
     if (!is_zero(&rect, sizeof(rect))) {
-        a := rect_absolute(rect, {0, 0});
-        b := rect_absolute(rect, {1, 0});
-        c := rect_absolute(rect, {0, 1});
-        d := rect_absolute(rect, {1, 1});
+        a := start_pos;
+        b := clamp2(0, 1, rect_absolute(rect, {1, 0}));
+        c := clamp2(0, 1, rect_absolute(rect, {0, 1}));
+        d := clamp2(0, 1, rect_absolute(rect, {1, 1}));
 
         x_min = min4(a.x, b.x, c.x, d.x);
         x_max = max4(a.x, b.x, c.x, d.x);
@@ -85,18 +86,18 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         y_max = max4(a.y, b.y, c.y, d.y);
 
         origin := rect_relative(rect, { 0, 0 });
-        iter.dx = sub2(rect_relative(rect, { 1. / (image.size.x), 0 }), origin);
-        iter.dy = sub2(rect_relative(rect, { 0, 1. / (image.size.y) }), origin);
+        iter.dx = sub2(rect_relative(rect, { 1. / image.size.x, 0 }), origin);
+        iter.dy = sub2(rect_relative(rect, { 0, 1. / image.size.y }), origin);
     } else {
         rect = all_rect();
         iter.dx = { 1. / image.size.x, 0. };
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = clampi(0, image.size.x, int(round(x_min * image.size.x - 0.5)));
-    iter.end.x   = clampi(0, image.size.x, int(round(x_max * image.size.x - 0.5)));
-    iter.start.y = clampi(0, image.size.y, int(round(y_min * image.size.y - 0.5)));
-    iter.end.y   = clampi(0, image.size.y, int(round(y_max * image.size.y - 0.5)));
+    iter.start.x = int(ceil(x_min * image.size.x - 0.5));
+    iter.end.x   = int(x_max * image.size.x - 0.5) + 1;
+    iter.start.y = int(ceil(y_min * image.size.y - 0.5));
+    iter.end.y   = int(y_max * image.size.y - 0.5) + 1;
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -130,38 +131,110 @@ func pixel_iter_next(it: PixelIter*): bool {
     return false;
 }
 
-func wrapi(x: int, m: int): int {
-    result := x % m;
-    if (result < 0) {
-        result += m;
+func test_iterator() {
+    dim := int2 { 32, 32 };
+    img := make_image(dim);
+
+    for (i := 0; i < dim.x; i++) {
+        for (j := 0; j < dim.y; j++) {
+            r := Color {
+                random01(),
+                random01(),
+                random01(),
+                random01()
+            };
+
+            img.pixels[i + j*dim.x] = r;
+        }
     }
-    return result;
+
+    i := 0;
+    j := 0;
+    for (it := pixel_iter_begin(&img, {}); pixel_iter_next(&it)) {
+        p := img.pixels[i + j*dim.x];
+        c := image_sample_linear(&img, it.pos);
+        #assert(p.r - c.r < 1e-5);
+        #assert(p.g - c.g < 1e-5);
+        #assert(p.b - c.b < 1e-5);
+        #assert(p.a - c.a < 1e-5);
+
+        i++;
+        if (i == dim.x) {
+            i = 0;
+            j++;
+        }
+    }
+    #assert(i + j*dim.x == dim.x*dim.y);
+}
+
+func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {
+    if (a > 0 && b > 0) {
+        #assert(ab > 0);
+        if (c > 0 && d > 0) {
+            #assert(cd > 0);
+            #assert(abcd >= 0);
+        }
+    }
+    if (c > 0 && d > 0) {
+        #assert(cd > 0);
+    }
+}
+
+enum EdgeBehavior {
+    Edge_Clamp,
+    Edge_Wrap
 }
 
 func image_sample_linear(img: Image*, pos: float2): Color {
+    return image_sample_linear_edge(img, pos, Edge_Clamp);
+}
+
+func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehavior): Color {
     if (img.pixels == 0) {
         return {};
     }
 
-    pos.x = (pos.x * img.size.x) - 0.5;
-    pos.y = (pos.y * img.size.y) - 0.5;
+    scaled := float2 {
+        pos.x * img.size.x - 0.5,
+        pos.y * img.size.y - 0.5,
+    };
 
-    vi := float2_to_int2(pos);
-    vf := float2 { pos.x - vi.x, pos.y - vi.y };
+    if (edge_behavior == Edge_Clamp) {
+        scaled.x = clamp(0, float(img.size.x), scaled.x);
+        scaled.y = clamp(0, float(img.size.y), scaled.y);
+    } else if (edge_behavior == Edge_Wrap) {
+        scaled.x = wrap(scaled.x, float(img.size.x));
+        scaled.y = wrap(scaled.y, float(img.size.y));
+    } else {
+        #assert(0);
+    }
+
+    vi := float2_to_int2(scaled);
+    vf := sub2(scaled, int2_to_float2(vi));
 
     a := vi;
     b := add2i(a, {1, 0});
     c := add2i(a, {0, 1});
     d := add2i(a, {1, 1});
 
-    a.x = wrapi(a.x, img.size.x);
-    b.x = wrapi(b.x, img.size.x);
-    c.x = wrapi(c.x, img.size.x);
-    d.x = wrapi(d.x, img.size.x);
-    a.y = wrapi(a.y, img.size.y);
-    b.y = wrapi(b.y, img.size.y);
-    c.y = wrapi(c.y, img.size.y);
-    d.y = wrapi(d.y, img.size.y);
+    #assert(a.x >= 0 && a.x < img.size.x);
+    #assert(a.y >= 0 && a.y < img.size.y);
+
+    if (edge_behavior == Edge_Clamp) {
+        b.x = clampi_high(img.size.x - 1, b.x);
+        c.x = clampi_high(img.size.x - 1, c.x);
+        d.x = clampi_high(img.size.x - 1, d.x);
+        b.y = clampi_high(img.size.y - 1, b.y);
+        c.y = clampi_high(img.size.y - 1, c.y);
+        d.y = clampi_high(img.size.y - 1, d.y);
+    } else if (edge_behavior == Edge_Wrap) {
+        b.x = (b.x == img.size.x) ? 0 : b.x;
+        c.x = (c.x == img.size.x) ? 0 : c.x;
+        d.x = (d.x == img.size.x) ? 0 : d.x;
+        b.y = (b.y == img.size.x) ? 0 : b.y;
+        c.y = (c.y == img.size.x) ? 0 : c.y;
+        d.y = (d.y == img.size.x) ? 0 : d.y;
+    }
 
     A := img.pixels[a.x + a.y*img.size.x];
     B := img.pixels[b.x + b.y*img.size.x];
@@ -172,33 +245,60 @@ func image_sample_linear(img: Image*, pos: float2): Color {
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
 
+    assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
+    assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
+    assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
+    assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
+
     return ABCD;
 }
 
-func sample_linear(pixels: float*, size: int2, pos: float2): float {
+func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeBehavior): float {
     if (pixels == 0) {
         return {};
     }
 
-    pos.x = (pos.x * size.x) - 0.5;
-    pos.y = (pos.y * size.y) - 0.5;
+    scaled := float2 {
+        pos.x * size.x - 0.5,
+        pos.y * size.y - 0.5,
+    };
 
-    vi := float2_to_int2(pos);
-    vf := float2 { pos.x - vi.x, pos.y - vi.y };
+    if (edge_behavior == Edge_Clamp) {
+        scaled.x = clamp(0, float(size.x), scaled.x);
+        scaled.y = clamp(0, float(size.y), scaled.y);
+    } else if (edge_behavior == Edge_Wrap) {
+        scaled.x = wrap(scaled.x, float(size.x));
+        scaled.y = wrap(scaled.y, float(size.y));
+    } else {
+        #assert(0);
+    }
+
+    vi := float2_to_int2(scaled);
+    vf := sub2(scaled, int2_to_float2(vi));
 
     a := vi;
     b := add2i(a, {1, 0});
     c := add2i(a, {0, 1});
     d := add2i(a, {1, 1});
 
-    a.x = wrapi(a.x, size.x);
-    b.x = wrapi(b.x, size.x);
-    c.x = wrapi(c.x, size.x);
-    d.x = wrapi(d.x, size.x);
-    a.y = wrapi(a.y, size.y);
-    b.y = wrapi(b.y, size.y);
-    c.y = wrapi(c.y, size.y);
-    d.y = wrapi(d.y, size.y);
+    #assert(a.x >= 0 && a.x < size.x);
+    #assert(a.y >= 0 && a.y < size.y);
+
+    if (edge_behavior == Edge_Clamp) {
+        b.x = clampi_high(size.x - 1, b.x);
+        c.x = clampi_high(size.x - 1, c.x);
+        d.x = clampi_high(size.x - 1, d.x);
+        b.y = clampi_high(size.y - 1, b.y);
+        c.y = clampi_high(size.y - 1, c.y);
+        d.y = clampi_high(size.y - 1, d.y);
+    } else if (edge_behavior == Edge_Wrap) {
+        b.x = (b.x == size.x) ? 0 : b.x;
+        c.x = (c.x == size.x) ? 0 : c.x;
+        d.x = (d.x == size.x) ? 0 : d.x;
+        b.y = (b.y == size.x) ? 0 : b.y;
+        c.y = (c.y == size.x) ? 0 : c.y;
+        d.y = (d.y == size.x) ? 0 : d.y;
+    }
 
     A := pixels[a.x + a.y*size.x];
     B := pixels[b.x + b.y*size.x];
@@ -208,6 +308,8 @@ func sample_linear(pixels: float*, size: int2, pos: float2): float {
     AB := lerp(A, B, vf.x);
     CD := lerp(C, D, vf.x);
     ABCD := lerp(AB, CD, vf.y);
+
+    assert_correct_signs(A, B, C, D, AB, CD, ABCD);
 
     return ABCD;
 }

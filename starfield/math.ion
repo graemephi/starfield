@@ -47,6 +47,10 @@ func clamp01(x: float): float {
     return clamp(0, 1, x);
 }
 
+func clamp2(a: float, b: float, v: float2): float2 {
+    return { clamp(a, b, v.x), clamp(a, b, v.y) };
+}
+
 func maxi(a: int32, b: int32): int32 {
     return (a > b) ? a : b;
 }
@@ -189,7 +193,7 @@ func mod2s(v: float2, m: float): float2 {
 }
 
 func floor2(v: float2): float2 {
-    return { floor(v.x), floor(v.y) };
+    return { float(int(v.x)), float(int(v.y)) };
 }
 
 func normalise2(v: float2): float2 {
@@ -268,8 +272,8 @@ func remap(a: float, b: float, m: float, n: float, x: float): float {
 
 func lerp2(a: float2, b: float2, t: float): float2 {
     return float2 {
-        (1 - t)*a.x + t*b.x,
-        (1 - t)*a.y + t*b.y
+        lerp(a.x, b.x, t),
+        lerp(a.y, b.y, t)
     };
 }
 
