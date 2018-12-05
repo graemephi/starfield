@@ -231,9 +231,9 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
         b.x = (b.x == img.size.x) ? 0 : b.x;
         c.x = (c.x == img.size.x) ? 0 : c.x;
         d.x = (d.x == img.size.x) ? 0 : d.x;
-        b.y = (b.y == img.size.x) ? 0 : b.y;
-        c.y = (c.y == img.size.x) ? 0 : c.y;
-        d.y = (d.y == img.size.x) ? 0 : d.y;
+        b.y = (b.y == img.size.y) ? 0 : b.y;
+        c.y = (c.y == img.size.y) ? 0 : c.y;
+        d.y = (d.y == img.size.y) ? 0 : d.y;
     }
 
     A := img.pixels[a.x + a.y*img.size.x];
@@ -295,9 +295,9 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
         b.x = (b.x == size.x) ? 0 : b.x;
         c.x = (c.x == size.x) ? 0 : c.x;
         d.x = (d.x == size.x) ? 0 : d.x;
-        b.y = (b.y == size.x) ? 0 : b.y;
-        c.y = (c.y == size.x) ? 0 : c.y;
-        d.y = (d.y == size.x) ? 0 : d.y;
+        b.y = (b.y == size.y) ? 0 : b.y;
+        c.y = (c.y == size.y) ? 0 : c.y;
+        d.y = (d.y == size.y) ? 0 : d.y;
     }
 
     A := pixels[a.x + a.y*size.x];
