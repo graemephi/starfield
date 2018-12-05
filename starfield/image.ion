@@ -1,8 +1,9 @@
+const PixelEps = 1e-7;
+
 struct Image {
     pixels: Color*;
     size: int2;
 }
-
 
 func make_image(size: int2): Image {
     return Image {
@@ -47,6 +48,7 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
 
 struct PixelIter {
     image: Image*;
+    aspect_ratio: float;
     start: int2;
     end: int2;
     rect: Rect;
@@ -56,6 +58,7 @@ struct PixelIter {
     dy: float2;
 
     pos: float2;
+    ar_pos: float2;
     pixel: Color*;
 }
 
@@ -68,40 +71,44 @@ func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter: PixelIter = {};
 
+    aspect_ratio := float(image.size.x) / float(image.size.y);
+
     x_min := 0.;
     x_max := 1.;
     y_min := 0.;
     y_max := 1.;
-    start_pos := clamp2(0, 1,  rect_absolute(rect, {0, 0}));
+    start_pos := clamp2(0, 1,  rect_absolute(rect, aspect_ratio, {0, 0}));
 
     if (!is_zero(&rect, sizeof(rect))) {
         a := start_pos;
-        b := clamp2(0, 1, rect_absolute(rect, {1, 0}));
-        c := clamp2(0, 1, rect_absolute(rect, {0, 1}));
-        d := clamp2(0, 1, rect_absolute(rect, {1, 1}));
+        b := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {1, 0}));
+        c := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {0, 1}));
+        d := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {1, 1}));
 
         x_min = min4(a.x, b.x, c.x, d.x);
         x_max = max4(a.x, b.x, c.x, d.x);
         y_min = min4(a.y, b.y, c.y, d.y);
         y_max = max4(a.y, b.y, c.y, d.y);
 
-        origin := rect_relative(rect, { 0, 0 });
-        iter.dx = sub2(rect_relative(rect, { 1. / image.size.x, 0 }), origin);
-        iter.dy = sub2(rect_relative(rect, { 0, 1. / image.size.y }), origin);
+        origin := rect_relative(rect, aspect_ratio, { 0, 0 });
+        iter.dx = sub2(rect_relative(rect, aspect_ratio, { 1. / image.size.x, 0 }), origin);
+        iter.dy = sub2(rect_relative(rect, aspect_ratio, { 0, 1. / image.size.y }), origin);
     } else {
         rect = all_rect();
         iter.dx = { 1. / image.size.x, 0. };
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = int(ceil(x_min * image.size.x - 0.5));
-    iter.end.x   = int(x_max * image.size.x - 0.5) + 1;
-    iter.start.y = int(ceil(y_min * image.size.y - 0.5));
-    iter.end.y   = int(y_max * image.size.y - 0.5) + 1;
+    iter.start.x = int(ceil(x_min * image.size.x - 0.5 + PixelEps));
+    iter.end.x   = int(x_max * image.size.x - 0.5 + PixelEps) + 1;
+    iter.start.y = int(ceil(y_min * image.size.y - 0.5 + PixelEps));
+    iter.end.y   = int(y_max * image.size.y - 0.5 + PixelEps) + 1;
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
-    iter.pos = rect_relative(rect, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
+    iter.pos = rect_relative(rect, aspect_ratio, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
+    iter.ar_pos = { iter.pos.x * aspect_ratio, iter.pos.y };
     iter.line_start = iter.pos;
+    iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
     iter.image = image;
 
@@ -119,6 +126,7 @@ func pixel_iter_next(it: PixelIter*): bool {
 
             if (inside_normal_rect(it.pos)) {
                 it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
+                it.ar_pos = { it.pos.x * it.aspect_ratio, it.pos.y };
                 return true;
             }
         }
@@ -150,13 +158,18 @@ func test_iterator() {
 
     i := 0;
     j := 0;
-    for (it := pixel_iter_begin(&img, {}); pixel_iter_next(&it)) {
+    for (it := pixel_iter_begin(&img, all_rect()); pixel_iter_next(&it)) {
         p := img.pixels[i + j*dim.x];
         c := image_sample_linear(&img, it.pos);
+        d := image_sample_nearest(&img, it.pos);
         #assert(p.r - c.r < 1e-5);
         #assert(p.g - c.g < 1e-5);
         #assert(p.b - c.b < 1e-5);
         #assert(p.a - c.a < 1e-5);
+        #assert(p.r == d.r);
+        #assert(p.g == d.g);
+        #assert(p.b == d.b);
+        #assert(p.a == d.a);
 
         i++;
         if (i == dim.x) {
@@ -169,14 +182,14 @@ func test_iterator() {
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {
     if (a > 0 && b > 0) {
-        #assert(ab > 0);
+        #assert(ab >= 0);
         if (c > 0 && d > 0) {
-            #assert(cd > 0);
+            #assert(cd >= 0);
             #assert(abcd >= 0);
         }
     }
     if (c > 0 && d > 0) {
-        #assert(cd > 0);
+        #assert(cd >= 0);
     }
 }
 
@@ -194,9 +207,12 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
         return {};
     }
 
+    #assert(img.size.x);
+    #assert(img.size.y);
+
     scaled := float2 {
-        pos.x * img.size.x - 0.5,
-        pos.y * img.size.y - 0.5,
+        pos.x * img.size.x - 0.5 + PixelEps,
+        pos.y * img.size.y - 0.5 + PixelEps,
     };
 
     if (edge_behavior == Edge_Clamp) {
@@ -258,6 +274,9 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
         return {};
     }
 
+    #assert(size.x);
+    #assert(size.y);
+
     scaled := float2 {
         pos.x * size.x - 0.5,
         pos.y * size.y - 0.5,
@@ -315,11 +334,14 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
 }
 
 func image_sample_nearest(img: Image*, pos: float2): Color {
-    if (img.pixels == 0 || img.size.x == 0 || img.size.y == 0) {
+    if (img.pixels == 0) {
         return {};
     }
 
-    p := int2 { int(round(pos.x * img.size.x - 0.5)), int(round(pos.y * img.size.y - 0.5)) };
+    #assert(img.size.x);
+    #assert(img.size.y);
+
+    p := int2 { int(round(pos.x * img.size.x - 0.5 + PixelEps)), int(round(pos.y * img.size.y - 0.5 + PixelEps)) };
     return image_fetch(img, p);
 }
 

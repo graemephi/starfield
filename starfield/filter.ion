@@ -2,6 +2,10 @@ func blur(img: Image*, radius: float) {
     blur_to(img, img, radius);
 }
 
+func blur_asym(img: Image*, radius: float2) {
+    blur_to_asym(img, img, radius);
+}
+
 func blur_fetch(row: Color*, len: int, i: int): Color {
     if (i < 0 || i >= len) {
         return {};
@@ -12,8 +16,7 @@ func blur_fetch(row: Color*, len: int, i: int): Color {
 
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
     #assert(radius > 0);
-    #assert(len - 2 - radius  > 0);
-    r := int(radius);
+    r := clampi(0, len - 2, int(radius));
     a := radius - r;
 
     r_rcp :=  1. / (2. * radius + 1.);
@@ -95,21 +98,45 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     temp := make_image({src.size.y, src.size.x});
     scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
 
-    for (y := 0; y < src.size.y; y++) {
-        row_src := src.pixels + y*src.size.x;
-        row_dest := dest.pixels + y*dest.size.x;
-        blur_row(scratch, row_src, src.size.x, radius);
-        blur_row(row_dest, scratch, src.size.x, radius);
-        blur_row(scratch, row_dest, src.size.x, radius);
-        blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
+    for (i := 0; i < 3; i++) {
+        for (y := 0; y < src.size.y; y++) {
+            row_src := src.pixels + y*src.size.x;
+            row_dest := dest.pixels + y*dest.size.x;
+            blur_row(scratch, row_src, src.size.x, radius);
+            blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
+        }
+
+        for (y := 0; y < temp.size.y; y++) {
+            row := temp.pixels + y*temp.size.x;
+            blur_row(scratch, row, temp.size.x, radius);
+            blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
+        }
     }
 
-    for (y := 0; y < temp.size.y; y++) {
-        row := temp.pixels + y*temp.size.x;
-        blur_row(scratch, row, temp.size.x, radius);
-        blur_row(row, scratch, temp.size.x, radius);
-        blur_row(scratch, row, temp.size.x, radius);
-        blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
+    free_image(&temp);
+    free(scratch);
+}
+
+func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
+    #assert(dest.size.x == src.size.x);
+    #assert(dest.size.y == src.size.y);
+
+    temp := make_image({src.size.y, src.size.x});
+    scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
+
+    for (i := 0; i < 3; i++) {
+        for (y := 0; y < src.size.y; y++) {
+            row_src := src.pixels + y*src.size.x;
+            row_dest := dest.pixels + y*dest.size.x;
+            blur_row(scratch, row_src, src.size.x, radius.x);
+            blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
+        }
+
+        for (y := 0; y < temp.size.y; y++) {
+            row := temp.pixels + y*temp.size.x;
+            blur_row(scratch, row, temp.size.x, radius.y);
+            blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
+        }
     }
 
     free_image(&temp);
@@ -150,7 +177,7 @@ func grayscale_blur_fetch(row: float*, len: int, i: int): float {
 
 func grayscale_blur_row(dest: float*, src: float*, len: int, radius: float) {
     #assert(radius > 0);
-    r := int(radius);
+    r := clampi(0, len - 2, int(radius));
     a := radius - r;
 
     r_rcp :=  1. / (2. * radius + 1.);
@@ -225,8 +252,8 @@ func diffract_row(dest: float*, src: float*, len: int, inner_radius: float, oute
     #assert(inner_radius > 0);
     #assert(outer_radius > inner_radius);
 
-    r := int(inner_radius);
-    r2 := int(outer_radius);
+    r := clampi(0, len - 2, int(inner_radius));
+    r2 := clampi(0, len - 3, int(outer_radius));
     a := inner_radius - r;
     a2 := outer_radius - r2;
 
@@ -322,6 +349,7 @@ func transform_image(src: Image*, rotate: float2, scale: float2): Image {
 
     inverse_rect := all_rect();
     inverse_rect.size = { 1. / scale.x, 1. / scale.y };
+    inverse_rect.size.x /= (float(src.size.x) / src.size.y);
     inverse_rect.rot = { rotate.x, -rotate.y };
 
     for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
@@ -331,11 +359,13 @@ func transform_image(src: Image*, rotate: float2, scale: float2): Image {
     return result;
 }
 
-func bounds_after_transform(transform: float2): float2 {
-    a := rotate({-0.5, -0.5}, transform);
-    b := rotate({ 0.5, -0.5}, transform);
-    c := rotate({-0.5,  0.5}, transform);
-    d := rotate({ 0.5,  0.5}, transform);
+func bounds_after_transform(transform: float2, aspect_ratio: float): float2 {
+    r := all_rect();
+    r.rot = transform;
+    a := rect_absolute(r, aspect_ratio, {0,0});
+    b := rect_absolute(r, aspect_ratio, {1,0});
+    c := rect_absolute(r, aspect_ratio, {0,1});
+    d := rect_absolute(r, aspect_ratio, {1,1});
 
     x_min := min4(a.x, b.x, c.x, d.x);
     x_max := max4(a.x, b.x, c.x, d.x);
@@ -399,6 +429,7 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
         }
     } else {
         scale := float2 { 1. / transformed_bounds.x, 1. / transformed_bounds.y };
+        scale.x /= (float(dest.size.x) / dest.size.y);
         offset := float2 { 0.5, 0.5 };
         for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
             pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), offset);
@@ -424,8 +455,9 @@ func diffract(img: Image*, args: DiffractionArguments) {
     alpha := args.alpha == 0 ? 1 : args.alpha;
     radius := args.radius == 0 ? 1 : args.radius;
     transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
+    aspect_ratio := float(img.size.x) / float(img.size.y);
 
-    bounds := bounds_after_transform(transform);
+    bounds := bounds_after_transform(transform, aspect_ratio);
     m := magnitude2(transform);
     working_size := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
@@ -443,7 +475,7 @@ func diffract(img: Image*, args: DiffractionArguments) {
 
     if (args.type == Diffraction_CrossOrthoRed) {
         ortho := rotate(args.transform, mul2s({ InvSqrt2, InvSqrt2 }, 0.7));
-        ortho_bounds := bounds_after_transform(ortho);
+        ortho_bounds := bounds_after_transform(ortho, aspect_ratio);
         ortho_working_size := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
         #assert(maxi(ortho_working_size.x, ortho_working_size.y) < scratch_buf_size);
         #assert((ortho_working_size.x * ortho_working_size.y) < transpose_scratch_size);

@@ -49,6 +49,8 @@ func starfield_len(starfield: Starfield*): int64 {
 }
 
 func push_star(starfield: Starfield*, star: Star*) {
+    // Dumb hack for non square images.
+    star.rect.pos.x = star.rect.pos.x * ImageSize.x / ImageSize.y;
     buf_push((:void**)&starfield.stars, (:char*)star, sizeof(Star));
 }
 
@@ -232,8 +234,8 @@ func create_starfield(starfield: char const*): Starfield {
     tiles := 25;
     w := 1. / tiles;
     background_star_size := 0.005;
-    xy := float2 { w / 2., w / 2. };
-    for (i := 0; i < tiles; i++) {
+    xy := float2 { (w * ImageSize.x / ImageSize.y) / 2., w / 2. };
+    for (i := 0; i < tiles * ImageSize.x / ImageSize.y; i++) {
         for (j := 0; j < tiles; j++) {
             count := max(1., tex_lookup(&star_count_noise, xy).r);
             for (k := 0; k < count; k++) {
@@ -358,9 +360,9 @@ func draw_galaxy(tex: Tex*, arms: int) {
         matter := color_mul(bl, arm_color);
         matter = color_mul1_rgb(matter, perlin_octaves(it.pos, 32) * 0.5 + 1);
         matter = color_add(inter_color, matter);
-        matter.a = bloom_amount;
+        matter.a = clamp01(max(matter.r, max(matter.g, matter.b))) * bloom_amount;
 
-        *it.pixel = color_blend(*it.pixel, matter);
+        *it.pixel = color_blend(*it.pixel, color_premultiply(matter));
     }
 
     free_starfield(s);
@@ -529,7 +531,7 @@ func random_warp(p: float2, freq: float, scale: float): float2 {
 func draw_nebula(img: Image*, density: Tex*) {
     nebula := make_image(div2is(img.size, 2));
 
-    c := random_random_star_color({ 0, 4 });
+    c := random_random_star_color({});
     //  c := Color {1,1,1,1};
     push_random_state((:uint32)more_entropy);
     more_entropy = random();
@@ -544,11 +546,11 @@ func draw_nebula(img: Image*, density: Tex*) {
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
-        p := perlin_octaves(it.pos, 5) * .5 + .5;
+        p := perlin_octaves(it.ar_pos, 5) * .5 + .5;
         warp_scale := d * turbulence*(1 - p);
-        w1 := worley_octaves(random_warp(add2s(it.pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
-        w2 := 2*worley_octaves(random_warp(add2s(it.pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
-        w3 := 4*worleyf2_octaves(random_warp(add2s(it.pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
+        w1 := worley_octaves(random_warp(add2s(it.ar_pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
+        w2 := 2*worley_octaves(random_warp(add2s(it.ar_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
+        w3 := 4*worleyf2_octaves(random_warp(add2s(it.ar_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
         w := w1*w1*w2*w3;
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
     }

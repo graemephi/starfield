@@ -1,6 +1,8 @@
 // TODO
 //
 // https://images.nasa.gov/details-PIA08653.html
+//
+// Make diffraction have zero past edge samplers
 
 import libc { ... }
 import sdl { ... }
@@ -19,7 +21,7 @@ func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
 @foreign
 var _MM_FLUSH_ZERO_ON: uint32;
 
-var ImageSize: int2 const = { 512, 512 };
+var ImageSize: int2 const = { 1500, 500 };
 
 func xrealloc(mem: void*, size: usize): void* {
     result := realloc(mem, size);
@@ -164,101 +166,6 @@ func hash_int2_u32(p: int2): uint32 {
     return uint32((h >> 32) ^ h);
 }
 
-struct HashTable {
-    values, keys: usize*;
-}
-
-struct HashTableResult {
-    value: usize;
-    valid: bool;
-}
-
-func hashtable_set(table: HashTable*, key: usize, value: usize) {
-    buf_fit((:void**)&table.keys, sizeof(usize));
-    buf_fit((:void**)&table.values, sizeof(usize));
-
-    slots := buf_cap(table.keys) / sizeof(usize);
-    key_hash := hash(&key, sizeof(key));
-    idx := key_hash % slots;
-
-    while (false == (table.keys[idx] == (:usize)key && table.values[idx] == (:usize)value)) {
-        idx++;
-        if (idx == slots) {
-            idx = 0;
-        }
-        #assert(idx * sizeof(usize) < buf_cap(table.keys));
-    }
-
-    table.keys[idx] = key;
-    table.values[idx] = value;
-    buf_header(table.keys).len++;
-    buf_header(table.values).len++;
-}
-
-func hashtable_get(table: HashTable*, key: usize): HashTableResult {
-    #assert(table);
-
-    if (table.keys == 0) {
-        return {};
-    }
-
-    slots := buf_cap(table.keys) / sizeof(usize);
-    key_hash := hash(&key, sizeof(key));
-    idx: ssize = key_hash % slots;
-
-    while (table.keys[idx] && table.keys[idx] != key) {
-        idx++;
-
-        if (idx == slots) {
-            idx = 0;
-        }
-    }
-
-    result := HashTableResult {
-        valid = table.keys[idx] == key
-    };
-
-    if (result.valid) {
-        result.value = table.values[idx];
-    }
-
-    return result;
-}
-
-struct Map {
-    table: HashTable;
-    values: uint8*;
-    elem_len: ssize;
-}
-
-func map_get_idx(map: Map*, key_hash: usize): ssize {
-    idx := hashtable_get(&map.table, key_hash);
-    return idx.valid ? idx.value : -1;
-}
-
-func map_get(map: Map*, key_hash: usize): void* {
-    idx := hashtable_get(&map.table, key_hash);
-    value := idx.valid ? map.values + (idx.value * map.elem_len) : 0;
-    return value;
-}
-
-func map_set(map: Map*, key_hash: usize, value: void*, value_len: ssize) {
-    if (map.elem_len != value_len) {
-        #assert(map.elem_len == 0);
-        map.elem_len = value_len;
-    }
-
-    old_value := map_get(map, key_hash);
-
-    if (old_value == 0) {
-        value_ptr := buf_push((:void**)&map.values, value, value_len);
-        table_value := (:usize)((:uint8*)value_ptr - map.values);
-        hashtable_set(&map.table, key_hash, table_value);
-    } else {
-        memcpy(old_value, value, value_len);
-    }
-}
-
 struct Color {
     r, g, b, a: float;
 }
@@ -299,7 +206,15 @@ func free_tex(tex: Tex*) {
     tex.size = { 0, 0 };
 }
 
+func make_tex_from_image(img: Image*): Tex {
+    tex := make_tex(img.size);
+    image_copy_to(&{tex.pixels, tex.size}, img);
+    // Note: no mip mapping or premultiplied alpha.
+    return tex;
+}
+
 func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float2 {
+    // Todo: don't take into accoutn rotation of the target rect.
     step_x := fabs(src_size.x / (dest_size.x * target_size.x));
     step_y := fabs(src_size.y / (dest_size.y * target_size.y));
     return { max(0, log2(step_x)), max(0, log2(step_y)) };
@@ -308,7 +223,7 @@ func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): fl
 // Axis-aligned anisotropic filtering
 func generate_lods(tex: Tex*) {
     #assert(tex.size.x == tex.size.y);
-    tex.lod_levels = maxi(1, log2i(tex.size.x));
+    tex.lod_levels = maxi(1, log2i(tex.size.x) + 1);
 
     blurry := image_copy(&{tex.pixels, tex.size});
 
@@ -327,12 +242,13 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                #assert(!color_nan(*it.pixel));
             }
         }
 
         for (j := i + 1; j < tex.lod_levels; j++) {
-            prev_lod := tex_get_lod(tex, { j - 1, i  });
+            prev_lod := tex_get_lod(tex, { j - 1, i });
             blurry_subrect := Image { blurry.pixels, prev_lod.size };
 
             blur_horizontal(&blurry_subrect, &prev_lod, 0.5);
@@ -340,7 +256,8 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                #assert(!color_nan(*it.pixel));
             }
         }
 
@@ -353,7 +270,8 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_nearest(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                #assert(!color_nan(*it.pixel));
             }
         }
     }
@@ -388,10 +306,15 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
     // Each mip is a square mip, followed by decreasing mips in the x axis, then
     // decreasing mips in the y axis
 
-    #assert(lod.x >= 0);
-    #assert(lod.y >= 0);
+    if (lod.x < 0) {
+        lod.x += tex.lod_levels;
+    }
 
-    if (lod.x >= tex.lod_levels || lod.y >= tex.lod_levels) {
+    if (lod.y < 0) {
+        lod.y += tex.lod_levels;
+    }
+
+    if (lod.x < 0 || lod.x >= tex.lod_levels || lod.y < 0 || lod.y >= tex.lod_levels) {
         return {};
     }
 
@@ -428,14 +351,17 @@ func tex_lookup(tex: Tex*, pos: float2): Color {
 }
 
 func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
+    // Todo: No point in bilinear sampling when an scale appropriate lod is
+    // being used
+
     result := Color {};
     if (lod.x == lod.y) {
         lodi := float2_to_int2(lod);
-        lodf := float2 { lod.x - lodi.x, lod.x - lodi.x };
+        lodf := (float2{ lod.x - lodi.x, lod.x - lodi.x });
         a_lod := tex_get_lod(tex, lodi);
-        b_lod := tex_get_lod(tex, add2is(lodi, 1));
         a := image_sample_linear(&a_lod, pos);
-        if (lodf.x > 0.0001) {
+        if (lodf.x > 1e-5) {
+            b_lod := tex_get_lod(tex, add2is(lodi, 1));
             b := image_sample_linear(&b_lod, pos);
             return  color_lerp(a, b, lodf.x);
         }
@@ -444,7 +370,7 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
     }
 
     lodi := float2_to_int2(lod);
-    lodf := float2 { lod.x - lodi.x, lod.y - lodi.y };
+    lodf := (float2{ lod.x - lodi.x, lod.y - lodi.y });
     a_lod := tex_get_lod(tex, lodi);
     b_lod := tex_get_lod(tex, add2i(lodi, { 1, 0 }));
     c_lod := tex_get_lod(tex, add2i(lodi, { 0, 1 }));
@@ -524,11 +450,8 @@ func inside_normal_rect(pos: float2): bool {
         && pos.y >= 0 && pos.y < 1;
 }
 
-func inside_rect(rect: Rect, pos: float2): bool {
-    return inside_normal_rect(rect_relative(rect, pos));
-}
-
-func rect_relative(rect: Rect, abs_pos: float2): float2 {
+func rect_relative(rect: Rect, aspect_ratio: float, abs_pos: float2): float2 {
+    abs_pos.x *= aspect_ratio;
     shift_pos := sub2(abs_pos, rect.pos);
     rot_pos := rotate(shift_pos, rect.rot);
     scaled_pos := div2(rot_pos, rect.size);
@@ -536,11 +459,12 @@ func rect_relative(rect: Rect, abs_pos: float2): float2 {
     return result;
 }
 
-func rect_absolute(rect: Rect, rel_pos: float2): float2 {
+func rect_absolute(rect: Rect, aspect_ratio: float, rel_pos: float2): float2 {
     centered_pos := sub2(rel_pos, { 0.5, 0.5 });
     scaled_pos := mul2(centered_pos, rect.size);
     rot_pos := rotate(scaled_pos, { rect.rot.x, -rect.rot.y });
     shift_pos := add2(rot_pos, rect.pos);
+    shift_pos.x /= aspect_ratio;
     return shift_pos;
 }
 
@@ -593,6 +517,33 @@ func color_mul(a: Color, b: Color): Color {
     };
 }
 
+func color_div(a: Color, b: Color): Color {
+    return Color {
+        safe_div(a.r, b.r),
+        safe_div(a.g, b.g),
+        safe_div(a.b, b.b),
+        safe_div(a.a, b.a)
+    };
+}
+
+func color_exp(a: Color): Color {
+    return Color {
+        exp(a.r),
+        exp(a.g),
+        exp(a.b),
+        exp(a.a)
+    };
+}
+
+func color_add1(a: Color, b: float): Color {
+    return Color {
+        a.r + b,
+        a.g + b,
+        a.b + b,
+        a.a + b
+    };
+}
+
 func color_mul1(a: Color, b: float): Color {
     return Color {
         a.r * b,
@@ -618,6 +569,10 @@ func color_blend(dest: Color, src: Color): Color {
         src.b + (dest.b * (1. - src.a)),
         src.a + (dest.a * (1. - src.a))
     };
+}
+
+func color_nan(c: Color): bool {
+    return isnan(c.r) || isnan(c.b) || isnan(c.g) || isnan(c.a);
 }
 
 func color_premultiply(c: Color): Color {
@@ -790,6 +745,51 @@ func worleyf2_octaves(p: float2, grid_size: float, poisson_alpha: float): float 
     + worleyf2(mul2s(p, 4.2), grid_size, poisson_alpha) * 0.0625;
 }
 
+func luminance(c: Color): float {
+    // https://en.wikipedia.org/w/index.php?title=Relative_luminance&oldid=817127289
+    return 0.2126*c.r + 0.7152*c.g + 0.0722*c.b;
+}
+
+func uncharted2duiker(x: float): float {
+               // Original values
+    a := 0.1;  // 0.15
+    b := 0.15; // 0.5
+    c := 0.1;
+    d := 0.2;
+    e := 0.02;
+    f := 0.3;
+    return ((x*(a*x+c*b)+d*e)/(x*(a*x+b)+d*f))-e/f;
+}
+
+func tonemap(img: Image*, color_adjustment: Color, mix: float) {
+    b := image_copy(img);
+
+    Lmax := 0.;
+    for (it := pixel_iter_begin(&b, {}); pixel_iter_next(&it)) {
+        *it.pixel = (*it.pixel);
+        lum := luminance(*it.pixel);
+        if (lum > srgb(1./255)) {
+            it.pixel.a = log(1e-5 + luminance(*it.pixel));
+        }
+        Lmax = max(Lmax, lum);
+    }
+    blur_asym(&b, mul2s(int2_to_float2(ImageSize), 0.5));
+
+    adjust := color_adjustment;
+    adjust.a = 1. / luminance(color_adjustment);
+    adjust = color_premultiply(adjust);
+
+    // note: no normalisation, so sensitive to image size
+    Lw := exp(image_sample_linear(&b, {.5, .5}).a);
+    a := remap(0, 10000, 6, 1, clamp(0, 10000, Lmax));
+    for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
+        *it.pixel = (*it.pixel);
+        it.pixel.r = a * (adjust.r * uncharted2duiker(it.pixel.r) / uncharted2duiker(Lw));
+        it.pixel.g = a * (adjust.g * uncharted2duiker(it.pixel.g) / uncharted2duiker(Lw));
+        it.pixel.b = a * (adjust.b * uncharted2duiker(it.pixel.b) / uncharted2duiker(Lw));
+    }
+}
+
 func main(argc: int, argv: char**): int {
     if (true) {
         test_iterator();
@@ -809,17 +809,35 @@ func main(argc: int, argv: char**): int {
     renderer := SDL_CreateSoftwareRenderer(surface);
     #assert(surface.format.format == SDL_PIXELFORMAT_RGB888);
     #assert(surface.format.BitsPerPixel == 32);
+    #assert(surface.w == ImageSize.x);
+    #assert(surface.h == ImageSize.y);
 
     starfield_text :="""
 ✺   　　 　　 ·   ⊹
  *  ⋆ 　　　  ✧  *
   　　　　　　　.  　
  +  *　  　* 　　. 　 ⋆
-  ✫ 　　  +
+    　　  +   ✫
 """;
 
-    random_state = (:uint32)hash(starfield_text, sizeof(starfield_text));
-    more_entropy = hash(starfield_text + sizeof(starfield_text) / 2, sizeof(starfield_text) / 2);
+    // Ion!!!!
+    text_len := strlen(starfield_text);
+
+    random_state = (:uint32)hash(starfield_text, text_len);
+    more_entropy = hash(starfield_text + text_len / 2, text_len / 2);
+
+    noise := make_image(ImageSize);
+    noise_level := 1 - square(random01());
+    for (it := pixel_iter_begin(&noise, {}); pixel_iter_next(&it)) {
+        c := Color {
+            square(random_normal()) * (noise_level / 4096.),
+            square(random_normal()) * (noise_level / 4096.),
+            square(random_normal()) * (noise_level / 4096.),
+            1
+        };
+        *it.pixel = c;
+    }
+    blur(&noise, 0.1);
 
     diffraction_rotation = random_unit_vector2();
 
@@ -831,9 +849,9 @@ func main(argc: int, argv: char**): int {
     n_t := 0;
     t_reset := time_now();
 
-    image := make_image({ surface.w, surface.h });
-    blurred := make_image({ surface.w, surface.h });
-    blurred2 := make_image({ surface.w, surface.h });
+    image := make_image(ImageSize);
+    blurred := make_image(ImageSize);
+    blurred2 := make_image(ImageSize);
     while (app_update()) {
         if (app.error) {
             print_and_clear_error();
@@ -850,7 +868,7 @@ func main(argc: int, argv: char**): int {
             diffract(&image, {
                 alpha = 0.1,
                 radius = 4,
-                transform = diffraction_rotation,
+                transform = {}, //diffraction_rotation,
                 type = randomn(1, DiffractionTypeCount)
             });
 
@@ -866,6 +884,12 @@ func main(argc: int, argv: char**): int {
                 xbp2 := color_lerp(bp2, mbp2, .9);
                 *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
             }
+
+            // tonemap(&image, {
+            //     r = clamp_low(.1, 2.3 + random_normal()*0.5),
+            //     g = clamp_low(.1, 2 + random_normal()*0.5),
+            //     b = clamp_low(.1, 1.9 + random_normal()*0.5),
+            // }, square(random01()));
 
             image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
 
@@ -887,6 +911,15 @@ func main(argc: int, argv: char**): int {
                 starfield = create_starfield(starfield_text);
                 t_reset = t0;
             }
+        }
+
+        if (app.mouse.right_button.pressed) {
+            tonemap(&image, {
+                r = clamp_low(.1, 1 + random_normal()*0.1),
+                g = clamp_low(.1, 1 + random_normal()*0.1),
+                b = clamp_low(.1, 1 + random_normal()*0.1),
+            }, 1 - square(random01()));
+            image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
         }
 
         SDL_UpdateWindowSurface(app.window.sdl);

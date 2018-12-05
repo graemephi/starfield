@@ -290,7 +290,7 @@ func mod(x: float, m: float): float {
 func wrap(x: float, m: float): float {
     y := mod(x, m * 2);
     if (y > m) {
-        y -= (y - m);
+        y = m - (y - m);
     }
     return y;
 }
@@ -298,6 +298,10 @@ func wrap(x: float, m: float): float {
 func smoothstep(x: float): float {
     x = clamp01(x);
     return x*x*(3 - 2*x);
+}
+
+func smoothstep2(v: float2): float2 {
+    return { smoothstep(v.x), smoothstep(v.y) };
 }
 
 func smoothstep_range(a: float, b: float, x: float): float {
