@@ -58,7 +58,7 @@ struct PixelIter {
     dy: float2;
 
     pos: float2;
-    ar_pos: float2;
+    abs_pos: float2;
     pixel: Color*;
 }
 
@@ -106,7 +106,7 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, aspect_ratio, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
-    iter.ar_pos = { iter.pos.x * aspect_ratio, iter.pos.y };
+    iter.abs_pos = rect_relative(rect, aspect_ratio, iter.pos);
     iter.line_start = iter.pos;
     iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
@@ -126,7 +126,7 @@ func pixel_iter_next(it: PixelIter*): bool {
 
             if (inside_normal_rect(it.pos)) {
                 it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
-                it.ar_pos = { it.pos.x * it.aspect_ratio, it.pos.y };
+                it.abs_pos = rect_relative(it.rect, it.aspect_ratio, it.pos);
                 return true;
             }
         }

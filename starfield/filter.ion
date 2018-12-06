@@ -401,7 +401,6 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
     if (is_identity_transform(transform) == false) {
         m := magnitude2(transform);
         rotation = float2 { transform.x / m,  transform.y / m };
-
         transformed_img := transform_image(dest, rotation, transformed_bounds);
         img = &transformed_img;
     }
@@ -432,7 +431,7 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
         scale.x /= (float(dest.size.x) / dest.size.y);
         offset := float2 { 0.5, 0.5 };
         for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
-            pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), offset);
+            pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), { 0.5, 0.5 });
 
             if (inside_normal_rect(pos)) {
                 it.pixel.r += alpha.r*sample_linear(red, img.size, pos, Edge_Wrap);
@@ -440,7 +439,6 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
                 it.pixel.b += alpha.b*sample_linear(blue, img.size, pos, Edge_Wrap);
             }
         }
-
         free_image(img);
     }
 

@@ -49,8 +49,6 @@ func starfield_len(starfield: Starfield*): int64 {
 }
 
 func push_star(starfield: Starfield*, star: Star*) {
-    // Dumb hack for non square images.
-    star.rect.pos.x = star.rect.pos.x * ImageSize.x / ImageSize.y;
     buf_push((:void**)&starfield.stars, (:char*)star, sizeof(Star));
 }
 
@@ -546,11 +544,11 @@ func draw_nebula(img: Image*, density: Tex*) {
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
-        p := perlin_octaves(it.ar_pos, 5) * .5 + .5;
+        p := perlin_octaves(it.abs_pos, 5) * .5 + .5;
         warp_scale := d * turbulence*(1 - p);
-        w1 := worley_octaves(random_warp(add2s(it.ar_pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
-        w2 := 2*worley_octaves(random_warp(add2s(it.ar_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
-        w3 := 4*worleyf2_octaves(random_warp(add2s(it.ar_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
+        w1 := worley_octaves(random_warp(add2s(it.abs_pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
+        w2 := 2*worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
+        w3 := 4*worleyf2_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
         w := w1*w1*w2*w3;
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
     }

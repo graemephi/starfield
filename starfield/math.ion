@@ -209,14 +209,20 @@ func random(): uint32 {
     return random_state;
 }
 
+func set_random_state(state: uint32): uint32 {
+    old := random_state;
+    random_state = state;
+    return old;
+}
+
 var random_stack: uint32* = 0;
-func push_random_state(seed: uint32) {
+func push_random_state(state: uint32) {
     buf_u32_push(&random_stack, random_state);
-    random_state = seed;
+    set_random_state(state);
 }
 
 func pop_random_state() {
-    random_state = buf_u32_pop(random_stack);
+    set_random_state(buf_u32_pop(random_stack));
 }
 
 const int_23_mask = 0b00000000_011111111111111111111111;

@@ -1,1 +1,4 @@
 build/*
+out_*.c
+.vs/*
+*.psess
