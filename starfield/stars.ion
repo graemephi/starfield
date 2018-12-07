@@ -226,7 +226,7 @@ func create_starfield(starfield: char const*): Starfield {
     density := square(random_normal() + 2);
     for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
-        it.pixel.r = (:float)random_poisson(clamp_low(0, density + random_normal()));
+        it.pixel.r = (:float)random_poisson(exp(-clamp_low(0, density + random_normal())));
     }
 
     tiles := 25;
@@ -281,6 +281,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
     tilt := random01();
 
     s := &Starfield {};
+    buf_fit((:void**)&s.stars, sizeof(Star)*30000);
     for (i := 0; i < 30000; i++) {
         w := arm_width;
         x := random_normal() / 8;
@@ -531,24 +532,24 @@ func draw_nebula(img: Image*, density: Tex*) {
 
     c := random_random_star_color({});
     //  c := Color {1,1,1,1};
-    push_random_state((:uint32)more_entropy);
-    more_entropy = random();
-    pop_random_state();
+    for (s := random_state; with_random_state(s, more_entropy)) {
+        more_entropy = random();
+    }
 
     turbulence  := randomr(0., 0.2);
     turbulence2 := randomr(turbulence, 0.4);
     detail := random_normal()*2;
     negative_space := (random() & 1) ? 1. : -1.;
-    sparsity := randomr(0.3, 0.9);
+    sparsity := randomr(0.4, 1);
     fade := random01();
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
         p := perlin_octaves(it.abs_pos, 5) * .5 + .5;
         warp_scale := d * turbulence*(1 - p);
-        w1 := worley_octaves(random_warp(add2s(it.abs_pos, 1.6939), 4, warp_scale), 5+p*0.2, 2);
-        w2 := 2*worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2, 2);
-        w3 := 4*worleyf2_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2, 2);
+        w1 := worley_octaves(random_warp(add2s(it.abs_pos, 1.6939), 4, warp_scale), 5+p*0.2).x;
+        w2 := 2*worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).x;
+        w3 := 4*worley_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2).y;
         w := w1*w1*w2*w3;
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
     }

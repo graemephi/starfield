@@ -179,6 +179,11 @@ func distance2(a: float2, b: float2): float {
     return sqrt(d);
 }
 
+func magnitude_squared2(v: float2): float {
+    vv := dot2(v, v);
+    return vv;
+}
+
 func magnitude2(v: float2): float {
     vv := dot2(v, v);
     return vv ? sqrt(vv) : 0;
@@ -194,6 +199,14 @@ func mod2s(v: float2, m: float): float2 {
 
 func floor2(v: float2): float2 {
     return { float(int(v.x)), float(int(v.y)) };
+}
+
+func fract(x: float): float {
+    return int(x) - x;
+}
+
+func fract2(v: float2): float2 {
+    return sub2(floor2(v), v);
 }
 
 func normalise2(v: float2): float2 {
@@ -215,14 +228,14 @@ func set_random_state(state: uint32): uint32 {
     return old;
 }
 
-var random_stack: uint32* = 0;
-func push_random_state(state: uint32) {
-    buf_u32_push(&random_stack, random_state);
-    set_random_state(state);
-}
+func with_random_state(old_state: usize, new_state: usize): bool {
+    if (old_state == random_state) {
+        random_state = uint32(new_state);
+        return true;
+    }
 
-func pop_random_state() {
-    set_random_state(buf_u32_pop(random_stack));
+    random_state = uint32(old_state);
+    return false;
 }
 
 const int_23_mask = 0b00000000_011111111111111111111111;
@@ -245,9 +258,8 @@ func randomr(lo: float, hi: float): float {
     return random01() * (hi - lo) + lo;
 }
 
-func random_poisson(alpha: float): int {
+func random_poisson(L: float): int {
     result := -1;
-    L := exp(-alpha);
     p := 1.;
     do {
         p *= random01();
