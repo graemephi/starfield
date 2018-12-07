@@ -615,6 +615,7 @@ func time_now(): double {
 
 var perlin_gradients: float2* = 0;
 const PerlinGradientCount = 256;
+#static_assert(PerlinGradientCount & (PerlinGradientCount - 1) == 0)
 func perlin_gradient(p: int2): float2 {
     result := float2 {};
 
@@ -677,27 +678,57 @@ func perlin_octaves(p: float2, grid_size: float): float {
     + perlin(mul2s(p, 4.2), grid_size) * 0.0625;
 }
 
+const WorleyMaxPointsPerSquare = 10;
+
+struct WorleySquare {
+    count: int;
+    points: float2[WorleyMaxPointsPerSquare];
+}
+
+var worley_squares: WorleySquare* = 0;
+const WorleySquareCount = 256;
+#static_assert(WorleySquareCount & (WorleySquareCount - 1) == 0)
+func worley_square(p: float2): WorleySquare* {
+    result: WorleySquare* = 0;
+
+    if (worley_squares == 0) {
+        alpha := exp(-2.01);
+
+        for (i := 0; i < WorleySquareCount; i++) {
+            w := WorleySquare {};
+            w.count = clampi(0, WorleyMaxPointsPerSquare, random_poisson(alpha));
+            for (j := 0; j < w.count; j++) {
+                w.points[j] = { random01(), random01() };
+            }
+            buf_push((:void**)&worley_squares, &w, sizeof(w));
+        }
+    }
+
+    for (s := random_state; with_random_state(s, (:uint32)more_entropy ^ hash_int2_u32(*(:int2*)&p)))  {
+        result = worley_squares + (random() & (WorleySquareCount - 1));
+    }
+
+    return result;
+}
+
 func worley(p01: float2, grid_size: float): float2 {
     p := mul2s(p01, grid_size);
     pi := floor2(p);
     pf := sub2(p, pi);
-    alpha := 0.13533528323; // exp(2)
 
     f1 := 2*Sqrt2;
     f2 := f1;
 
     // 1.25x speed up to do the current square first.
-    for (s := random_state; with_random_state(s, more_entropy + hash_int2_u32(*(:int2*)&pi))) {
-        k := random_poisson(alpha);
+    w0 := worley_square(pi);
 
-        for (m := 0; m < k; m++) {
-            d := distance_squared2(p, add2(pi, { random01(), random01() }));
-            if (d < f1) {
-                f2 = f1;
-                f1 = d;
-            } else if (d < f2) {
-                f2 = d;
-            }
+    for (m := 0; m < w0.count; m++) {
+        d := distance_squared2(pf, w0.points[m]);
+        if (d < f1) {
+            f2 = f1;
+            f1 = d;
+        } else if (d < f2) {
+            f2 = d;
         }
     }
 
@@ -707,17 +738,15 @@ func worley(p01: float2, grid_size: float): float2 {
                 face_dist := magnitude_squared2({ i*(0.5*i + 0.5 - pf.x), j*(0.5*j + 0.5 - pf.y) });
                 if (face_dist < f2) {
                     p_ij := add2(pi, { i, j });
-                    for (s := random_state; with_random_state(s, more_entropy + hash_int2_u32(*(:int2*)&p_ij))) {
-                        k := random_poisson(alpha);
+                    w := worley_square(p_ij);
 
-                        for (m := 0; m < k; m++) {
-                            d := distance_squared2(p, add2(p_ij, { random01(), random01() }));
-                            if (d < f1) {
-                                f2 = f1;
-                                f1 = d;
-                            } else if (d < f2) {
-                                f2 = d;
-                            }
+                    for (m := 0; m < w.count; m++) {
+                        d := distance_squared2(p, add2(p_ij, w.points[m]));
+                        if (d < f1) {
+                            f2 = f1;
+                            f1 = d;
+                        } else if (d < f2) {
+                            f2 = d;
                         }
                     }
                 }

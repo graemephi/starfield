@@ -261,10 +261,10 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
 
-    assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
-    assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
-    assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
-    assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
+    // assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
+    // assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
+    // assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
+    // assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
 
     return ABCD;
 }
@@ -328,7 +328,7 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
     CD := lerp(C, D, vf.x);
     ABCD := lerp(AB, CD, vf.y);
 
-    assert_correct_signs(A, B, C, D, AB, CD, ABCD);
+    // assert_correct_signs(A, B, C, D, AB, CD, ABCD);
 
     return ABCD;
 }

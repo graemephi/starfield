@@ -531,7 +531,7 @@ func draw_nebula(img: Image*, density: Tex*) {
     nebula := make_image(div2is(img.size, 2));
 
     c := random_random_star_color({});
-    //  c := Color {1,1,1,1};
+
     for (s := random_state; with_random_state(s, more_entropy)) {
         more_entropy = random();
     }
@@ -548,7 +548,7 @@ func draw_nebula(img: Image*, density: Tex*) {
         p := perlin_octaves(it.abs_pos, 5) * .5 + .5;
         warp_scale := d * turbulence*(1 - p);
         w1 := worley_octaves(random_warp(add2s(it.abs_pos, 1.6939), 4, warp_scale), 5+p*0.2).x;
-        w2 := 2*worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).x;
+        w2 := worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).y;
         w3 := 4*worley_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2).y;
         w := w1*w1*w2*w3;
         *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
