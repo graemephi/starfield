@@ -8,39 +8,10 @@ func blur_asym(img: Image*, radius: float2) {
 
 func blur_fetch(row: Color*, len: int, i: int): Color {
     if (i < 0 || i >= len) {
-        return {};
+        return { xmm = zero4() };
     }
 
-    return row[i];
-}
-
-func blur_row_slow(dest: Color*, src: Color*, len: int, radius: float) {
-    #assert(radius > 0);
-    r := clampi(0, len - 2, int(radius));
-    a := radius - r;
-
-    r_rcp :=  1. / (2. * radius + 1.);
-    c_acc := color_mul1(blur_fetch(src, len, r + 1), a);
-
-    for (i := 0; i <= r; i++) {
-        c_acc = color_add(c_acc, blur_fetch(src, len, i));
-    }
-
-    for (i := 0; i < r + 1; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
-    }
-    for (i := r + 1; i < len - r - 2; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(src[i+r+1], src[i+r+2], a));
-        c_acc = color_sub(c_acc, color_lerp(src[i-r], src[i-r-1], a));
-    }
-    for (i := len - r - 2; i < len; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
-    }
+    return { xmm = load4((:float*)(row + i)) };
 }
 
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
@@ -263,7 +234,6 @@ func diffract_plane(plane: float*, scratch: float*, transpose_scratch: float*, s
 
 func planarise(img: Image*): float* {
     pixel_count := img.size.x*img.size.y;
-    #assert(pixel_count % 4 == 0);
     pixels: float* = xcalloc(pixel_count, sizeof(float)*3);
 
     for (i := 0; i < pixel_count; i++) {

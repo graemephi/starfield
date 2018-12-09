@@ -65,6 +65,9 @@ func blendv4(a: float4, b: float4, c: m128): float4;
 @foreign("_mm_broadcastss_ps")
 func broadcastss4(a: float4): float4;
 
+@foreign("_mm_setzero_ps")
+func zero4(): float4;
+
 //
 // 32 bit ints
 
