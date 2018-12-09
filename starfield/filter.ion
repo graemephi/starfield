@@ -127,20 +127,23 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     temp := make_image({src.size.y, src.size.x});
     scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
 
-    for (i := 0; i < 3; i++) {
-        for (y := 0; y < src.size.y; y++) {
-            row_src := src.pixels + y*src.size.x;
-            row_dest := dest.pixels + y*dest.size.x;
-            blur_row(scratch, row_src, src.size.x, radius);
-            blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
-        }
-
-        for (y := 0; y < temp.size.y; y++) {
-            row := temp.pixels + y*temp.size.x;
-            blur_row(scratch, row, temp.size.x, radius);
-            blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
-        }
+    for (y := 0; y < src.size.y; y++) {
+        row_src := src.pixels + y*src.size.x;
+        row_dest := dest.pixels + y*dest.size.x;
+        blur_row(scratch, row_src, src.size.x, radius);
+        blur_row(row_dest, scratch, src.size.x, radius);
+        blur_row(scratch, row_dest, src.size.x, radius);
+        blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
     }
+
+    for (y := 0; y < temp.size.y; y++) {
+        row := temp.pixels + y*temp.size.x;
+        blur_row(scratch, row, temp.size.x, radius);
+        blur_row(row, scratch, temp.size.x, radius);
+        blur_row(scratch, row, temp.size.x, radius);
+        blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
+    }
+
 
     free_image(&temp);
     free(scratch);
@@ -169,103 +172,6 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     }
 
     free_image(&temp);
-    free(scratch);
-}
-
-// Used internally by the diffraction filter.
-struct GrayscaleImage {
-    pixels: float*;
-    size: int2;
-}
-
-func make_grayscale_image(size: int2): GrayscaleImage {
-    return GrayscaleImage {
-        pixels = xcalloc(size.x*size.y, sizeof(float)),
-        size = size
-    };
-}
-
-func free_grayscale_image(img: GrayscaleImage*) {
-    #assert(img.pixels);
-    free(img.pixels);
-    img.pixels = 0;
-    img.size = { 0, 0 };
-}
-
-func grayscale_blur(img: GrayscaleImage*, radius: float) {
-    grayscale_blur_to(img, img, radius);
-}
-
-func grayscale_blur_fetch(row: float*, len: int, i: int): float {
-    if (i < 0 || i >= len) {
-        return {};
-    }
-
-    return row[i];
-}
-
-func grayscale_blur_row(dest: float*, src: float*, len: int, radius: float) {
-    #assert(radius > 0);
-    r := clampi(0, len - 2, int(radius));
-    a := radius - r;
-
-    r_rcp :=  1. / (2. * radius + 1.);
-    c_acc := grayscale_blur_fetch(src, len, r + 1) * a;
-
-    for (i := 0; i <= r; i++) {
-        c_acc += grayscale_blur_fetch(src, len, i);
-    }
-
-    for (i := 0; i < r + 1; i++) {
-        dest[i] = c_acc * r_rcp;
-        c_acc += lerp(grayscale_blur_fetch(src, len, i+r+1), grayscale_blur_fetch(src, len, i+r+2), a);
-        c_acc -= lerp(grayscale_blur_fetch(src, len, i-r), grayscale_blur_fetch(src, len, i-r-1), a);
-    }
-    for (i := r + 1; i < len - r - 2; i++) {
-        dest[i] = c_acc * r_rcp;
-        c_acc += lerp(src[i+r+1], src[i+r+2], a);
-        c_acc -= lerp(src[i-r], src[i-r-1], a);
-    }
-    for (i := len - r - 2; i < len; i++) {
-        dest[i] = c_acc * r_rcp;
-        c_acc += lerp(grayscale_blur_fetch(src, len, i+r+1), grayscale_blur_fetch(src, len, i+r+2), a);
-        c_acc -= lerp(grayscale_blur_fetch(src, len, i-r), grayscale_blur_fetch(src, len, i-r-1), a);
-    }
-}
-
-func grayscale_blur_transpose(dest: float*, dest_width: int, src: float*, src_width: int) {
-    for (i := 0; i < src_width; i++) {
-        *dest = *src;
-        dest += dest_width;
-        src++;
-    }
-}
-
-func grayscale_blur_to(dest: GrayscaleImage*, src: GrayscaleImage*, radius: float) {
-    #assert(dest.size.x == src.size.x);
-    #assert(dest.size.y == src.size.y);
-
-    temp := make_grayscale_image({src.size.y, src.size.x});
-    scratch: float* = xcalloc(maxi(src.size.x, src.size.y), sizeof(float));
-
-    for (y := 0; y < src.size.y; y++) {
-        row_src := src.pixels + y*src.size.x;
-        row_dest := dest.pixels + y*dest.size.x;
-        grayscale_blur_row(scratch, row_src, src.size.x, radius);
-        grayscale_blur_row(row_dest, scratch, src.size.x, radius);
-        grayscale_blur_row(scratch, row_dest, src.size.x, radius);
-        grayscale_blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
-    }
-
-    for (y := 0; y < temp.size.y; y++) {
-        row := temp.pixels + y*temp.size.x;
-        grayscale_blur_row(scratch, row, temp.size.x, radius);
-        grayscale_blur_row(row, scratch, temp.size.x, radius);
-        grayscale_blur_row(scratch, row, temp.size.x, radius);
-        grayscale_blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
-    }
-
-    free_grayscale_image(&temp);
     free(scratch);
 }
 
@@ -357,6 +263,7 @@ func diffract_plane(plane: float*, scratch: float*, transpose_scratch: float*, s
 
 func planarise(img: Image*): float* {
     pixel_count := img.size.x*img.size.y;
+    #assert(pixel_count % 4 == 0);
     pixels: float* = xcalloc(pixel_count, sizeof(float)*3);
 
     for (i := 0; i < pixel_count; i++) {

@@ -13,6 +13,19 @@ struct float4 {
     m128_f32: float[4];
 }
 
+@foreign("__m128")
+struct int4 {
+    m128_i32: int[4];
+}
+
+@foreign("__m128")
+struct m128 {
+    m128_i32: int[4];
+}
+
+//
+// floats
+
 @foreign("_mm_add_ps")
 func add4(a: float4, b: float4): float4;
 
@@ -28,83 +41,63 @@ func div4(a: float4, b: float4): float4;
 @foreign("_mm_load_ps")
 func load4(p: float const*): float4;
 
-@foreign("_mm_load1_ps")
-func load_single4(p: float const*): float4;
-
 @foreign("_mm_store_ps")
 func store4(p: float const*, a: float4);
 
+@foreign("_mm_set1_ps")
+func set4(p: float): float4;
 
-// Hmm... todo!
+@foreign("_mm_fmadd_ps")
+func fma4(a: float4, b: float4, c: float4): float4;
 
-struct float8 {
-    a: float;
-    b: float;
-    c: float;
-    d: float;
-    e: float;
-    f: float;
-    g: float;
-    h: float;
-}
+@foreign("_mm_and_ps")
+func and4(a: float4, b: float4): float4;
 
+@foreign("_mm_or_ps")
+func or4(a: float4, b: float4): float4;
 
-func add8(a: float8, b: float8): float8 {
-    return {
-        a.a + b.a,
-        a.b + b.b,
-        a.c + b.c,
-        a.d + b.d,
-        a.e + b.e,
-        a.f + b.f,
-        a.g + b.g,
-        a.h + b.h,
-    };
-}
+@foreign("_mm_blend_ps")
+func blend4(a: float4, b: float4, c: int): float4;
 
-func sub8(a: float8, b: float8): float8 {
-    return {
-        a.a - b.a,
-        a.b - b.b,
-        a.c - b.c,
-        a.d - b.d,
-        a.e - b.e,
-        a.f - b.f,
-        a.g - b.g,
-        a.h - b.h,
-    };
-}
+@foreign("_mm_blendv_ps")
+func blendv4(a: float4, b: float4, c: m128): float4;
 
-func mul8(a: float8, b: float8): float8 {
-    return {
-        a.a * b.a,
-        a.b * b.b,
-        a.c * b.c,
-        a.d * b.d,
-        a.e * b.e,
-        a.f * b.f,
-        a.g * b.g,
-        a.h * b.h,
-    };
-}
+@foreign("_mm_broadcastss_ps")
+func broadcastss4(a: float4): float4;
 
-func div8(a: float8, b: float8): float8 {
-    return {
-        a.a * b.a,
-        a.b * b.b,
-        a.c * b.c,
-        a.d * b.d,
-        a.e * b.e,
-        a.f * b.f,
-        a.g * b.g,
-        a.h * b.h,
-    };
-}
+//
+// 32 bit ints
 
-func load8(p: float*): float8 {
-    return *(:float8*)p;
-}
+@foreign("_mm_add_epi32")
+func add4i(a: int4, b: int4): int4;
 
-func store8(p: float*, a: float8) {
-    *(:float8*)p = a;
+@foreign("_mm_sub_epi32")
+func sub4i(a: int4, b: int4): int4;
+
+@foreign("_mm_mul_epi32")
+func mul4i(a: int4, b: int4): int4;
+
+@foreign("_mm_div_epi32")
+func div4i(a: int4, b: int4): int4;
+
+@foreign("_mm_load_epi32")
+func load4i(p: int const*): int4;
+
+@foreign("_mm_store_epi32")
+func store4i(p: int const*, a: int4);
+
+@foreign("_mm_set1_epi32")
+func set4i(p: int): int4;
+
+@foreign("_mm_and_epi32")
+func and4i(a: float4, b: float4): float4;
+
+@foreign("_mm_or_epi32")
+func or4i(a: float4, b: float4): float4;
+
+//
+//
+
+func lerp4(a: float4, b: float4, t: float): float4 {
+    return fma4(sub4(b, a), set4(t), a);
 }

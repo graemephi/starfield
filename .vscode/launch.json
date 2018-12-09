@@ -9,7 +9,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/starfield.exe",
-            "args": [],
+            "args": ["b"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

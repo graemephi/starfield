@@ -15,7 +15,7 @@
                 "reveal": "always",
                 "echo": false,
                 "focus": false,
-                "panel": "shared",
+                "panel": "shared"
             },
             "problemMatcher": {
                 "fileLocation": "absolute",
