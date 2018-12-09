@@ -644,7 +644,7 @@ void starfield_blur_to(starfield_Image (*dest), starfield_Image (*src), float ra
 #line 268 "C:\\code\\starfield\\starfield\\math.ion"
 float starfield_randomr(float lo, float hi);
 
-#line 350 "C:\\code\\starfield\\starfield\\image.ion"
+#line 348 "C:\\code\\starfield\\starfield\\image.ion"
 starfield_Color starfield_image_fetch(starfield_Image (*img), noir_int2 pos);
 
 #line 497 "C:\\code\\starfield\\starfield\\starfield.ion"
@@ -693,7 +693,7 @@ starfield_Rect starfield_all_rect(void);
 #line 201 "C:\\code\\starfield\\starfield\\image.ion"
 starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float2 pos);
 
-#line 338
+#line 336
 starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos);
 
 #line 140 "C:\\code\\starfield\\noir\\noir.ion"
@@ -1068,7 +1068,7 @@ float (*starfield_planarise(starfield_Image (*img)));
 #line 232
 void starfield_diffract_plane(float (*plane), float (*scratch), float (*transpose_scratch), noir_int2 size, float inner_radius, float outer_radius);
 
-#line 274 "C:\\code\\starfield\\starfield\\image.ion"
+#line 272 "C:\\code\\starfield\\starfield\\image.ion"
 float starfield_sample_linear(float (*pixels), noir_int2 size, noir_float2 pos, starfield_EdgeBehavior edge_behavior);
 
 #line 32 "C:\\code\\starfield\\starfield\\math.ion"
@@ -2816,13 +2816,13 @@ float starfield_randomr(float lo, float hi) {
     return ((starfield_random01()) * (((hi) - (lo)))) + (lo);
 }
 
-#line 350 "C:\\code\\starfield\\starfield\\image.ion"
+#line 348 "C:\\code\\starfield\\starfield\\image.ion"
 starfield_Color starfield_image_fetch(starfield_Image (*img), noir_int2 pos) {
     if ((((((img->pixels) == (0)) || ((pos.x) < (0))) || ((pos.x) >= (img->size.x))) || ((pos.y) < (0))) || ((pos.y) >= (img->size.y))) {
         assert(0);
         return (starfield_Color){0};
     }
-    #line 356
+    #line 354
     assert(((pos.x) + ((pos.y) * (img->size.x))) < ((img->size.x) * (img->size.y)));
     return img->pixels[(pos.x) + ((pos.y) * (img->size.x))];
 }
@@ -2917,15 +2917,15 @@ starfield_Color starfield_image_sample_linear(starfield_Image (*img), noir_float
     return starfield_image_sample_linear_edge(img, pos, STARFIELD_Edge_Clamp);
 }
 
-#line 338
+#line 336
 starfield_Color starfield_image_sample_nearest(starfield_Image (*img), noir_float2 pos) {
     if ((img->pixels) == (0)) {
         return (starfield_Color){0};
     }
-    #line 343
+    #line 341
     assert(img->size.x);
     assert(img->size.y);
-    #line 346
+    #line 344
     noir_int2 p = {(int)(roundf((((pos.x) * (img->size.x)) - (0.5f)) + (STARFIELD_PixelEps))), (int)(roundf((((pos.y) * (img->size.y)) - (0.5f)) + (STARFIELD_PixelEps)))};
     return starfield_image_fetch(img, p);
 }
@@ -3740,13 +3740,11 @@ starfield_Color starfield_image_sample_linear_edge(starfield_Image (*img), noir_
         return (starfield_Color){0};
     }
     #line 210
-    edge_behavior = STARFIELD_Edge_Clamp;
-    #line 212
     assert(img->size.x);
     assert(img->size.y);
-    #line 215
+    #line 213
     noir_float2 scaled = {(((pos.x) * (img->size.x)) - (0.5f)) + (STARFIELD_PixelEps), (((pos.y) * (img->size.y)) - (0.5f)) + (STARFIELD_PixelEps)};
-    #line 220
+    #line 218
     if ((edge_behavior) == (STARFIELD_Edge_Clamp)) {
         scaled.x = starfield_clamp(0, (float)(img->size.x), scaled.x);
         scaled.y = starfield_clamp(0, (float)(img->size.y), scaled.y);
@@ -3756,18 +3754,18 @@ starfield_Color starfield_image_sample_linear_edge(starfield_Image (*img), noir_
     } else {
         assert(0);
     }
-    #line 230
+    #line 228
     noir_int2 vi = starfield_float2_to_int2(scaled);
     noir_float2 vf = starfield_sub2(scaled, starfield_int2_to_float2(vi));
-    #line 233
+    #line 231
     noir_int2 a = vi;
     noir_int2 b = starfield_add2i(a, (noir_int2){1, 0});
     noir_int2 c = starfield_add2i(a, (noir_int2){0, 1});
     noir_int2 d = starfield_add2i(a, (noir_int2){1, 1});
-    #line 238
+    #line 236
     assert(((a.x) >= (0)) && ((a.x) < (img->size.x)));
     assert(((a.y) >= (0)) && ((a.y) < (img->size.y)));
-    #line 241
+    #line 239
     if ((edge_behavior) == (STARFIELD_Edge_Clamp)) {
         b.x = starfield_clampi_high((img->size.x) - (1), b.x);
         c.x = starfield_clampi_high((img->size.x) - (1), c.x);
@@ -3783,16 +3781,16 @@ starfield_Color starfield_image_sample_linear_edge(starfield_Image (*img), noir_
         c.y = (((c.y) == (img->size.y)) ? 0 : c.y);
         d.y = (((d.y) == (img->size.y)) ? 0 : d.y);
     }
-    #line 257
+    #line 255
     starfield_Color A = img->pixels[(a.x) + ((a.y) * (img->size.x))];
     starfield_Color B = img->pixels[(b.x) + ((b.y) * (img->size.x))];
     starfield_Color C = img->pixels[(c.x) + ((c.y) * (img->size.x))];
     starfield_Color D = img->pixels[(d.x) + ((d.y) * (img->size.x))];
-    #line 262
+    #line 260
     starfield_Color AB = starfield_color_lerp(A, B, vf.x);
     starfield_Color CD = starfield_color_lerp(C, D, vf.x);
     starfield_Color ABCD = starfield_color_lerp(AB, CD, vf.y);
-    #line 271
+    #line 269
     return ABCD;
 }
 
@@ -4043,17 +4041,17 @@ void starfield_diffract_plane(float (*plane), float (*scratch), float (*transpos
     }
 }
 
-#line 274 "C:\\code\\starfield\\starfield\\image.ion"
+#line 272 "C:\\code\\starfield\\starfield\\image.ion"
 float starfield_sample_linear(float (*pixels), noir_int2 size, noir_float2 pos, starfield_EdgeBehavior edge_behavior) {
     if ((pixels) == (0)) {
         return (float){0};
     }
-    #line 279
+    #line 277
     assert(size.x);
     assert(size.y);
-    #line 282
+    #line 280
     noir_float2 scaled = {((pos.x) * (size.x)) - (0.5f), ((pos.y) * (size.y)) - (0.5f)};
-    #line 287
+    #line 285
     if ((edge_behavior) == (STARFIELD_Edge_Clamp)) {
         scaled.x = starfield_clamp(0, (float)(size.x), scaled.x);
         scaled.y = starfield_clamp(0, (float)(size.y), scaled.y);
@@ -4063,18 +4061,18 @@ float starfield_sample_linear(float (*pixels), noir_int2 size, noir_float2 pos, 
     } else {
         assert(0);
     }
-    #line 297
+    #line 295
     noir_int2 vi = starfield_float2_to_int2(scaled);
     noir_float2 vf = starfield_sub2(scaled, starfield_int2_to_float2(vi));
-    #line 300
+    #line 298
     noir_int2 a = vi;
     noir_int2 b = starfield_add2i(a, (noir_int2){1, 0});
     noir_int2 c = starfield_add2i(a, (noir_int2){0, 1});
     noir_int2 d = starfield_add2i(a, (noir_int2){1, 1});
-    #line 305
+    #line 303
     assert(((a.x) >= (0)) && ((a.x) < (size.x)));
     assert(((a.y) >= (0)) && ((a.y) < (size.y)));
-    #line 308
+    #line 306
     if ((edge_behavior) == (STARFIELD_Edge_Clamp)) {
         b.x = starfield_clampi_high((size.x) - (1), b.x);
         c.x = starfield_clampi_high((size.x) - (1), c.x);
@@ -4090,16 +4088,16 @@ float starfield_sample_linear(float (*pixels), noir_int2 size, noir_float2 pos, 
         c.y = (((c.y) == (size.y)) ? 0 : c.y);
         d.y = (((d.y) == (size.y)) ? 0 : d.y);
     }
-    #line 324
+    #line 322
     float A = pixels[(a.x) + ((a.y) * (size.x))];
     float B = pixels[(b.x) + ((b.y) * (size.x))];
     float C = pixels[(c.x) + ((c.y) * (size.x))];
     float D = pixels[(d.x) + ((d.y) * (size.x))];
-    #line 329
+    #line 327
     float AB = starfield_lerp(A, B, vf.x);
     float CD = starfield_lerp(C, D, vf.x);
     float ABCD = starfield_lerp(AB, CD, vf.y);
-    #line 335
+    #line 333
     return ABCD;
 }
 

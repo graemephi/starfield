@@ -207,8 +207,6 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
         return {};
     }
 
-    edge_behavior = Edge_Clamp;
-
     #assert(img.size.x);
     #assert(img.size.y);
 
