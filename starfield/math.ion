@@ -51,12 +51,23 @@ func clamp2(a: float, b: float, v: float2): float2 {
     return { clamp(a, b, v.x), clamp(a, b, v.y) };
 }
 
-func maxi(a: int32, b: int32): int32 {
+func maxi(a: int, b: int): int {
     return (a > b) ? a : b;
 }
 
-func mini(a: int32, b: int32): int32 {
+func mini(a: int, b: int): int {
     return (a < b) ? a : b;
+}
+
+// http://aggregate.org/MAGIC/#Integer%20Minimum%20or%20Maximum
+func max_branchless(a: int32, b: int32): int32 {
+    return (a > b) ? a : b;
+    // return a - (((a - b) >> 31) & (a - b));
+}
+
+func min_branchless(a: int32, b: int32): int32 {
+    return (a < b) ? a : b;
+    // return a + (((b - a) >> 31) & (b - a));
 }
 
 func max(a: float, b: float): float {

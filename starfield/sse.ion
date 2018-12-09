@@ -1,0 +1,110 @@
+
+#foreign(header = "<xmmintrin.h>")
+#foreign(header = "<emmintrin.h>")
+
+@foreign
+func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
+
+@foreign
+var _MM_FLUSH_ZERO_ON: uint32;
+
+@foreign("__m128")
+struct float4 {
+    m128_f32: float[4];
+}
+
+@foreign("_mm_add_ps")
+func add4(a: float4, b: float4): float4;
+
+@foreign("_mm_sub_ps")
+func sub4(a: float4, b: float4): float4;
+
+@foreign("_mm_mul_ps")
+func mul4(a: float4, b: float4): float4;
+
+@foreign("_mm_div_ps")
+func div4(a: float4, b: float4): float4;
+
+@foreign("_mm_load_ps")
+func load4(p: float const*): float4;
+
+@foreign("_mm_load1_ps")
+func load_single4(p: float const*): float4;
+
+@foreign("_mm_store_ps")
+func store4(p: float const*, a: float4);
+
+
+// Hmm... todo!
+
+struct float8 {
+    a: float;
+    b: float;
+    c: float;
+    d: float;
+    e: float;
+    f: float;
+    g: float;
+    h: float;
+}
+
+
+func add8(a: float8, b: float8): float8 {
+    return {
+        a.a + b.a,
+        a.b + b.b,
+        a.c + b.c,
+        a.d + b.d,
+        a.e + b.e,
+        a.f + b.f,
+        a.g + b.g,
+        a.h + b.h,
+    };
+}
+
+func sub8(a: float8, b: float8): float8 {
+    return {
+        a.a - b.a,
+        a.b - b.b,
+        a.c - b.c,
+        a.d - b.d,
+        a.e - b.e,
+        a.f - b.f,
+        a.g - b.g,
+        a.h - b.h,
+    };
+}
+
+func mul8(a: float8, b: float8): float8 {
+    return {
+        a.a * b.a,
+        a.b * b.b,
+        a.c * b.c,
+        a.d * b.d,
+        a.e * b.e,
+        a.f * b.f,
+        a.g * b.g,
+        a.h * b.h,
+    };
+}
+
+func div8(a: float8, b: float8): float8 {
+    return {
+        a.a * b.a,
+        a.b * b.b,
+        a.c * b.c,
+        a.d * b.d,
+        a.e * b.e,
+        a.f * b.f,
+        a.g * b.g,
+        a.h * b.h,
+    };
+}
+
+func load8(p: float*): float8 {
+    return *(:float8*)p;
+}
+
+func store8(p: float*, a: float8) {
+    *(:float8*)p = a;
+}

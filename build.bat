@@ -12,7 +12,7 @@ set SDLLib=%BaseInclude%\SDL2\lib\x64\SDL2.lib %BaseInclude%\SDL2\lib\x64\SDL2ma
 
 set LinkerOptions=-subsystem:windows
 
-set DebugOptimisationLevel=-Od -Ob1
+set DOptimisationLevel=-Od -Ob1
 set OptimisationLevel=-Ox -Ob2
 set CompilerOptions=-Zi -Oi %OptimisationLevel% -W3 -WX -nologo -fp:fast -MTd
 

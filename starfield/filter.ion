@@ -14,6 +14,35 @@ func blur_fetch(row: Color*, len: int, i: int): Color {
     return row[i];
 }
 
+func blur_row_slow(dest: Color*, src: Color*, len: int, radius: float) {
+    #assert(radius > 0);
+    r := clampi(0, len - 2, int(radius));
+    a := radius - r;
+
+    r_rcp :=  1. / (2. * radius + 1.);
+    c_acc := color_mul1(blur_fetch(src, len, r + 1), a);
+
+    for (i := 0; i <= r; i++) {
+        c_acc = color_add(c_acc, blur_fetch(src, len, i));
+    }
+
+    for (i := 0; i < r + 1; i++) {
+        dest[i] = color_mul1(c_acc, r_rcp);
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
+        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
+    }
+    for (i := r + 1; i < len - r - 2; i++) {
+        dest[i] = color_mul1(c_acc, r_rcp);
+        c_acc = color_add(c_acc, color_lerp(src[i+r+1], src[i+r+2], a));
+        c_acc = color_sub(c_acc, color_lerp(src[i-r], src[i-r-1], a));
+    }
+    for (i := len - r - 2; i < len; i++) {
+        dest[i] = color_mul1(c_acc, r_rcp);
+        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
+        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
+    }
+}
+
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
     #assert(radius > 0);
     r := clampi(0, len - 2, int(radius));
