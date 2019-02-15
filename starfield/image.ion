@@ -83,10 +83,10 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         c := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {0, 1}));
         d := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {1, 1}));
 
-        x_min = min4(a.x, b.x, c.x, d.x);
-        x_max = max4(a.x, b.x, c.x, d.x);
-        y_min = min4(a.y, b.y, c.y, d.y);
-        y_max = max4(a.y, b.y, c.y, d.y);
+        x_min = hmin4(a.x, b.x, c.x, d.x);
+        x_max = hmax4(a.x, b.x, c.x, d.x);
+        y_min = hmin4(a.y, b.y, c.y, d.y);
+        y_max = hmax4(a.y, b.y, c.y, d.y);
 
         origin := rect_relative(rect, aspect_ratio, { 0, 0 });
         iter.dx = sub2(rect_relative(rect, aspect_ratio, { 1. / image.size.x, 0 }), origin);

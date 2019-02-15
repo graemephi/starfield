@@ -516,20 +516,20 @@ func color_exp(a: Color): Color {
 }
 
 func color_add1(a: Color, b: float): Color {
-    return { xmm = add4(a.xmm, set4(b)) };
+    return { xmm = add4(a.xmm, set14(b)) };
 }
 
 func color_mul1(a: Color, b: float): Color {
-    return { xmm = mul4(a.xmm, set4(b)) };
+    return { xmm = mul4(a.xmm, set14(b)) };
 }
 
 func color_mul1_rgb(a: Color, b: float): Color {
-    return { xmm = blend4(mul4(a.xmm, set4(b)), a.xmm, 0b1000) };
+    return { xmm = blend4(mul4(a.xmm, set14(b)), a.xmm, 0b1000) };
 }
 
 func color_blend(dest: Color, src: Color): Color {
     // src + (dest * (1 - src_alpha))
-    return { xmm = fma4(dest.xmm, set4(1 - src.a), src.xmm) };
+    return { xmm = fma4(dest.xmm, set14(1 - src.a), src.xmm) };
 }
 
 func color_nan(c: Color): bool {
@@ -923,6 +923,8 @@ func tonemap(img: Image*, color_adjustment: Color, mix: float) {
     }
 }
 
+#foreign(header = "stdcall.h")
+
 func main(argc: int, argv: char**): int {
     if (true) {
         test_iterator();
@@ -1008,7 +1010,7 @@ func main(argc: int, argv: char**): int {
             draw_starfield(&image, &starfield);
 
             diffract(&image, {
-                alpha = 0.01,
+                alpha = 0.1,
                 radius = 4,
                 transform = diffraction_rotation,
                 type = randomn(1, DiffractionTypeCount)

@@ -60,7 +60,7 @@ func init_audio(): bool {
         channels = app.audio.channels,
         format = AUDIO_F32,
         samples = 4096,
-        callback = sdl_audio_callback,
+        callback = 0 //sdl_audio_callback,
     };
     obtained_spec: SDL_AudioSpec;
     sdl_device := SDL_OpenAudioDevice(NULL, 0, &desired_spec, &obtained_spec, 0);
@@ -418,7 +418,7 @@ struct Time {
     delta_usecs: int;
     delta_msecs: int;
     delta_secs: float;
-    
+
     ticks: uint64;
     nsecs: uint64;
     usecs: uint64;

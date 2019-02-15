@@ -38,6 +38,9 @@ func mul4(a: float4, b: float4): float4;
 @foreign("_mm_div_ps")
 func div4(a: float4, b: float4): float4;
 
+@foreign("_mm_rcp_ps")
+func rcp4(a: float4): float4;
+
 @foreign("_mm_load_ps")
 func load4(p: float const*): float4;
 
@@ -45,7 +48,10 @@ func load4(p: float const*): float4;
 func store4(p: float const*, a: float4);
 
 @foreign("_mm_set1_ps")
-func set4(p: float): float4;
+func set14(p: float): float4;
+
+@foreign("_mm_set_ps")
+func set4(p3: float, p2: float, p1: float, p0: float): float4;
 
 @foreign("_mm_fmadd_ps")
 func fma4(a: float4, b: float4, c: float4): float4;
@@ -55,6 +61,48 @@ func and4(a: float4, b: float4): float4;
 
 @foreign("_mm_or_ps")
 func or4(a: float4, b: float4): float4;
+
+@foreign("_mm_min_ps")
+func min4(a: float4, b: float4): float4;
+
+@foreign("_mm_max_ps")
+func max4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpeq_ps")
+func eq4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpge_ps")
+func ge4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpgt_ps")
+func gt4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmple_ps")
+func le4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmplt_ps")
+func lt4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpneq_ps")
+func neq4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpnge_ps")
+func nge4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpngt_ps")
+func ngt4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpnle_ps")
+func nle4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpnlt_ps")
+func nlt4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpord_ps")
+func ord4(a: float4, b: float4): float4;
+
+@foreign("_mm_cmpunord_ps")
+func unord4(a: float4, b: float4): float4;
 
 @foreign("_mm_blend_ps")
 func blend4(a: float4, b: float4, c: int): float4;
@@ -67,6 +115,12 @@ func broadcastss4(a: float4): float4;
 
 @foreign("_mm_setzero_ps")
 func zero4(): float4;
+
+@foreign("_mm_movemask_ps")
+func movemask4(a: float4): int;
+
+@foreign("_mm_cvtss_f32")
+func cvtss(a: float4): float;
 
 //
 // 32 bit ints
@@ -102,5 +156,15 @@ func or4i(a: float4, b: float4): float4;
 //
 
 func lerp4(a: float4, b: float4, t: float): float4 {
-    return fma4(sub4(b, a), set4(t), a);
+    return fma4(sub4(b, a), set14(t), a);
 }
+
+func clamp14(a: float, b: float, t: float4): float4 {
+    return min4(max4(t, set14(a)), set14(b));
+}
+
+@foreign("_mm_min_ps")
+func clamp_max4(a: float4, b: float4): float4;
+
+@foreign("_mm_max_ps")
+func clamp_min4(a: float4, b: float4): float4;

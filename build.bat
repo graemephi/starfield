@@ -14,7 +14,7 @@ set LinkerOptions=-subsystem:windows
 
 set DOptimisationLevel=-Od -Ob1
 set OptimisationLevel=-Ox -Ob2
-set CompilerOptions=-Zi -Oi %OptimisationLevel% -W3 -WX -nologo -fp:fast -MTd
+set CompilerOptions=-Zi -Oi %OptimisationLevel% -W3 -WX -nologo -fp:fast -MTd -Gv
 
 call C:\code\cloned\bitwise\ion.exe starfield
 if errorlevel 1 goto end

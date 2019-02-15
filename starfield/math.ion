@@ -82,11 +82,11 @@ func safe_div(a: float, b: float): float {
     return b == 0 ? b : a / b;
 }
 
-func min4(a: float, b: float, c: float, d: float): float {
+func hmin4(a: float, b: float, c: float, d: float): float {
     return min(min(a, b), min(c, d));
 }
 
-func max4(a: float, b: float, c: float, d: float): float {
+func hmax4(a: float, b: float, c: float, d: float): float {
     return max(max(a, b), max(c, d));
 }
 
