@@ -17,7 +17,7 @@ func xrealloc(mem: void*, size: usize): void* {
     result := realloc(mem, size);
     if (!result) {
         printf("Failed to realloc");
-        #assert(0);
+        #assert(!"Bad realloc");
         exit(1);
     }
     return result;
@@ -27,7 +27,7 @@ func xmalloc(size: usize): void* {
     result := malloc(size);
     if (!result) {
         printf("Failed to malloc");
-        #assert(0);
+        #assert(!"Bad malloc");
         exit(1);
     }
     memset(result, 0, size);
@@ -38,7 +38,7 @@ func xcalloc(count: usize, size: usize): void* {
     result := calloc(count, size);
     if (!result) {
         printf("Failed to calloc");
-        #assert(0);
+        #assert(!"Bad calloc");
         exit(1);
     }
     return result;
@@ -298,6 +298,10 @@ func tex_poke(tex: Tex*, pos: int2, val: Color) {
     tex.pixels[idx] = val;
 }
 
+func tex_write_nearest(tex: Tex*, pos: float2, val: Color) {
+    tex_poke(tex, float2_to_int2({ pos.x * (tex.size.x - 1), pos.y * (tex.size.y - 1) }), val);
+}
+
 func tex_get_lod(tex: Tex*, lod: int2): Image {
     // Pixels are laid out as: Series of decreasing mips
     // Each mip is a square mip, followed by decreasing mips in the x axis, then
@@ -549,9 +553,9 @@ func srgb(val: float): float {
 
 func color_to_rgb8(color: Color): RGB8 {
     result := RGB8 {
-        r = uint8(srgb(color.r) * 255.),
-        g = uint8(srgb(color.g) * 255.),
-        b = uint8(srgb(color.b) * 255.),
+        r = uint8(clamp(0, 255, 0.5 + srgb(color.r) * 255.)),
+        g = uint8(clamp(0, 255, 0.5 + srgb(color.g) * 255.)),
+        b = uint8(clamp(0, 255, 0.5 + srgb(color.b) * 255.)),
     };
     return result;
 }
@@ -673,6 +677,8 @@ func worley(p01: float2, grid_size: float): float2 {
 
     f1 := 2*Sqrt2;
     f2 := f1;
+
+    // yes, this is faster than a loop
 
     {
         w := worley_square(pi);
@@ -950,8 +956,10 @@ func main(argc: int, argv: char**): int {
     // Ion!!!!
     text_len := strlen(starfield_text);
 
-    random_state = (:uint32)hash(starfield_text, text_len);
-    more_entropy = hash(starfield_text + text_len / 2, text_len / 2);
+    text_hash := hash(starfield_text, text_len);
+
+    random_state = (:uint32)text_hash;
+    more_entropy = (:uint32)(text_hash >> 32);
 
     noise := make_image(ImageSize);
     noise_level := 1 - square(random01());
@@ -977,8 +985,7 @@ func main(argc: int, argv: char**): int {
     t_reset := time_now();
 
     iters := 0;
-    profiling := argc > 1 ? (*argv[1] != 'b') : true;
-
+    profiling := (argc > 1) ? (*argv[1] != 'b') : true;
 
     image := make_image(ImageSize);
     blurred := make_image(ImageSize);
@@ -1001,7 +1008,7 @@ func main(argc: int, argv: char**): int {
             draw_starfield(&image, &starfield);
 
             diffract(&image, {
-                alpha = 0.1,
+                alpha = 0.01,
                 radius = 4,
                 transform = diffraction_rotation,
                 type = randomn(1, DiffractionTypeCount)

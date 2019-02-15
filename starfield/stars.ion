@@ -192,7 +192,6 @@ func create_starfield(starfield: char const*): Starfield {
                 star.rect.size = float2 { x, y };
                 star.rect.rot = star.type.fixed_rotation ? {} : random_unit_vector2();
                 star.color = random_star_color(star.type, 1 + x*x);
-
                 push_star(&result, &star);
             }
         }
@@ -263,10 +262,8 @@ func create_starfield(starfield: char const*): Starfield {
 }
 
 
-func draw_simple_star(buffer: Color*, size: int2) {
-    size.x -= 1;
-    size.y -= 1;
-    buffer[size.x/2 + size.x*size.y/2] = { 64, 64, 64, 1 };
+func draw_simple_star(tex: Tex*) {
+    tex_write_nearest(tex, { .5, .5 }, { 64, 64, 64, 1 });
 }
 
 func draw_galaxy(tex: Tex*, arms: int) {
@@ -403,10 +400,14 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     #assert(idx >= 0);
     #assert(idx < StarTypeCount);
 
-    if (type.tex.pixels && redraw == false) {
-        #assert(type.tex.size.x != 0);
-        #assert(type.tex.size.y != 0);
-        return;
+    if (type.tex.pixels) {
+        if (redraw == false) {
+            #assert(type.tex.size.x != 0);
+            #assert(type.tex.size.y != 0);
+            return;
+        }
+
+        free_tex(&type.tex);
     }
 
     type.id = idx;
@@ -417,25 +418,26 @@ func init_star_type_really(type: StarType*, redraw: bool) {
             type.size = { 1, 1 };
             draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
         case 1: // *
-            type.tex = make_tex({ 32, 32});
+            type.tex = make_tex({ 64, 64});
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
         case 2: // +
             type.tex = make_tex({ 32, 32});
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 1, radius = 8, type = Diffraction_Cross });
         case 3: // .
             type.tex = make_tex({ 32, 32 });
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
         case 4: // ·
             type.tex = make_tex({ 32, 32 });
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
         case 5: // ˚
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
         case 6: // ⊹
             type.tex = make_tex({ 64,  64 });
             type.size = { .5, .5 };
@@ -444,18 +446,20 @@ func init_star_type_really(type: StarType*, redraw: bool) {
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
             type.fixed_rotation = true;
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
             diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
             diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.3, radius = .75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .75, transform = rotate(diffraction_rotation, { cos(Pi/4), sin(Pi/4)}) });
         case 9: // ✧
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
             type.fixed_rotation = true;
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
             diffract(&{type.tex.pixels, type.tex.size}, { 2, 2, diffraction_rotation });
         case 10: // ✫
             type.tex = make_tex({ 128, 128 });
@@ -488,7 +492,7 @@ func init_star_type_really(type: StarType*, redraw: bool) {
         default: {
             type.tex = make_tex({ 32, 32});
             type.size = { 1, 1 };
-            draw_simple_star(type.tex.pixels, type.tex.size);
+            draw_simple_star(&type.tex);
         }
     }
 

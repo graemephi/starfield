@@ -1,5 +1,3 @@
-const PixelEps = 1e-7;
-
 struct Image {
     pixels: Color*;
     size: int2;
@@ -99,10 +97,10 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = int(ceil(x_min * image.size.x - 0.5 + PixelEps));
-    iter.end.x   = int(x_max * image.size.x - 0.5 + PixelEps) + 1;
-    iter.start.y = int(ceil(y_min * image.size.y - 0.5 + PixelEps));
-    iter.end.y   = int(y_max * image.size.y - 0.5 + PixelEps) + 1;
+    iter.start.x = int(ceil(x_min * image.size.x - 0.5));
+    iter.end.x   = int(x_max * image.size.x - 0.5) + 1;
+    iter.start.y = int(ceil(y_min * image.size.y - 0.5));
+    iter.end.y   = int(y_max * image.size.y - 0.5) + 1;
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, aspect_ratio, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -120,8 +118,7 @@ func pixel_iter_next(it: PixelIter*): bool {
 
     for (; it.pixel_pos.y < it.end.y; it.pixel_pos.y++) {
         for (; it.pixel_pos.x < it.end.x; it.pixel_pos.x++) {
-            // Todo: would be nice to know the effect of floating point
-            // accumulation here.
+            // Todo: used fixed point instead?
             it.pos = add2(it.pos, it.dx);
 
             if (inside_normal_rect(it.pos)) {
@@ -181,16 +178,16 @@ func test_iterator() {
 }
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {
-    if (a > 0 && b > 0) {
-        #assert(ab >= 0);
-        if (c > 0 && d > 0) {
-            #assert(cd >= 0);
-            #assert(abcd >= 0);
-        }
-    }
-    if (c > 0 && d > 0) {
-        #assert(cd >= 0);
-    }
+    // if (a > 0 && b > 0) {
+    //     #assert(ab >= 0);
+    //     if (c > 0 && d > 0) {
+    //         #assert(cd >= 0);
+    //         #assert(abcd >= 0);
+    //     }
+    // }
+    // if (c > 0 && d > 0) {
+    //     #assert(cd >= 0);
+    // }
 }
 
 enum EdgeBehavior {
@@ -211,8 +208,8 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     #assert(img.size.y);
 
     scaled := float2 {
-        pos.x * img.size.x - 0.5 + PixelEps,
-        pos.y * img.size.y - 0.5 + PixelEps,
+        pos.x * img.size.x - 0.5,
+        pos.y * img.size.y - 0.5,
     };
 
     if (edge_behavior == Edge_Clamp) {
@@ -261,10 +258,10 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
 
-    // assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
-    // assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
-    // assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
-    // assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
+    assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
+    assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
+    assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
+    assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
 
     return ABCD;
 }
@@ -328,7 +325,7 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
     CD := lerp(C, D, vf.x);
     ABCD := lerp(AB, CD, vf.y);
 
-    // assert_correct_signs(A, B, C, D, AB, CD, ABCD);
+    assert_correct_signs(A, B, C, D, AB, CD, ABCD);
 
     return ABCD;
 }
@@ -341,7 +338,8 @@ func image_sample_nearest(img: Image*, pos: float2): Color {
     #assert(img.size.x);
     #assert(img.size.y);
 
-    p := int2 { int(round(pos.x * img.size.x - 0.5 + PixelEps)), int(round(pos.y * img.size.y - 0.5 + PixelEps)) };
+    // Round to pixel center. x + .5 - .5 = x
+    p := int2 { int(pos.x * img.size.x), int(pos.y * img.size.y) };
     return image_fetch(img, p);
 }
 
