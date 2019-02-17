@@ -571,7 +571,7 @@ func time_now(): double {
 
 var perlin_gradients: float2* = 0;
 const PerlinGradientCount = 256;
-#static_assert(PerlinGradientCount & (PerlinGradientCount - 1) == 0)
+#static_assert((PerlinGradientCount & (PerlinGradientCount - 1)) == 0)
 func perlin_gradient(p: int2): float2 {
     result := float2 {};
 
@@ -899,7 +899,6 @@ func tonemap(img: Image*, color_adjustment: Color, mix: float) {
 
     Lmax := 0.;
     for (it := pixel_iter_begin(&b, {}); pixel_iter_next(&it)) {
-        *it.pixel = (*it.pixel);
         lum := luminance(*it.pixel);
         if (lum > srgb(1./255)) {
             it.pixel.a = log(1e-5 + luminance(*it.pixel));
@@ -912,11 +911,9 @@ func tonemap(img: Image*, color_adjustment: Color, mix: float) {
     adjust.a = 1. / luminance(color_adjustment);
     adjust = color_premultiply(adjust);
 
-    // note: no normalisation, so sensitive to image size
     Lw := exp(image_sample_linear(&b, {.5, .5}).a);
     a := remap(0, 10000, 6, 1, clamp(0, 10000, Lmax));
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
-        *it.pixel = (*it.pixel);
         it.pixel.r = a * (adjust.r * uncharted2duiker(it.pixel.r) / uncharted2duiker(Lw));
         it.pixel.g = a * (adjust.g * uncharted2duiker(it.pixel.g) / uncharted2duiker(Lw));
         it.pixel.b = a * (adjust.b * uncharted2duiker(it.pixel.b) / uncharted2duiker(Lw));
@@ -992,6 +989,8 @@ func main(argc: int, argv: char**): int {
     image := make_image(ImageSize);
     blurred := make_image(ImageSize);
     blurred2 := make_image(ImageSize);
+    blurred;
+    blurred2;
     while (app_update() && iters < 10) {
         if (app.error) {
             print_and_clear_error();
@@ -1010,8 +1009,8 @@ func main(argc: int, argv: char**): int {
             draw_starfield(&image, &starfield);
 
             diffract(&image, {
-                alpha = 0.1,
-                radius = 4,
+                alpha = 0.01,
+                radius = 2,
                 transform = diffraction_rotation,
                 type = randomn(1, DiffractionTypeCount)
             });

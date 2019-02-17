@@ -5,6 +5,7 @@ struct StarType {
     size: float2;
     nonsquare: bool;
     fixed_rotation: bool;
+    y_offset: float;
     tex: Tex;
 }
 
@@ -132,7 +133,7 @@ var star_colors: Color[] = {
 };
 const StarColorCount = (sizeof(star_colors)/sizeof(Color));
 
-func random_random_star_color(range: float2): Color {
+func random_star_color(range: float2): Color {
     min := range.x;
     max := range.y ? range.y : StarColorCount - 1;
 
@@ -146,7 +147,7 @@ func random_random_star_color(range: float2): Color {
     return color;
 }
 
-func random_star_color(type: StarType*, alpha: float): Color {
+func random_star_color_for_type(type: StarType*, alpha: float): Color {
     offset := 8;
     r := offset + random_normal() * (StarColorCount / 7);
     x := clamp(0, StarColorCount - 1, r);
@@ -164,7 +165,6 @@ func random_star_color(type: StarType*, alpha: float): Color {
 }
 
 func create_starfield(starfield: char const*): Starfield {
-    // todo: adjust height based on character, jitter
     result: Starfield = {};
 
     width := 0;
@@ -183,7 +183,7 @@ func create_starfield(starfield: char const*): Starfield {
             } else if (star.type.id != StarType_Space) {
                 star_count++;
 
-                star.rect.pos = { float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 };
+                star.rect.pos = { float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 + star.type.y_offset };
                 x := clamp(0.66, 1.33, square(random_normal()));
                 y := x;
                 if (star.type.nonsquare) {
@@ -191,7 +191,7 @@ func create_starfield(starfield: char const*): Starfield {
                 }
                 star.rect.size = float2 { x, y };
                 star.rect.rot = star.type.fixed_rotation ? {} : random_unit_vector2();
-                star.color = random_star_color(star.type, 1 + x*x);
+                star.color = random_star_color_for_type(star.type, 1 + x*x);
                 push_star(&result, &star);
             }
         }
@@ -245,7 +245,7 @@ func create_starfield(starfield: char const*): Starfield {
                         rot = random_unit_vector2()
                     },
                     type = star_types + 1,
-                    color = random_star_color(star_types + 1, 3*size*(16+4*count))
+                    color = random_star_color_for_type(star_types + 1, 3*size*(16+4*count))
                 });
             }
 
@@ -329,7 +329,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
                 rot = random_unit_vector2()
             },
             type = star_types + 1,
-            color = random_star_color(star_types + 1, 0.66)
+            color = random_star_color_for_type(star_types + 1, 0.66)
         });
     }
 
@@ -350,7 +350,9 @@ func draw_galaxy(tex: Tex*, arms: int) {
         bl := image_sample_linear(&bloom_less, it.pos);
         bm := image_sample_linear(&bloom_more, it.pos);
 
-        center_yellow_str := pow(1 - clamp01(th / (Sqrt2/4)), 6);
+        center_yellow_str := (1 - clamp01(th / (Sqrt2/4)));
+        center_yellow_str = center_yellow_str*center_yellow_str*center_yellow_str;
+        center_yellow_str *= center_yellow_str; // pow 6
         arm_color := color_lerp(blue, yellow, center_yellow_str);
         inter_color := color_mul1_rgb(color_mul(arm_color, bm), perlin_octaves(it.pos, 40) * 0.5 + 1);
         matter := color_mul(bl, arm_color);
@@ -420,15 +422,20 @@ func init_star_type_really(type: StarType*, redraw: bool) {
         case 1: // *
             type.tex = make_tex({ 64, 64});
             type.size = { 1, 1 };
+            type.y_offset = .25;
             draw_simple_star(&type.tex);
         case 2: // +
-            type.tex = make_tex({ 32, 32});
-            type.size = { 1, 1 };
+            type.tex = make_tex({ 128, 128 });
+            type.size = { .5, .5 };
+            type.fixed_rotation = true;
             draw_simple_star(&type.tex);
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 1, radius = 8, type = Diffraction_Cross });
+            blur(&{type.tex.pixels, type.tex.size}, .1);
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 8., radius = 8, transform = diffraction_rotation, type = Diffraction_Cross });
+            blur(&{type.tex.pixels, type.tex.size}, .1);
         case 3: // .
             type.tex = make_tex({ 32, 32 });
             type.size = { 1, 1 };
+            type.y_offset = -66.;
             draw_simple_star(&type.tex);
         case 4: // ·
             type.tex = make_tex({ 32, 32 });
@@ -437,24 +444,27 @@ func init_star_type_really(type: StarType*, redraw: bool) {
         case 5: // ˚
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
+            type.y_offset = .66;
             draw_simple_star(&type.tex);
         case 6: // ⊹
             type.tex = make_tex({ 64,  64 });
             type.size = { .5, .5 };
+            type.y_offset = -.1;
             draw_lensed_quasar(&type.tex);
         case 7: // ⋆
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(&type.tex);
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = 1.5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 1, radius = 1.5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
             draw_simple_star(&type.tex);
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.3, radius = .75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 0.2, radius = .75, transform = rotate(diffraction_rotation, { cos(Pi/4), sin(Pi/4)}) });
+            blur(&{type.tex.pixels, type.tex.size}, .5);
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 3, radius = 1.75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = 1.75, transform = rotate(diffraction_rotation, { cos(Pi/4), sin(Pi/4)}) });
         case 9: // ✧
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
@@ -531,21 +541,18 @@ func random_warp(p: float2, freq: float, scale: float): float2 {
                     scale / (a+b+c+d)));
 }
 
-func draw_nebula(img: Image*, density: Tex*) {
-    nebula := make_image(div2is(img.size, 2));
-
-    c := random_random_star_color({});
+func draw_nebula(img: Image*, density: Tex*, downsample: int, scale: float, color: Color) {
+    nebula := make_image(div2is(img.size, downsample));
 
     for (s := random_state; with_random_state(s, more_entropy)) {
         more_entropy = random();
     }
 
-    turbulence  := randomr(0., 0.2);
-    turbulence2 := randomr(turbulence, 0.4);
-    detail := random_normal()*2;
+    turbulence  := randomr(0., 0.2 * scale);
+    turbulence2 := randomr(turbulence, 0.4 * scale);
+    detail := clamp_low(-1, random_normal() * 2 * scale);
     negative_space := (random() & 1) ? 1. : -1.;
     sparsity := randomr(0.4, 1);
-    fade := random01();
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
@@ -555,7 +562,7 @@ func draw_nebula(img: Image*, density: Tex*) {
         w2 := worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).y;
         w3 := 4*worley_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2).y;
         w := w1*w1*w2*w3;
-        *it.pixel = color_mul1(c, clamp_low(0, remap(0, 1, 0, w, p)));
+        *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
     blur_nebula := image_copy(&nebula);
@@ -587,5 +594,6 @@ func draw_stars(dest: Image*, starfield: Starfield*) {
 
 func draw_starfield(dest: Image*, starfield: Starfield*) {
     draw_stars(dest, starfield);
-    draw_nebula(dest, &starfield.density);
+    draw_nebula(dest, &starfield.density, 2, 1, random_star_color({}));
+    draw_nebula(dest, &starfield.density, 1, 2, random_star_color({}));
 }

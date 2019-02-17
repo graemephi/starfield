@@ -6,12 +6,16 @@ func blur_asym(img: Image*, radius: float2) {
     blur_to_asym(img, img, radius);
 }
 
+func color_load(c: Color*): Color {
+    return { xmm = load4((:float*)c) };
+}
+
 func blur_fetch(row: Color*, len: int, i: int): Color {
     if (i < 0 || i >= len) {
         return { xmm = zero4() };
     }
 
-    return { xmm = load4((:float*)(row + i)) };
+    return color_load(row + i);
 }
 
 func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
@@ -155,22 +159,22 @@ func diffract_fetch(row: float*, len: int, i: int): float {
 }
 
 func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], outer_radius: float[4]) {
-    for (k := 0; k < 3; k++) {
+    for (k := 0; k < 4; k++) {
         #assert(inner_radius[k] > 0);
         #assert(outer_radius[k] > inner_radius[k]);
 
         src_f32 := ((:float*)src) + k;
-        dest_cursor := ((:float*)dest) + k;
 
         r := clampi(0, len - 2, int(inner_radius[k]));
         r2 := clampi(0, len - 3, int(outer_radius[k]));
+
         a := inner_radius[k] - r;
         a2 := outer_radius[k] - r2;
 
         r_rcp :=  1. / (2 * (outer_radius[k] - inner_radius[k]));
 
-        c_sub := src_f32[(r + 1) * 4] * a;
-        c_acc := src_f32[(r2 + 1) * 4] * a2;
+        c_sub := diffract_fetch(src_f32, len, r + 1) * a;
+        c_acc := diffract_fetch(src_f32, len, r2 + 1) * a2;
 
         for (i := k; i <= r2; i++) {
             if (i <= r) {
@@ -179,30 +183,36 @@ func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], o
             c_acc += diffract_fetch(src_f32, len, i);
         }
 
+        dest_cursor_a := ((:float*)dest) + k;
         for (i := 0; i < r2 + 1; i++) {
-            *dest_cursor = (c_acc - c_sub) * r_rcp;
-            dest_cursor += 4;
+            *dest_cursor_a = (c_acc - c_sub) * r_rcp;
+            dest_cursor_a += 4;
             c_acc += lerp(diffract_fetch(src_f32, len, i+r2+1), diffract_fetch(src_f32, len, i+r2+2), a2);
             c_acc -= lerp(diffract_fetch(src_f32, len, i-r2), diffract_fetch(src_f32, len, i-r2-1), a2);
             c_sub += lerp(diffract_fetch(src_f32, len, i+r+1), diffract_fetch(src_f32, len, i+r+2), a);
             c_sub -= lerp(diffract_fetch(src_f32, len, i-r), diffract_fetch(src_f32, len, i-r-1), a);
         }
+
+        dest_cursor_b := ((:float*)(dest + r2 + 1)) + k;
         for (i := r2 + 1; i < len - r2 - 2; i++) {
-            *dest_cursor = (c_acc - c_sub) * r_rcp;
-            dest_cursor += 4;
+            *dest_cursor_b = (c_acc - c_sub) * r_rcp;
+            dest_cursor_b += 4;
             c_acc += lerp(src_f32[(i+r2+1) * 4], src_f32[(i+r2+2) * 4], a2);
             c_acc -= lerp(src_f32[(i-r2) * 4], src_f32[(i-r2-1) * 4], a2);
             c_sub += lerp(src_f32[(i+r+1) * 4], src_f32[(i+r+2) * 4], a);
             c_sub -= lerp(src_f32[(i-r) * 4], src_f32[(i-r-1) * 4], a);
         }
+
+        dest_cursor_c := ((:float*)(dest + len - r2 - 2)) + k;
         for (i := len - r2 - 2; i < len; i++) {
-            *dest_cursor = (c_acc - c_sub) * r_rcp;
-            dest_cursor += 4;
+            *dest_cursor_c = (c_acc - c_sub) * r_rcp;
+            dest_cursor_c += 4;
             c_acc += lerp(diffract_fetch(src_f32, len, i+r2+1), diffract_fetch(src_f32, len, i+r2+2), a2);
             c_acc -= lerp(diffract_fetch(src_f32, len, i-r2), diffract_fetch(src_f32, len, i-r2-1), a2);
             c_sub += lerp(diffract_fetch(src_f32, len, i+r+1), diffract_fetch(src_f32, len, i+r+2), a);
             c_sub -= lerp(diffract_fetch(src_f32, len, i-r), diffract_fetch(src_f32, len, i-r-1), a);
         }
+        #assert((:Color*)dest_cursor_c - dest == len);
     }
 }
 
@@ -279,22 +289,6 @@ func bounds_after_transform(transform: float2, aspect_ratio: float): float2 {
     return { x, y };
 }
 
-enum DiffractionType {
-    Diffraction_None,
-    Diffraction_Cross,
-    Diffraction_CrossOrthoRed,
-    Diffraction_Single,
-
-    DiffractionTypeCount
-}
-
-struct DiffractionArguments {
-    alpha: float;
-    radius: float;
-    transform: float2;
-    type: DiffractionType;
-}
-
 func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: float2, transformed_bounds: float2, scratch: Color*, transpose_scratch: Color* /* nullable */) {
     rotation := float2 { 1, 0 };
 
@@ -306,8 +300,8 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
         img = &transformed_img;
     }
 
-    inner_radius: float[4] = { radius * .25, radius * .25 * 1.1, radius * .25 * 1.2, 0 };
-    outer_radius: float[4] = { radius * .70, radius * .70 * 1.2, radius * .70 * 1.4, 0 };
+    inner_radius: float[4] = { radius * .25, radius * .25 * 1.1, radius * .25 * 1.2, radius * .25 * 1.2 };
+    outer_radius: float[4] = { radius * .70, radius * .70 * 1.2, radius * .70 * 1.4, radius * .70 * 1.4 };
 
     pixel_count := img.size.x*img.size.y;
     diffract_blur(img, scratch, transpose_scratch, img.size, inner_radius, outer_radius);
@@ -329,6 +323,22 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
         }
         free_image(img);
     }
+}
+
+enum DiffractionType {
+    Diffraction_None,
+    Diffraction_Cross,
+    Diffraction_CrossOrthoRed,
+    Diffraction_Single,
+
+    DiffractionTypeCount
+}
+
+struct DiffractionArguments {
+    alpha: float;
+    radius: float;
+    transform: float2;
+    type: DiffractionType;
 }
 
 func diffract(img: Image*, args: DiffractionArguments) {

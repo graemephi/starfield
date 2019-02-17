@@ -12,7 +12,7 @@ func make_image(size: int2): Image {
 
 func free_image(img: Image*) {
     #assert(img.pixels);
-    free(img.pixels);
+        free(img.pixels);
     img.pixels = 0;
     img.size = { 0, 0 };
 }
@@ -29,9 +29,13 @@ func image_copy(img: Image*): Image {
 }
 
 func image_copy_to(dest: Image*, src: Image*) {
-    #assert(src.size.x == dest.size.x);
-    #assert(src.size.y == dest.size.y);
-    memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+    if ((src.size.x == dest.size.x) && (src.size.y == dest.size.y)) {
+        memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+    } else {
+        for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
+            *it.pixel = image_sample_nearest(src, it.pos);
+        }
+    }
 }
 
 func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
@@ -213,11 +217,11 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     };
 
     if (edge_behavior == Edge_Clamp) {
-        scaled.x = clamp(0, float(img.size.x), scaled.x);
-        scaled.y = clamp(0, float(img.size.y), scaled.y);
+        scaled.x = clamp(0, float(img.size.x) - 1, scaled.x);
+        scaled.y = clamp(0, float(img.size.y) - 1, scaled.y);
     } else if (edge_behavior == Edge_Wrap) {
-        scaled.x = wrap(scaled.x, float(img.size.x));
-        scaled.y = wrap(scaled.y, float(img.size.y));
+        scaled.x = wrap(scaled.x, float(img.size.x) - 1);
+        scaled.y = wrap(scaled.y, float(img.size.y) - 1);
     } else {
         #assert(0);
     }
