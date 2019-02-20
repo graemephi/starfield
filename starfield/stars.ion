@@ -726,14 +726,14 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
         *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
-    blur_nebula := make_image_like(&nebula, 4);
-    image_copy_to(&blur_nebula, &nebula);
+    // Todo: downsample this
+    blur_nebula := image_copy(&nebula);
     blur_region(&blur_nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * 0.05;
-        n := image_sample_linear(&nebula, it.pos);
-        nb := image_sample_linear(&blur_nebula, it.pos);
+        n := image_sample_nearest(&nebula, it.pos);
+        nb := image_sample_nearest(&blur_nebula, it.pos);
         nnb := color_mul(n, nb);
         x := color_lerp(n, nnb, sparsity);
         y := color_add(n, x);
