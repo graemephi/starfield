@@ -134,18 +134,18 @@ func buf_u32_pop(buf: uint32*): uint32 {
 }
 
 func hash(p: void*, len: ssize): usize {
-    h := 1099511628211u;
+    h := 0xcbf29ce484222325u;
     b := (:uint8*)p;
     for (i := 0; i < len; i++) {
         h ^= b[i];
-        h *= 0xcbf29ce484222325u;
+        h *= 1099511628211u;
     }
     return h;
 }
 
 func bad_hash_int2(p: int2): usize {
-    // Way faster than a full hash and looks just as good if you do a xor shift round on it.
-    return uint(p.x) * uint(p.y) * 0xcbf29ce484222325ull;
+    h := (((0xcbf29ce484222325u ^ p.x) * 1099511628211u) ^ p.y) * 1099511628211u;
+    return h;
 }
 
 func bad_hash_int2_u32(p: int2): uint32 {
@@ -550,7 +550,6 @@ func color_to_rgb8(color: Color): RGB8 {
 
 // Unique for each image.
 var diffraction_rotation: float2 = {};
-var more_entropy: usize = 1;
 
 func time_now(): double {
     ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;
@@ -646,9 +645,10 @@ func worley_square(p: float2): WorleySquare* {
         }
     }
 
-    // r := (:uint32)more_entropy ^ bad_hash_int2_u32(*(:int2*)&p);
-    // result = worley_squares + (xor_shift(r) & (WorleySquareCount - 1));
-    result = worley_squares + (int(p.y*16+p.x)&255);
+    r := bad_hash_int2_u32(*(:int2*)&p);
+    result = worley_squares + (xor_shift(r) & (WorleySquareCount - 1));
+    #assert(result < (worley_squares + 256));
+    // result = worley_squares + (int(p.y*16+p.x)&255);
 
     return result;
 }
@@ -923,7 +923,6 @@ func post_process(img: Image*, small_blur: Image*, big_blur: Image*, color_adjus
 struct Threads {
     threads: SDL_Thread*;
     thread_count: int;
-    work_available_sem: SDL_sem*;
     work_completed_sem: SDL_sem*;
 
     work: WorkItem*;
@@ -968,6 +967,7 @@ union WorkArgs {
     post_process: post_processArgs;
 }
 struct WorkItem {
+    sem: SDL_sem*;
     type: WorkType;
     args: WorkArgs;
 }
@@ -976,13 +976,9 @@ func threads_thread(data: void*): int {
     work := (:WorkItem*)data;
 
     while (true) {
-        SDL_SemWait(threads.work_available_sem);
+        SDL_SemWait(work.sem);
         t0 := time_now();
         switch (work.type) {
-            case WorkType_None: {
-                SDL_Delay(1);
-                continue;
-            }
             case WorkType_DrawStarfield: {
                 img := *work.args.draw_starfield.img;
                 img.wr = work.args.draw_starfield.wr;
@@ -1012,7 +1008,6 @@ func threads_thread(data: void*): int {
 }
 
 func threads_init(threads: Threads*) {
-    threads.work_available_sem = SDL_CreateSemaphore(0);
     threads.work_completed_sem = SDL_CreateSemaphore(0);
     threads.thread_count = SDL_GetCPUCount();
 
@@ -1020,6 +1015,7 @@ func threads_init(threads: Threads*) {
     threads.work = xcalloc(sizeof(WorkItem), threads.work_count);
 
     for (i := 0; i < threads.thread_count; i++) {
+        threads.work[i].sem = SDL_CreateSemaphore(0);
         thread := SDL_CreateThread(threads_thread, 0, threads.work + i);
         buf_push((:void**)&threads.threads, &thread, sizeof(thread));
     }
@@ -1028,9 +1024,9 @@ func threads_init(threads: Threads*) {
 func threads_fork(threads: Threads*) {
     if (threads.started == false) {
         threads.started = true;
-        // Wake up every thread every time
-        for (i := 0; i < threads.work_count; i++) {
-            SDL_SemPost(threads.work_available_sem);
+        for (i := 0; i < threads.work_index; i++) {
+            #assert(threads.work[i].sem);
+            SDL_SemPost(threads.work[i].sem);
         }
     }
 }
@@ -1099,13 +1095,11 @@ func main(argc: int, argv: char**): int {
     　　  +   ✫
 """;
 
-    // Ion!!!!
     text_len := strlen(starfield_text);
 
     text_hash := hash(starfield_text, text_len);
 
     random_state = (:uint32)text_hash;
-    more_entropy = (:uint32)(text_hash >> 32);
     threads_init(&threads);
 
     diffraction_rotation = random_unit_vector2();
@@ -1153,12 +1147,12 @@ func main(argc: int, argv: char**): int {
             t0f := float(t0);
 
             noise := make_image(ImageSize);
-            noise_level := 1 - square(random01());
+            noise_level := (1 - square(random01())) / randomn(2048, 5192);
             for (it := pixel_iter_begin(&noise, {}); pixel_iter_next(&it)) {
                 c := Color {
-                    square(random_normal()) * (noise_level / 4096.),
-                    square(random_normal()) * (noise_level / 4096.),
-                    square(random_normal()) * (noise_level / 4096.),
+                    square(random_normal()) * (noise_level),
+                    square(random_normal()) * (noise_level),
+                    square(random_normal()) * (noise_level),
                     1
                 };
                 *it.pixel = c;
@@ -1167,15 +1161,9 @@ func main(argc: int, argv: char**): int {
 
             image_copy_to(&image, &noise);
 
-            // image.wr={0,0,50,65};
-            // for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-            //     tex_write_nearest(&{image.pixels, image.size, 1}, add2s(mul2s(rwo_gradient(it.pixel_pos),.5),.5), {1,1,1,1});
-
-            // }
-
             starfield = create_starfield(starfield_text);
-            perlin_gradient({});
             worley_square({});
+            perlin_gradient({});
 
             bands := 4;
             y_wr_step := image.size.y / bands;
@@ -1189,14 +1177,10 @@ func main(argc: int, argv: char**): int {
             }
             #assert(wr.y0 == image.size.y);
 
-            // draw_starfield(&image, &starfield);
-
             threads_join(&threads);
 
             threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
             threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
-            // blur_to(&blurred, &image, randomr(0, 1)); // ~1.33
-            // blur_to(&blurred2, &image, randomr(0.5,2)); // ~2
 
             threads_fork(&threads);
 
@@ -1225,7 +1209,6 @@ func main(argc: int, argv: char**): int {
             #assert(wr.y0 == image.size.y);
 
             threads_join(&threads);
-            // post_process(&image, &blurred, &blurred2, color_adjustment);
 
             image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
 

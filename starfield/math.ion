@@ -256,11 +256,22 @@ func with_random_state(old_state: usize, new_state: usize): bool {
     return false;
 }
 
-const int_23_mask = 0b00000000_011111111111111111111111;
-const int_23_reciprocal = 1. / int_23_mask;
+union fbits {
+    f: float;
+    i: int;
+}
+
+const f_exp_1_2_mask = 0b0_01111111_00000000000000000000000;
+const f_sig_mask     = 0b0_00000000_11111111111111111111111;
+func float_from_random_bits(b: int): float {
+    i := (b & f_sig_mask) | f_exp_1_2_mask;
+    f := fbits { i = i }.f - 1.;
+    return f;
+}
+
 func random01(): float {
-    r := random() & int_23_mask;
-    return r * int_23_reciprocal;
+    r := float_from_random_bits(random());
+    return r;
 }
 
 func random_unit_vector2(): float2 {

@@ -296,7 +296,7 @@ func create_starfield(starfield: char const*): Starfield {
 
     scales : float[4] = {1,1.5,1.75,2};
 
-    layer_count := clampi(0, 4, random_poisson(exp(-2.1)));
+    layer_count := 3; //clampi(0, 4, random_poisson(exp(-2.1)));
     color_x := randomr(2, StarColorCount - 2);
     variability := randomr(0.05, .3);
     color_width := variability*StarColorCount/1.5;
@@ -562,23 +562,32 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     tex_preprocess(&type.tex);
 }
 
-union fbits {
-    f: float;
-    i: int;
-}
-
 func rwo_gradient(p: int2): float2 {
-    // bad_hash_int2, but truncated, so it gives the same results as the sse version
-    h := int32(uint32(p.x) * uint32(p.y) * uint32(0xcbf29ce484222325));
+    // bad_hash_int2 with fnv-32 values so it gives the same results as the sse version
+    h := (((0x811c9dc5 ^ uint(p.x)) * 16777619u) ^ uint(p.y)) * 16777619u;
     a := xor_shift(h);
-    b := (a & (int_23_mask)) * int_23_reciprocal;
+    b := float_from_random_bits(a);
 
+    // Generate a random direction (x, y). (sqrt(b), sqrt(1 - b)) follows from
+    // the usual (b, sqrt(1 - b*b)), but we take the sqrt of b for x for two
+    // reasons. Firstly, the two sqrts seems to fare better speed wise--possibly
+    // due to pipelining? Secondly, if we generate y from a uniform x, then x is
+    // uniformly distributed on the unit interval, *not* the x part of the unit
+    // circle. sqrt(b) pushes the points in (0,1) towards 1, to be more
+    // cosine-weighted-like, so it's slightly better (but still worse than
+    // sincos(pi*X)). Another option is randomly swapping x and y, but that
+    // tanks throughput.
     x := sqrt(b);
     y := sqrt(1 - b);
+
+    // This positive in both x and y, but we don't use all the bits in a to
+    // generate the random float, so we use those to dump it in some quadrant
+    // of the unit circle.
     x_sign := a & (1<<31);
     y_sign := (a<<1) & (1<<31);
     xx := fbits{i = (fbits{f=x}.i + x_sign)}.f;
     yy := fbits{i = (fbits{f=y}.i + y_sign)}.f;
+
     return { xx, yy };
 }
 
@@ -587,7 +596,6 @@ func random_warp_one(p: float2, scale: float): float2 {
     b := rwo_gradient(float2_to_int2(add2(p, { 1, 0 })));
     c := rwo_gradient(float2_to_int2(add2(p, { 0, 1 })));
     d := rwo_gradient(float2_to_int2(add2(p, { 1, 1 })));
-
     r := float2 { p.x - int(p.x), p.y - int(p.y) };
 
     x := r.x*r.x*(3. - 2.*r.x);
@@ -600,7 +608,7 @@ func random_warp_one(p: float2, scale: float): float2 {
     return mul2s(abcd, scale);
 }
 
-func random_warp_(p: float2, freq: float, scale: float): float2 {
+func random_warp_scalar(p: float2, freq: float, scale: float): float2 {
     a := 1.;
     b := a*.5;
     c := b*.5;
@@ -620,14 +628,16 @@ struct float4x2 {
 }
 
 func rwo_gradient_sse(px: float4, py: float4): float4x2 {
-    pxi := cast_float4_to_int4(px);
-    pyi := cast_float4_to_int4(py);
-    h := mul4i(pxi, mul4i(pyi, set4si((:int)0xcbf29ce484222325)));
+    pxi := float4_to_int4(px);
+    pyi := float4_to_int4(py);
+    H0 := set4si(0x811c9dc5);
+    H1 := set4si(16777619);
+    h := mul4i(xor4i(mul4i(xor4i(pxi, H0), H1), pyi), H1);
     a := xor4i(h, shl4si(h, 13));
     a  = xor4i(a, shr4si(a, 17));
     a  = xor4i(a, shl4si(a, 5));
-    b := int4_to_float4(and4i(a, set4si(int_23_mask)));
-    c := mul4s(b, int_23_reciprocal);
+    b := cast_int4_to_float4(or4i(and4i(a, set4si(f_sig_mask)), set4si(f_exp_1_2_mask)));
+    c := sub4(b, set4s(1));
     x := sqrt4(c);
     y := sqrt4(sub4(set4s(1), c));
 
@@ -638,7 +648,7 @@ func rwo_gradient_sse(px: float4, py: float4): float4x2 {
 }
 
 
-func random_warp(p: float2, freq: float, scale: float): float2 {
+func random_warp_sse(p: float2, freq: float, scale: float): float2 {
     one := set4s(1.);
     two := set4s(2.);
     three := set4s(3.);
@@ -688,6 +698,10 @@ func random_warp(p: float2, freq: float, scale: float): float2 {
     return result[0];
 }
 
+func random_warp(p: float2, freq: float, scale: float): float2 {
+    return random_warp_sse(p, freq, scale);
+}
+
 func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
     nebula := make_image_like(img, 1);
 
@@ -695,12 +709,11 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
     scale := layer.scale;
 
     density := &props.density;
-    turbulence  := layer.turbulence.x + props.turbulence.x * scale;
-    turbulence2 := layer.turbulence.y + props.turbulence.y * scale;
-    detail := layer.detail + props.detail * scale;
-    negative_space := layer.negative_space * props.negative_space;
-    sparsity := layer.sparsity + props.sparsity;
-
+    turbulence  := props.turbulence.x * scale;
+    turbulence2 := props.turbulence.y * scale;
+    detail := props.detail * scale;
+    negative_space := props.negative_space;
+    sparsity := props.sparsity;
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
@@ -713,8 +726,8 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
         *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
-    // Todo: downsample this
-    blur_nebula := image_copy(&nebula);
+    blur_nebula := make_image_like(&nebula, 4);
+    image_copy_to(&blur_nebula, &nebula);
     blur_region(&blur_nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {

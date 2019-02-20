@@ -6,3 +6,4 @@ out_*.c
 *.user
 *.filters
 My Amplifier Results*
+out_starfield.c
