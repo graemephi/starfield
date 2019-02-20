@@ -556,15 +556,9 @@ func time_now(): double {
     return double(ticks) / double(app.time.ticks_per_sec);
 }
 
-var perlin_reflectors: float2[4] = {
-    {  1,  1 },
-    { -1,  1 },
-    {  1, -1 },
-    { -1, -1 }
-};
-
 var perlin_gradients: float2* = 0;
-const PerlinGradientCount = 256;
+const PerlinGradientCountRoot = 16;
+const PerlinGradientCount = PerlinGradientCountRoot*PerlinGradientCountRoot;
 #static_assert((PerlinGradientCount & (PerlinGradientCount - 1)) == 0)
 func perlin_gradient(p: int2): float2 {
     result := float2 {};
@@ -576,7 +570,7 @@ func perlin_gradient(p: int2): float2 {
         }
     }
 
-    result = perlin_gradients[int(p.y*16+p.x) & (PerlinGradientCount - 1)];
+    result = perlin_gradients[(int(p.y)*PerlinGradientCountRoot + int(p.x)) & (PerlinGradientCount -1)];
     return result;
 }
 
@@ -619,7 +613,7 @@ func perlin_octaves(p: float2, grid_size: float): float {
     + perlin(mul2s(p, 4.2), grid_size) * 0.0625;
 }
 
-const WorleyMaxPointsPerSquare = 10;
+const WorleyMaxPointsPerSquare = 6;
 
 struct WorleySquare {
     count: int;
@@ -627,7 +621,8 @@ struct WorleySquare {
 }
 
 var worley_squares: WorleySquare* = 0;
-const WorleySquareCount = 256;
+const WorleySquareCountRoot = 16;
+const WorleySquareCount = WorleySquareCountRoot*WorleySquareCountRoot;
 #static_assert(WorleySquareCount & (WorleySquareCount - 1) == 0)
 func worley_square(p: float2): WorleySquare* {
     result: WorleySquare* = 0;
@@ -637,7 +632,7 @@ func worley_square(p: float2): WorleySquare* {
 
         for (i := 0; i < WorleySquareCount; i++) {
             w := WorleySquare {};
-            w.count = clampi(0, WorleyMaxPointsPerSquare, random_poisson(alpha));
+            w.count = clampi(1, WorleyMaxPointsPerSquare, random_poisson(alpha));
             for (j := 0; j < w.count; j++) {
                 w.points[j] = { random01(), random01() };
             }
@@ -645,11 +640,7 @@ func worley_square(p: float2): WorleySquare* {
         }
     }
 
-    r := bad_hash_int2_u32(*(:int2*)&p);
-    result = worley_squares + (xor_shift(r) & (WorleySquareCount - 1));
-    #assert(result < (worley_squares + 256));
-    // result = worley_squares + (int(p.y*16+p.x)&255);
-
+    result = worley_squares + ((int(p.y)*WorleySquareCountRoot + int(p.x)) & (WorleySquareCount -1));
     return result;
 }
 
@@ -660,6 +651,8 @@ func worley(p01: float2, grid_size: float): float2 {
 
     f1 := 2*Sqrt2;
     f2 := f1;
+
+    hit := false;
 
     // yes, this is faster than a loop
 
@@ -675,12 +668,18 @@ func worley(p01: float2, grid_size: float): float2 {
                 f2 = d;
             }
         }
+
+        // Early out. This is 5%~ of cases
+        min_dist := square(min(min(pf.x, 1 - pf.x), min(pf.y, 1 - pf.y)));
+        if (f2 < min_dist) {
+            return { sqrt(f1), sqrt(f2) };
+        }
     }
 
     {
         i := -1.;
         j := 0.;
-        face_dist := pf.x;
+        face_dist := square(pf.x);
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
@@ -701,7 +700,7 @@ func worley(p01: float2, grid_size: float): float2 {
     {
         i := 1.;
         j := 0.;
-        face_dist := 1. - pf.x;
+        face_dist := square(1. - pf.x);
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
@@ -722,7 +721,7 @@ func worley(p01: float2, grid_size: float): float2 {
     {
         i := 0.;
         j := -1.;
-        face_dist := pf.y;
+        face_dist := square(pf.y);
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
@@ -743,7 +742,7 @@ func worley(p01: float2, grid_size: float): float2 {
     {
         i := 0.;
         j := 1.;
-        face_dist := 1. - pf.y;
+        face_dist := square(1. - pf.y);
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
@@ -1165,7 +1164,7 @@ func main(argc: int, argv: char**): int {
             worley_square({});
             perlin_gradient({});
 
-            bands := 4;
+            bands := threads.thread_count;
             y_wr_step := image.size.y / bands;
             #assert(y_wr_step * bands == image.size.y);
             wr := WritableRegion { 0, 0, image.size.x, y_wr_step };
@@ -1197,7 +1196,7 @@ func main(argc: int, argv: char**): int {
             color_adjustment := Color {
                 clamp_low(.1, 2.3 + random_normal()*0.5),
                 clamp_low(.1, 2 + random_normal()*0.5),
-                clamp_low(.1, 1.9 + random_normal()*0.5),
+                clamp_low(.1, 1.7 + random_normal()*0.6),
                 square(random01())
             };
 

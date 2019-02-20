@@ -509,15 +509,15 @@ func init_star_type_really(type: StarType*, redraw: bool) {
             type.size = { 1, 1 };
             type.fixed_rotation = true;
             draw_simple_star(&type.tex);
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = 1.5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 1, radius = 1.5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = .5, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 1, radius = .5, transform = rotate(diffraction_rotation, { cos(Pi/8), sin(Pi/8)}) });
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
             draw_simple_star(&type.tex);
             blur(&{type.tex.pixels, type.tex.size}, .5);
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 3, radius = 1.75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = 1.75, transform = rotate(diffraction_rotation, { cos(Pi/4), sin(Pi/4)}) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 3, radius = .75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&{type.tex.pixels, type.tex.size}, { alpha = 2, radius = .75, transform = rotate(diffraction_rotation, { cos(Pi/4), sin(Pi/4)}) });
         case 9: // ✧
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
