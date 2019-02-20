@@ -1,6 +1,20 @@
-
+#foreign(header = "<intrin.h>")
 #foreign(header = "<xmmintrin.h>")
 #foreign(header = "<emmintrin.h>")
+
+//
+// Atomics
+
+// Ideally, we'd just use SDL atomics, but the sdl in ion defined SDL_atomic_t as an incomplete type :'(
+#foreign(preamble = "#define volatile_long volatile long")
+
+@foreign typedef volatile_long = long;
+
+@foreign("_InterlockedIncrement")
+func interlocked_increment(x: volatile_long *): volatile_long;
+
+//
+// sse
 
 @foreign
 func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
@@ -13,14 +27,9 @@ struct float4 {
     m128_f32: float[4];
 }
 
-@foreign("__m128")
+@foreign("__m128i")
 struct int4 {
-    m128_i32: int[4];
-}
-
-@foreign("__m128")
-struct m128 {
-    m128_i32: int[4];
+    m128i_i32: int[4];
 }
 
 //
@@ -41,14 +50,23 @@ func div4(a: float4, b: float4): float4;
 @foreign("_mm_rcp_ps")
 func rcp4(a: float4): float4;
 
+@foreign("_mm_floor_ps")
+func floor4(a: float4): float4;
+
 @foreign("_mm_load_ps")
 func load4(p: float const*): float4;
+
+@foreign("_mm_loadu_ps")
+func loadu4(p: float const*): float4;
 
 @foreign("_mm_store_ps")
 func store4(p: float const*, a: float4);
 
+@foreign("_mm_storeu_ps")
+func storeu4(p: float const*, a: float4);
+
 @foreign("_mm_set1_ps")
-func set14(p: float): float4;
+func set4s(p: float): float4;
 
 @foreign("_mm_set_ps")
 func set4(p3: float, p2: float, p1: float, p0: float): float4;
@@ -56,11 +74,20 @@ func set4(p3: float, p2: float, p1: float, p0: float): float4;
 @foreign("_mm_fmadd_ps")
 func fma4(a: float4, b: float4, c: float4): float4;
 
+@foreign("_mm_fmsub_ps")
+func fmsub4(a: float4, b: float4, c: float4): float4;
+
+@foreign("_mm_hadd_ps")
+func hadd4(a: float4, b: float4): float4;
+
 @foreign("_mm_and_ps")
 func and4(a: float4, b: float4): float4;
 
 @foreign("_mm_or_ps")
 func or4(a: float4, b: float4): float4;
+
+@foreign("_mm_xor_ps")
+func xor4(a: float4, b: float4): float4;
 
 @foreign("_mm_min_ps")
 func min4(a: float4, b: float4): float4;
@@ -108,7 +135,13 @@ func unord4(a: float4, b: float4): float4;
 func blend4(a: float4, b: float4, c: int): float4;
 
 @foreign("_mm_blendv_ps")
-func blendv4(a: float4, b: float4, c: m128): float4;
+func blendv4(a: float4, b: float4, c: int4): float4;
+
+@foreign("_mm_shuffle_ps")
+func shuffle4(a: float4, b: float4, c: int): float4;
+
+@foreign("_MM_SHUFFLE")
+func SHUFFLE(d: int, c: int, b: int, a: int): int;
 
 @foreign("_mm_broadcastss_ps")
 func broadcastss4(a: float4): float4;
@@ -122,6 +155,27 @@ func movemask4(a: float4): int;
 @foreign("_mm_cvtss_f32")
 func cvtss(a: float4): float;
 
+@foreign("_mm_sqrt_ps")
+func sqrt4(a: float4): float4;
+
+@foreign("_mm_rsqrt_ss")
+func rsqrts(a: float4): float4;
+
+@foreign("_mm_rsqrt_ps")
+func rsqrt4(a: float4): float4;
+
+@foreign("_mm_unpacklo_ps")
+func unpacklo4(a: float4, b: float4): float4;
+
+@foreign("_mm_unpackhi_ps")
+func unpackhi4(a: float4, b: float4): float4;
+
+@foreign("_mm_cvtps_epi32")
+func float4_to_int4(a: float4): int4;
+
+@foreign("_mm_castsi128_ps")
+func cast_int4_to_float4(a: int4): float4;
+
 //
 // 32 bit ints
 
@@ -131,7 +185,7 @@ func add4i(a: int4, b: int4): int4;
 @foreign("_mm_sub_epi32")
 func sub4i(a: int4, b: int4): int4;
 
-@foreign("_mm_mul_epi32")
+@foreign("_mm_mullo_epi32")
 func mul4i(a: int4, b: int4): int4;
 
 @foreign("_mm_div_epi32")
@@ -144,27 +198,53 @@ func load4i(p: int const*): int4;
 func store4i(p: int const*, a: int4);
 
 @foreign("_mm_set1_epi32")
-func set4i(p: int): int4;
+func set4si(p: int): int4;
 
-@foreign("_mm_and_epi32")
-func and4i(a: float4, b: float4): float4;
+@foreign("_mm_and_si128")
+func and4i(a: int4, b: int4): int4;
 
-@foreign("_mm_or_epi32")
-func or4i(a: float4, b: float4): float4;
+@foreign("_mm_or_si128")
+func or4i(a: int4, b: int4): int4;
+
+@foreign("_mm_xor_si128")
+func xor4i(a: int4, b: int4): int4;
+
+@foreign("_mm_slli_epi32")
+func shl4si(a: int4, c: int): int4;
+
+@foreign("_mm_srli_epi32")
+func shr4si(a: int4, c: int): int4;
+
+@foreign("_mm_cvtepi32_ps")
+func int4_to_float4(a: int4): float4;
+
+@foreign("_mm_castps_si128")
+func cast_float4_to_int4(a: float4): int4;
+
 
 //
 //
 
-func lerp4(a: float4, b: float4, t: float): float4 {
-    return fma4(sub4(b, a), set14(t), a);
+func lerp4(a: float4, b: float4, t: float4): float4 {
+    return fma4(sub4(b, a), t, a);
+}
+
+func lerp4s(a: float4, b: float4, t: float): float4 {
+    return fma4(sub4(b, a), set4s(t), a);
 }
 
 func clamp14(a: float, b: float, t: float4): float4 {
-    return min4(max4(t, set14(a)), set14(b));
+    return min4(max4(t, set4s(a)), set4s(b));
 }
 
-@foreign("_mm_min_ps")
-func clamp_max4(a: float4, b: float4): float4;
+func add4s(a: float4, b: float): float4 {
+    return add4(a, set4s(b));
+}
 
-@foreign("_mm_max_ps")
-func clamp_min4(a: float4, b: float4): float4;
+func mul4s(a: float4, b: float): float4 {
+    return mul4(a, set4s(b));
+}
+
+func rsqrt(a: float): float {
+    return cvtss(rsqrts(set4s(a)));
+}

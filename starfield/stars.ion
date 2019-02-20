@@ -29,16 +29,40 @@ struct Star {
     color: Color;
 }
 
+struct NebulaLayer {
+    color: Color;
+    scale: float;
+
+    // per layer perturbations
+    turbulence: float2;
+    detail: float;
+    negative_space: float;
+    sparsity: float;
+}
+
+struct NebulaProperties {
+    density: Tex;
+    layer_count: int;
+    layers: NebulaLayer*;
+    turbulence: float2;
+    detail: float;
+    negative_space: float;
+    sparsity: float;
+}
+
 struct Starfield {
     stars: Star*;
     star_count: int32;
-    density: Tex;
+    nebula_properties: NebulaProperties;
 }
 
 func free_starfield(starfield: Starfield*) {
     buf_free(starfield.stars);
-    if (starfield.density.pixels) {
-        free_tex(&starfield.density);
+    if (starfield.nebula_properties.density.pixels) {
+        free_tex(&starfield.nebula_properties.density);
+    }
+    if (starfield.nebula_properties.layers) {
+        buf_free(starfield.nebula_properties.layers);
     }
     starfield.stars = 0;
     starfield.star_count = 0;
@@ -133,6 +157,14 @@ var star_colors: Color[] = {
 };
 const StarColorCount = (sizeof(star_colors)/sizeof(Color));
 
+func star_color(x: float): Color {
+    x = clamp(0, StarColorCount - 2, x);
+    xi := int(x);
+    xf := x - xi;
+    color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
+    return color;
+}
+
 func random_star_color(range: float2): Color {
     min := range.x;
     max := range.y ? range.y : StarColorCount - 1;
@@ -141,9 +173,7 @@ func random_star_color(range: float2): Color {
     r := offset + random_normal() * (StarColorCount / 7);
     x := clamp(min, max, r);
 
-    xi := int(x);
-    xf := x - xi;
-    color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
+    color := star_color(x);
     return color;
 }
 
@@ -156,10 +186,8 @@ func random_star_color_for_type(type: StarType*, alpha: float): Color {
         x = clamp(8, 11, x);
     }
 
-    xi := int(x);
-    xf := x - xi;
-    color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
-    color = color_mul1(color, random01() * (float(xi) / StarColorCount) * alpha);
+    color := star_color(x);
+    color = color_mul1(color, random01() * (float(x) / StarColorCount) * alpha);
 
     return color;
 }
@@ -215,7 +243,7 @@ func create_starfield(starfield: char const*): Starfield {
 
     for (i := 0; i < starfield_len(&result); i++) {
         s := result.stars + i;
-        s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
+        s.rect.pos.x = (ImageSize.x/ ImageSize.y) * (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
         s.rect.size.x = s.type.size.x * s.type.tex.size.x * s.rect.size.x / ImageSize.x;
         s.rect.size.y = s.type.size.y * s.type.tex.size.y * s.rect.size.y / ImageSize.y;
@@ -229,10 +257,10 @@ func create_starfield(starfield: char const*): Starfield {
     }
 
     tiles := 25;
-    w := 1. / tiles;
+    w := (0.+ImageSize.x / ImageSize.y) / tiles;
     background_star_size := 0.005;
     xy := float2 { (w * ImageSize.x / ImageSize.y) / 2., w / 2. };
-    for (i := 0; i < tiles * ImageSize.x / ImageSize.y; i++) {
+    for (i := 0; i < tiles ; i++) {
         for (j := 0; j < tiles; j++) {
             count := max(1., tex_lookup(&star_count_noise, xy).r);
             for (k := 0; k < count; k++) {
@@ -256,7 +284,34 @@ func create_starfield(starfield: char const*): Starfield {
         xy.y += w;
     }
 
-    result.density = star_count_noise;
+
+    turbulence := randomr(0., 0.2);
+    result.nebula_properties = {
+        density = star_count_noise,
+        turbulence = { turbulence, randomr(turbulence, 0.35) },
+        detail = clamp_low(-1, random_normal() * 2),
+        negative_space = (random() & 1) ? 1. : -1.,
+        sparsity = randomr(0.4, 1),
+    };
+
+    scales : float[4] = {1,1.5,1.75,2};
+
+    layer_count := clampi(0, 4, random_poisson(exp(-2.1)));
+    color_x := randomr(2, StarColorCount - 2);
+    variability := randomr(0.05, .3);
+    color_width := variability*StarColorCount/1.5;
+    for (i := 0; i < layer_count; i++) {
+        buf_push((:void**)&result.nebula_properties.layers, &NebulaLayer {
+            color = star_color(color_x + random_normal()*color_width),
+            scale = scales[i],
+            turbulence = {},
+            detail = random_normal()*variability*3,
+            negative_space = 1,
+            sparsity = random_normal()*variability*.1,
+        }, sizeof(NebulaLayer));
+    }
+    result.nebula_properties.layer_count = layer_count;
+
     result.star_count = (:int)starfield_len(&result);
     return result;
 }
@@ -350,9 +405,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
         bl := image_sample_linear(&bloom_less, it.pos);
         bm := image_sample_linear(&bloom_more, it.pos);
 
-        center_yellow_str := (1 - clamp01(th / (Sqrt2/4)));
-        center_yellow_str = center_yellow_str*center_yellow_str*center_yellow_str;
-        center_yellow_str *= center_yellow_str; // pow 6
+        center_yellow_str := pow(1 - clamp01(th / (Sqrt2/4)), 6);
         arm_color := color_lerp(blue, yellow, center_yellow_str);
         inter_color := color_mul1_rgb(color_mul(arm_color, bm), perlin_octaves(it.pos, 40) * 0.5 + 1);
         matter := color_mul(bl, arm_color);
@@ -369,7 +422,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
 }
 
 func draw_lensed_quasar(tex: Tex*) {
-    center := div2is(tex.size, 2);
+    center := div2si(tex.size, 2);
 
     width := tex.size.x / int(2 + random01() * 8);
     height := tex.size.y / int(2 + random01() * 8);
@@ -509,11 +562,31 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     tex_preprocess(&type.tex);
 }
 
+union fbits {
+    f: float;
+    i: int;
+}
+
+func rwo_gradient(p: int2): float2 {
+    // bad_hash_int2, but truncated, so it gives the same results as the sse version
+    h := int32(uint32(p.x) * uint32(p.y) * uint32(0xcbf29ce484222325));
+    a := xor_shift(h);
+    b := (a & (int_23_mask)) * int_23_reciprocal;
+
+    x := sqrt(b);
+    y := sqrt(1 - b);
+    x_sign := a & (1<<31);
+    y_sign := (a<<1) & (1<<31);
+    xx := fbits{i = (fbits{f=x}.i + x_sign)}.f;
+    yy := fbits{i = (fbits{f=y}.i + y_sign)}.f;
+    return { xx, yy };
+}
+
 func random_warp_one(p: float2, scale: float): float2 {
-    a := perlin_gradient(float2_to_int2(add2(p, { 0, 0 })));
-    b := perlin_gradient(float2_to_int2(add2(p, { 1, 0 })));
-    c := perlin_gradient(float2_to_int2(add2(p, { 0, 1 })));
-    d := perlin_gradient(float2_to_int2(add2(p, { 1, 1 })));
+    a := rwo_gradient(float2_to_int2(add2(p, { 0, 0 })));
+    b := rwo_gradient(float2_to_int2(add2(p, { 1, 0 })));
+    c := rwo_gradient(float2_to_int2(add2(p, { 0, 1 })));
+    d := rwo_gradient(float2_to_int2(add2(p, { 1, 1 })));
 
     r := float2 { p.x - int(p.x), p.y - int(p.y) };
 
@@ -527,7 +600,7 @@ func random_warp_one(p: float2, scale: float): float2 {
     return mul2s(abcd, scale);
 }
 
-func random_warp(p: float2, freq: float, scale: float): float2 {
+func random_warp_(p: float2, freq: float, scale: float): float2 {
     a := 1.;
     b := a*.5;
     c := b*.5;
@@ -541,18 +614,93 @@ func random_warp(p: float2, freq: float, scale: float): float2 {
                     scale / (a+b+c+d)));
 }
 
-func draw_nebula(img: Image*, density: Tex*, downsample: int, scale: float, color: Color) {
-    nebula := make_image(div2is(img.size, downsample));
+struct float4x2 {
+    x: float4;
+    y: float4;
+}
 
-    for (s := random_state; with_random_state(s, more_entropy)) {
-        more_entropy = random();
-    }
+func rwo_gradient_sse(px: float4, py: float4): float4x2 {
+    pxi := cast_float4_to_int4(px);
+    pyi := cast_float4_to_int4(py);
+    h := mul4i(pxi, mul4i(pyi, set4si((:int)0xcbf29ce484222325)));
+    a := xor4i(h, shl4si(h, 13));
+    a  = xor4i(a, shr4si(a, 17));
+    a  = xor4i(a, shl4si(a, 5));
+    b := int4_to_float4(and4i(a, set4si(int_23_mask)));
+    c := mul4s(b, int_23_reciprocal);
+    x := sqrt4(c);
+    y := sqrt4(sub4(set4s(1), c));
 
-    turbulence  := randomr(0., 0.2 * scale);
-    turbulence2 := randomr(turbulence, 0.4 * scale);
-    detail := clamp_low(-1, random_normal() * 2 * scale);
-    negative_space := (random() & 1) ? 1. : -1.;
-    sparsity := randomr(0.4, 1);
+    x_sign := and4i(a, set4si(1 << 31));
+    y_sign := and4i(shl4si(a, 1), set4si(1 << 31));
+
+    return { cast_int4_to_float4(add4i(cast_float4_to_int4(x), x_sign)), cast_int4_to_float4(add4i(cast_float4_to_int4(y), y_sign)) };
+}
+
+
+func random_warp(p: float2, freq: float, scale: float): float2 {
+    one := set4s(1.);
+    two := set4s(2.);
+    three := set4s(3.);
+
+    scale4 := set4(0.125, 0.25, 0.5, 1);
+    octave := set4(8, 4, 2, 1);
+
+    qx := mul4(set4s(p.x * freq), octave);
+    qy := mul4(set4s(p.y * freq), octave);
+    qxi := floor4(qx);
+    qyi := floor4(qy);
+    qxi1 := add4(qxi, one);
+    qyi1 := add4(qyi, one);
+
+    a := rwo_gradient_sse(qxi, qyi);
+    b := rwo_gradient_sse(qxi1, qyi);
+    c := rwo_gradient_sse(qxi, qyi1);
+    d := rwo_gradient_sse(qxi1, qyi1);
+
+    rx := sub4(qx, qxi);
+    ry := sub4(qy, qyi);
+
+    x := mul4(mul4(rx, rx), sub4(three, mul4(rx, two)));
+    y := mul4(mul4(ry, ry), sub4(three, mul4(ry, two)));
+
+    abx := lerp4(a.x, b.x, x);
+    aby := lerp4(a.y, b.y, x);
+    cdx := lerp4(c.x, d.x, x);
+    cdy := lerp4(c.y, d.y, x);
+    abcdx := mul4(lerp4(abx, cdx, y), scale4);
+    abcdy := mul4(lerp4(aby, cdy, y), scale4);
+
+    xy01 := unpacklo4(abcdx, abcdy);
+    xy23 := unpackhi4(abcdx, abcdy);
+
+    xyxy := add4(xy01, xy23);
+    x_y_ := unpackhi4(xyxy, xyxy);
+
+    offset := add4(xyxy, x_y_);
+
+    p4 := set4(0, 0, p.y, p.x);
+    result4 := add4(p4, mul4s(offset, scale / (1 + 0.5 + 0.25 + 0.125)));
+
+    // Dumb, but the compiler does the right thing.
+    result: float2[2] = {};
+    storeu4((:float*)result, result4);
+    return result[0];
+}
+
+func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
+    nebula := make_image_like(img, 1);
+
+    color := layer.color;
+    scale := layer.scale;
+
+    density := &props.density;
+    turbulence  := layer.turbulence.x + props.turbulence.x * scale;
+    turbulence2 := layer.turbulence.y + props.turbulence.y * scale;
+    detail := layer.detail + props.detail * scale;
+    negative_space := layer.negative_space * props.negative_space;
+    sparsity := layer.sparsity + props.sparsity;
+
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
@@ -565,15 +713,16 @@ func draw_nebula(img: Image*, density: Tex*, downsample: int, scale: float, colo
         *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
+    // Todo: downsample this
     blur_nebula := image_copy(&nebula);
-    blur(&blur_nebula, 16);
+    blur_region(&blur_nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * 0.05;
         n := image_sample_linear(&nebula, it.pos);
         nb := image_sample_linear(&blur_nebula, it.pos);
         nnb := color_mul(n, nb);
-        x := color_lerp(nb, nnb, sparsity);
+        x := color_lerp(n, nnb, sparsity);
         y := color_add(n, x);
         z := color_pow(y, 2 + d * negative_space);
         z.a *= .333;
@@ -594,6 +743,7 @@ func draw_stars(dest: Image*, starfield: Starfield*) {
 
 func draw_starfield(dest: Image*, starfield: Starfield*) {
     draw_stars(dest, starfield);
-    draw_nebula(dest, &starfield.density, 2, 1, random_star_color({}));
-    draw_nebula(dest, &starfield.density, 1, 2, random_star_color({}));
+    for (i := 0; i < starfield.nebula_properties.layer_count; i++) {
+        draw_nebula(dest, &starfield.nebula_properties, starfield.nebula_properties.layers + i);
+    }
 }

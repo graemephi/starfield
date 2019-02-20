@@ -6,8 +6,17 @@ func blur_asym(img: Image*, radius: float2) {
     blur_to_asym(img, img, radius);
 }
 
+// Nothing else in this file knows about writable regions
+func blur_region(img: Image*, radius: float) {
+    wr := explicit_writable_region(img);
+    region := *img;
+    region.pixels = img.pixels + (wr.x0 + wr.y0*img.size.x);
+    region.size = { wr.x1 - wr.x0, wr.y1 - wr.y0 };
+    blur(&region, radius);
+}
+
 func color_load(c: Color*): Color {
-    return { xmm = load4((:float*)c) };
+    return { xmm = loadu4((:float*)c) };
 }
 
 func blur_fetch(row: Color*, len: int, i: int): Color {

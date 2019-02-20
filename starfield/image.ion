@@ -1,18 +1,38 @@
+struct WritableRegion {
+    // Top left inclusive
+    x0: int;
+    y0: int;
+    // Bottom right exclusive
+    x1: int;
+    y1: int;
+}
+
 struct Image {
     pixels: Color*;
     size: int2;
+    wr: WritableRegion;
 }
 
 func make_image(size: int2): Image {
     return Image {
         pixels = xcalloc(size.x*size.y, sizeof(Color)),
-        size = size
+        size = size,
+        wr = { 0, 0, size.x, size.y }
+    };
+}
+
+func make_image_like(img: Image*, downsample: int): Image {
+    size := div2si(img.size, downsample);
+    return Image {
+        pixels = xcalloc(size.x*size.y, sizeof(Color)),
+        size = size,
+        wr = { img.wr.x0 / downsample, img.wr.y0 / downsample, img.wr.x1 / downsample, img.wr.y1 / downsample }
     };
 }
 
 func free_image(img: Image*) {
     #assert(img.pixels);
-        free(img.pixels);
+    free(img.pixels);
     img.pixels = 0;
     img.size = { 0, 0 };
 }
@@ -48,8 +68,22 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     }
 }
 
+func explicit_writable_region(img: Image*): WritableRegion {
+    return {
+        x0 = img.wr.x0,
+        y0 = img.wr.y0,
+        x1 = img.wr.x1 ? img.wr.x1 : img.size.x,
+        y1 = img.wr.y1 ? img.wr.y1 : img.size.y,
+    };
+}
+
+func writable_at(wr: WritableRegion, pos: int2): bool {
+    return (pos.x >= wr.x0 && pos.x < wr.x1) &&
+           (pos.y >= wr.y0 && pos.y < wr.y1);
+}
+
 struct PixelIter {
-    image: Image*;
+    image: Image;
     aspect_ratio: float;
     start: int2;
     end: int2;
@@ -65,9 +99,7 @@ struct PixelIter {
 }
 
 func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
-    #static_assert(offsetof(Tex, pixels) == offsetof(Image, pixels));
-    #static_assert(offsetof(Tex, size) == offsetof(Image, size));
-    return pixel_iter_begin((:Image*)tex, rect);
+    return pixel_iter_begin(&{tex.pixels, tex.size}, rect);
 }
 
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
@@ -101,10 +133,13 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
         iter.dy = { 0., 1. / image.size.y };
     }
 
-    iter.start.x = int(ceil(x_min * image.size.x - 0.5));
-    iter.end.x   = int(x_max * image.size.x - 0.5) + 1;
-    iter.start.y = int(ceil(y_min * image.size.y - 0.5));
-    iter.end.y   = int(y_max * image.size.y - 0.5) + 1;
+    iter.image = *image;
+    iter.image.wr = explicit_writable_region(image);
+
+    iter.start.x = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.x - 0.5)));
+    iter.start.y = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(ceil(y_min * image.size.y - 0.5)));
+    iter.end.x   = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.x - 0.5)) + 1;
+    iter.end.y   = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1;
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
     iter.pos = rect_relative(rect, aspect_ratio, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
@@ -112,7 +147,6 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter.line_start = iter.pos;
     iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
-    iter.image = image;
 
     return iter;
 }
@@ -125,7 +159,7 @@ func pixel_iter_next(it: PixelIter*): bool {
             // Todo: used fixed point instead?
             it.pos = add2(it.pos, it.dx);
 
-            if (inside_normal_rect(it.pos)) {
+            if (inside_normal_rect(it.pos) && writable_at(it.image.wr, it.pixel_pos)) {
                 it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
                 it.abs_pos = rect_relative(it.rect, it.aspect_ratio, it.pos);
                 return true;
@@ -182,16 +216,16 @@ func test_iterator() {
 }
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {
-    // if (a > 0 && b > 0) {
-    //     #assert(ab >= 0);
-    //     if (c > 0 && d > 0) {
-    //         #assert(cd >= 0);
-    //         #assert(abcd >= 0);
-    //     }
-    // }
-    // if (c > 0 && d > 0) {
-    //     #assert(cd >= 0);
-    // }
+    if (a > 0 && b > 0) {
+        #assert(ab >= 0);
+        if (c > 0 && d > 0) {
+            #assert(cd >= 0);
+            #assert(abcd >= 0);
+        }
+    }
+    if (c > 0 && d > 0) {
+        #assert(cd >= 0);
+    }
 }
 
 enum EdgeBehavior {
@@ -262,11 +296,6 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
 
-    assert_correct_signs(A.r, B.r, C.r, D.r, AB.r, CD.r, ABCD.r);
-    assert_correct_signs(A.g, B.g, C.g, D.g, AB.g, CD.g, ABCD.g);
-    assert_correct_signs(A.b, B.b, C.b, D.b, AB.b, CD.b, ABCD.b);
-    assert_correct_signs(A.a, B.a, C.a, D.a, AB.a, CD.a, ABCD.a);
-
     return ABCD;
 }
 
@@ -328,8 +357,6 @@ func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeB
     AB := lerp(A, B, vf.x);
     CD := lerp(C, D, vf.x);
     ABCD := lerp(AB, CD, vf.y);
-
-    assert_correct_signs(A, B, C, D, AB, CD, ABCD);
 
     return ABCD;
 }
