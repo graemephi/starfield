@@ -876,10 +876,8 @@ func uncharted2duiker(x: float): float {
     return ((x*(a*x+c*b)+d*e)/(x*(a*x+b)+d*f))-e/f;
 }
 
-func tonemap(img: Image*, color_adjustment: Color) {
+func calculate_luminance(img: Image*): float2 {
     b := image_copy(img);
-    mix := color_adjustment.a;
-
     Lmax := 0.;
     for (it := pixel_iter_begin(&b, {}); pixel_iter_next(&it)) {
         lum := luminance(*it.pixel);
@@ -889,22 +887,20 @@ func tonemap(img: Image*, color_adjustment: Color) {
         Lmax = max(Lmax, lum);
     }
     blur_asym(&b, mul2s(int2_to_float2(ImageSize), 0.5));
+    Lw := exp(image_sample_linear(&b, {.5, .5}).a);
+    return { Lw, Lmax };
+}
+
+func post_process(img: Image*, small_blur: Image*, big_blur: Image*, Lw: float, Lmax: float, color_adjustment: Color) {
+    mix := color_adjustment.a;
 
     adjust := color_adjustment;
     adjust.a = 1. / luminance(color_adjustment);
     adjust = color_premultiply(adjust);
 
-    Lw := exp(image_sample_linear(&b, {.5, .5}).a);
     a := remap(0, 10000, 6, 1, clamp(0, 10000, Lmax));
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
-        it.pixel.r = a * (adjust.r * uncharted2duiker(it.pixel.r) / uncharted2duiker(Lw));
-        it.pixel.g = a * (adjust.g * uncharted2duiker(it.pixel.g) / uncharted2duiker(Lw));
-        it.pixel.b = a * (adjust.b * uncharted2duiker(it.pixel.b) / uncharted2duiker(Lw));
-    }
-}
-
-func post_process(img: Image*, small_blur: Image*, big_blur: Image*, color_adjustment: Color) {
-    for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
+        // Layer blurs
         bp := image_fetch(small_blur, it.pixel_pos);
         mbp := color_mul(*it.pixel, bp);
         xbp := color_lerp(bp, mbp, 0.1);
@@ -912,10 +908,13 @@ func post_process(img: Image*, small_blur: Image*, big_blur: Image*, color_adjus
         bp2 := image_fetch(big_blur, it.pixel_pos);
         mbp2 := color_mul(*it.pixel, bp2);
         xbp2 := color_lerp(bp2, mbp2, .9);
-        *it.pixel = color_add(*it.pixel, color_add(xbp, xbp2));
-    }
+        c := color_add(*it.pixel, color_add(xbp, xbp2));
 
-    tonemap(img, color_adjustment);
+        // Tonemap
+        it.pixel.r = lerp(c.r, a * (adjust.r * uncharted2duiker(c.r) / uncharted2duiker(Lw)), mix);
+        it.pixel.g = lerp(c.g, a * (adjust.g * uncharted2duiker(c.g) / uncharted2duiker(Lw)), mix);
+        it.pixel.b = lerp(c.b, a * (adjust.b * uncharted2duiker(c.b) / uncharted2duiker(Lw)), mix);
+    }
 }
 
 // It just fork/joins
@@ -941,6 +940,7 @@ enum WorkType {
     WorkType_None = 0,
     WorkType_DrawStarfield,
     WorkType_BlurTo,
+    WorkType_CalculateLuminance,
     WorkType_PostProcess,
 }
 struct draw_starfieldArgs {
@@ -953,16 +953,23 @@ struct blur_toArgs {
     src: Image*;
     radius: float;
 }
+struct calculate_luminanceArgs {
+    img: Image*;
+    result: float2*;
+}
 struct post_processArgs {
     img: Image*;
     wr: WritableRegion;
     small_blur: Image*;
     big_blur: Image*;
+    Lw: float;
+    Lmax: float;
     color_adjustment: Color;
 }
 union WorkArgs {
     draw_starfield: draw_starfieldArgs;
     blur_to: blur_toArgs;
+    calculate_luminance: calculate_luminanceArgs;
     post_process: post_processArgs;
 }
 struct WorkItem {
@@ -986,10 +993,13 @@ func threads_thread(data: void*): int {
             case WorkType_BlurTo: {
                 blur_to(work.args.blur_to.dest, work.args.blur_to.src, work.args.blur_to.radius);
             }
+            case WorkType_CalculateLuminance: {
+                *work.args.calculate_luminance.result = calculate_luminance(work.args.calculate_luminance.img);
+            }
             case WorkType_PostProcess: {
                 img := *work.args.post_process.img;
                 img.wr = work.args.post_process.wr;
-                post_process(&img, work.args.post_process.small_blur, work.args.post_process.big_blur, work.args.post_process.color_adjustment);
+                post_process(&img, work.args.post_process.small_blur, work.args.post_process.big_blur, work.args.post_process.Lw, work.args.post_process.Lmax, work.args.post_process.color_adjustment);
             }
             default: #assert(!"Bad work type");
         }
@@ -1058,12 +1068,22 @@ func threads_blur_to(threads: Threads*, dest: Image*, src: Image*, radius: float
     };
 }
 
-func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, small_blur: Image*, big_blur: Image*, color_adjustment: Color) {
+func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: float2*) {
+    #assert(threads.work_index < threads.work_count);
+    #assert(threads.started == false);
+    #assert(result_out);
+    threads.work[threads.work_index].type = WorkType_CalculateLuminance;
+    threads.work[threads.work_index++].args = {
+        calculate_luminance = { img, result_out }
+    };
+}
+
+func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, small_blur: Image*, big_blur: Image*, Lw: float, Lmax: float, color_adjustment: Color) {
     #assert(threads.work_index < threads.work_count);
     #assert(threads.started == false);
     threads.work[threads.work_index].type = WorkType_PostProcess;
     threads.work[threads.work_index++].args = {
-        post_process = { img, wr, small_blur, big_blur, color_adjustment }
+        post_process = { img, wr, small_blur, big_blur, Lw, Lmax, color_adjustment }
     };
 }
 
@@ -1178,8 +1198,10 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
+            lum: float2;
             threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
             threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
+            threads_calculate_luminance(&threads, &image, &lum);
 
             threads_fork(&threads);
 
@@ -1197,11 +1219,11 @@ func main(argc: int, argv: char**): int {
                 clamp_low(.1, 2.3 + random_normal()*0.5),
                 clamp_low(.1, 2 + random_normal()*0.5),
                 clamp_low(.1, 1.7 + random_normal()*0.6),
-                square(random01())
+                1 - square(random01())
             };
 
             for (i := 0; i < bands; i++) {
-                threads_post_process(&threads, &image, wr, &blurred, &blurred2, color_adjustment);
+                threads_post_process(&threads, &image, wr, &blurred, &blurred2, lum.x, lum.y, color_adjustment);
                 wr.y0 += y_wr_step;
                 wr.y1 += y_wr_step;
             }

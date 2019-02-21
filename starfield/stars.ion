@@ -575,7 +575,7 @@ func rwo_gradient(p: int2): float2 {
     // uniformly distributed on the unit interval, *not* the x part of the unit
     // circle. sqrt(b) pushes the points in (0,1) towards 1, to be more
     // cosine-weighted-like, so it's slightly better (but still worse than
-    // sincos(pi*X)). Another option is randomly swapping x and y, but that
+    // sincos(2piX)). Another option is randomly swapping x and y, but that
     // tanks throughput.
     x := sqrt(b);
     y := sqrt(1 - b);
@@ -646,7 +646,6 @@ func rwo_gradient_sse(px: float4, py: float4): float4x2 {
 
     return { cast_int4_to_float4(add4i(cast_float4_to_int4(x), x_sign)), cast_int4_to_float4(add4i(cast_float4_to_int4(y), y_sign)) };
 }
-
 
 func random_warp_sse(p: float2, freq: float, scale: float): float2 {
     one := set4s(1.);
