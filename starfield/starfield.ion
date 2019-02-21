@@ -1261,7 +1261,7 @@ func main(argc: int, argv: char**): int {
         fflush(stdout);
 
         if (!profiling) {
-            SDL_Delay(10);
+            SDL_WaitEvent(0);
         }
     }
 
