@@ -1,6 +1,7 @@
 build/*
 out_*.c
 .vs/*
+.vscode/*
 *.psess
 *.vspx
 *.user
