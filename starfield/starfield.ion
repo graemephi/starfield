@@ -548,9 +548,6 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-// Unique for each image.
-var diffraction_rotation: float2 = {};
-
 func time_now(): double {
     ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;
     return double(ticks) / double(app.time.ticks_per_sec);
@@ -979,6 +976,8 @@ struct WorkItem {
 }
 
 func threads_thread(data: void*): int {
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+
     work := (:WorkItem*)data;
 
     while (true) {
@@ -1086,6 +1085,9 @@ func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, sm
         post_process = { img, wr, small_blur, big_blur, Lw, Lmax, color_adjustment }
     };
 }
+
+// Unique for each image.
+var diffraction_rotation: float2 = {};
 
 func main(argc: int, argv: char**): int {
     if (true) {
@@ -1198,7 +1200,7 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
-            lum: float2;
+            lum := float2 {};
             threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
             threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
             threads_calculate_luminance(&threads, &image, &lum);
