@@ -6,5 +6,8 @@ out_*.c
 *.vspx
 *.user
 *.filters
+*.vcxproj
+*.sln
+*.exe
 My Amplifier Results*
 out_starfield.c
