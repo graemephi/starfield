@@ -246,16 +246,6 @@ func set_random_state(state: uint32): uint32 {
     return old;
 }
 
-func with_random_state(old_state: usize, new_state: usize): bool {
-    if (old_state == random_state) {
-        random_state = uint32(new_state);
-        return true;
-    }
-
-    random_state = uint32(old_state);
-    return false;
-}
-
 union fbits {
     f: float;
     i: int;
