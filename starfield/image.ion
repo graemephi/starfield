@@ -72,8 +72,8 @@ func explicit_writable_region(img: Image*): WritableRegion {
     return {
         x0 = img.wr.x0,
         y0 = img.wr.y0,
-        x1 = img.wr.x1 ? img.wr.x1 : img.size.x,
-        y1 = img.wr.y1 ? img.wr.y1 : img.size.y,
+        x1 = img.wr.x1 ? clampi(0, img.size.x, img.wr.x1) : img.size.x,
+        y1 = img.wr.y1 ? clampi(0, img.size.y, img.wr.y1) : img.size.y,
     };
 }
 

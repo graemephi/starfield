@@ -11,6 +11,9 @@
 @foreign("_InterlockedIncrement")
 func interlocked_increment(x: volatile_long *): volatile_long;
 
+@foreign("_InterlockedDecrement")
+func interlocked_decrement(x: volatile_long *): volatile_long;
+
 //
 // sse
 

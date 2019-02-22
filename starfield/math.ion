@@ -59,17 +59,6 @@ func mini(a: int, b: int): int {
     return (a < b) ? a : b;
 }
 
-// http://aggregate.org/MAGIC/#Integer%20Minimum%20or%20Maximum
-func max_branchless(a: int32, b: int32): int32 {
-    return (a > b) ? a : b;
-    // return a - (((a - b) >> 31) & (a - b));
-}
-
-func min_branchless(a: int32, b: int32): int32 {
-    return (a < b) ? a : b;
-    // return a + (((b - a) >> 31) & (b - a));
-}
-
 func max(a: float, b: float): float {
     return (a > b) ? a : b;
 }
@@ -257,7 +246,6 @@ func float_from_random_bits(b: int): float {
     i := (b & f_sig_mask) | f_exp_1_2_mask;
     f := fbits { i = i }.f - 1.;
     return f;
-    // return (b & f_sig_mask) * (1. / f_sig_mask);
 }
 
 func random01(): float {

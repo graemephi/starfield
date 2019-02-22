@@ -929,10 +929,10 @@ func post_process(img: Image*, small_blur: Image*, big_blur: Image*, Lw: float, 
     }
 }
 
-// It just fork/joins
 struct Threads {
     threads: SDL_Thread*;
     thread_count: int;
+    work_available_sem: SDL_sem*;
     work_completed_sem: SDL_sem*;
 
     work: WorkItem*;
@@ -940,13 +940,15 @@ struct Threads {
     // Only the main thread touches these.
     started: bool;
     work_count: int;
-    work_index: int;
 
     // Worker threads touch this.
+    work_token: volatile_long;
+    work_index: volatile_long;
     work_completed: volatile_long;
 }
 
 var threads: Threads;
+const WorkItems = 8;
 
 enum WorkType {
     WorkType_None = 0,
@@ -985,19 +987,44 @@ union WorkArgs {
     post_process: post_processArgs;
 }
 struct WorkItem {
-    sem: SDL_sem*;
     type: WorkType;
     args: WorkArgs;
+}
+
+func get_work(completed: int): WorkItem* {
+    work: WorkItem* = 0;
+
+    if (completed == threads.work_index) {
+        SDL_SemPost(threads.work_completed_sem);
+        SDL_SemWait(threads.work_available_sem);
+    }
+
+    while (true) {
+        token := interlocked_increment(&threads.work_token) - 1;
+
+        if (token < threads.work_index) {
+            work = threads.work + (token & (WorkItems - 1));
+            #assert(work.type != WorkType_None);
+            SDL_SemPost(threads.work_available_sem);
+            break;
+        }
+
+        SDL_SemWait(threads.work_available_sem);
+    }
+
+    return work;
 }
 
 func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
-    work := (:WorkItem*)data;
+    completed := threads.work_completed;
+    SDL_SemWait(threads.work_available_sem);
 
-    while (true) {
-        SDL_SemWait(work.sem);
+    while(true) {
+        work := get_work(completed);
+
         t0 := time_now();
         switch (work.type) {
             case WorkType_DrawStarfield: {
@@ -1023,26 +1050,22 @@ func threads_thread(data: void*): int {
         printf("type %d: %f elapsed\n", work.type, (t1-t0)*1000);
         work.type = WorkType_None;
 
-        if (interlocked_increment(&threads.work_completed) == threads.work_index) {
-            SDL_SemPost(threads.work_completed_sem);
-        }
+        completed = interlocked_increment(&threads.work_completed);
     }
 
     return 0;
 }
 
 func threads_init(threads: Threads*) {
+    threads.work_available_sem = SDL_CreateSemaphore(0);
     threads.work_completed_sem = SDL_CreateSemaphore(0);
     threads.thread_count = SDL_GetCPUCount();
 
-    #assert(threads.thread_count >= 4);
-
-    threads.work_count = threads.thread_count;
+    threads.work_count = WorkItems;
     threads.work = xcalloc(sizeof(WorkItem), threads.work_count);
 
     for (i := 0; i < threads.thread_count; i++) {
-        threads.work[i].sem = SDL_CreateSemaphore(0);
-        thread := SDL_CreateThread(threads_thread, 0, threads.work + i);
+        thread := SDL_CreateThread(threads_thread, 0, 0);
         buf_push((:void**)&threads.threads, &thread, sizeof(thread));
     }
 }
@@ -1050,10 +1073,7 @@ func threads_init(threads: Threads*) {
 func threads_fork(threads: Threads*) {
     if (threads.started == false) {
         threads.started = true;
-        for (i := 0; i < threads.work_index; i++) {
-            #assert(threads.work[i].sem);
-            SDL_SemPost(threads.work[i].sem);
-        }
+        SDL_SemPost(threads.work_available_sem);
     }
 }
 
@@ -1065,6 +1085,7 @@ func threads_join(threads: Threads*) {
     threads.started = false;
     threads.work_completed = 0;
     threads.work_index = 0;
+    threads.work_token = 0;
 }
 
 func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
@@ -1209,15 +1230,13 @@ func main(argc: int, argv: char**): int {
 
             bands := threads.thread_count;
             y_wr_step := image.size.y / bands;
-            #assert(y_wr_step * bands == image.size.y);
             wr := WritableRegion { 0, 0, image.size.x, y_wr_step };
 
-            for (i := 0; i < bands; i++) {
+            while (wr.y0 < image.size.y) {
                 threads_draw_starfield(&threads, &image, wr, &starfield);
                 wr.y0 += y_wr_step;
                 wr.y1 += y_wr_step;
             }
-            #assert(wr.y0 == image.size.y);
 
             threads_join(&threads);
 
@@ -1245,12 +1264,11 @@ func main(argc: int, argv: char**): int {
                 1 - square(random01())
             };
 
-            for (i := 0; i < bands; i++) {
+            while (wr.y0 < image.size.y) {
                 threads_post_process(&threads, &image, wr, &blurred, &blurred2, lum.x, lum.y, color_adjustment);
                 wr.y0 += y_wr_step;
                 wr.y1 += y_wr_step;
             }
-            #assert(wr.y0 == image.size.y);
 
             threads_join(&threads);
 
@@ -1267,7 +1285,9 @@ func main(argc: int, argv: char**): int {
             n_t++;
 
             if (profiling || app.mouse.left_button.pressed) {
-                // Regen galaxy every time
+                // Regen galaxy every time. This is a good candidate for
+                // multithreading but is the only big bit of work not started
+                // directly by this top level
                 // init_star_type_really(star_types + 12, true);
 
                 printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
