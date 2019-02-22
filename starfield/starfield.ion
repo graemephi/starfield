@@ -2,7 +2,7 @@ import libc { ... }
 import sdl { ... }
 import noir { ... }
 
-#foreign(header = "<sdl_bits.h>")
+#foreign(header = "<SDL_bits.h>")
 
 @foreign
 func isnan(f: float): bool;
@@ -298,7 +298,7 @@ func tex_write_nearest(tex: Tex*, pos: float2, val: Color) {
 }
 
 func tex_get_lod(tex: Tex*, lod: int2): Image {
-    // Pixels are laid out as: Series of decreasing mips
+    // Pixels are laid out as a series of decreasing mips
     // Each mip is a square mip, followed by decreasing mips in the x axis, then
     // decreasing mips in the y axis
 
@@ -356,7 +356,7 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
         if (lodf.x > 1e-5) {
             b_lod := tex_get_lod(tex, add2si(lodi, 1));
             b := image_sample_linear(&b_lod, pos);
-            return  color_lerp(a, b, lodf.x);
+            return color_lerp(a, b, lodf.x);
         }
 
         return a;
@@ -411,10 +411,11 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
     }
 }
 
-func all_rect(): Rect {
+func all_rect(img: Image*): Rect {
+    ar := float(img.size.x) / float(img.size.y);
     return {
-        pos = { 0.5, 0.5 },
-        size = { 1, 1 },
+        pos = { 0.5 * ar, 0.5 },
+        size = { ar, 1 },
         rot = { 1, 0 }
     };
 }
@@ -438,27 +439,41 @@ func rotate_theta(v: float2, theta: float): float2 {
     return rotate(v, { cos(theta), sin(theta) });
 }
 
-func inside_normal_rect(pos: float2): bool {
-    return pos.x >= 0 && pos.x < 1
+func inside_normal_rect(pos: float2, aspect_ratio: float): bool {
+    return pos.x >= 0 && pos.x < aspect_ratio
         && pos.y >= 0 && pos.y < 1;
 }
 
-func rect_relative(rect: Rect, aspect_ratio: float, abs_pos: float2): float2 {
-    abs_pos.x *= aspect_ratio;
+func rect_relative(rect: Rect, abs_pos: float2): float2 {
     shift_pos := sub2(abs_pos, rect.pos);
     rot_pos := rotate(shift_pos, rect.rot);
-    scaled_pos := div2(rot_pos, rect.size);
-    result := add2(scaled_pos, { 0.5, 0.5 });
+    scaled_pos := div2s(rot_pos, rect.size.y);
+    result := add2(scaled_pos, { 0.5 * rect.size.x / rect.size.y, 0.5 });
     return result;
 }
 
-func rect_absolute(rect: Rect, aspect_ratio: float, rel_pos: float2): float2 {
-    centered_pos := sub2(rel_pos, { 0.5 / aspect_ratio, 0.5 });
-    scaled_pos := mul2(centered_pos, rect.size);
+func rect_absolute(rect: Rect, rel_pos: float2): float2 {
+    centered_pos := sub2(rel_pos, { 0.5 * rect.size.x / rect.size.y, 0.5 });
+    scaled_pos := mul2s(centered_pos, rect.size.y);
     rot_pos := rotate(scaled_pos, { rect.rot.x, -rect.rot.y });
     shift_pos := add2(rot_pos, rect.pos);
-    shift_pos.x /= aspect_ratio;
     return shift_pos;
+}
+
+func rect_to_rect(dest: Rect, src: Rect, src_pos: float2): float2 {
+    s := rect_absolute(src, src_pos);
+    r := rect_relative(dest, s);
+    return r;
+}
+
+func rect_to_image(dest: Image*, src: Rect, src_pos: float2): float2 {
+    ar := float(dest.size.x) / float(dest.size.y);
+    return rect_to_rect({ pos = { ar * .5, .5 }, size = { ar, 1. } }, src, src_pos);
+}
+
+func image_to_rect(dest: Rect, src: Image*, src_pos: float2): float2 {
+    ar := float(src.size.x) / float(src.size.y);
+    return rect_to_rect(dest, { pos = { ar * .5, .5 }, size = { ar, 1. } }, src_pos);
 }
 
 func gray(c: float): Color {
@@ -977,6 +992,7 @@ struct WorkItem {
 
 func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
     work := (:WorkItem*)data;
 
@@ -1018,6 +1034,8 @@ func threads_thread(data: void*): int {
 func threads_init(threads: Threads*) {
     threads.work_completed_sem = SDL_CreateSemaphore(0);
     threads.thread_count = SDL_GetCPUCount();
+
+    #assert(threads.thread_count >= 4);
 
     threads.work_count = threads.thread_count;
     threads.work = xcalloc(sizeof(WorkItem), threads.work_count);
@@ -1091,9 +1109,13 @@ var diffraction_rotation: float2 = {};
 
 func main(argc: int, argv: char**): int {
     if (true) {
-        test_iterator();
+        test_pixel_iterator({32,32});
+        test_pixel_iterator({64,32});
+        test_pixel_iterator({32,64});
+        test_pixel_iterator({8,1024});
     }
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
     app.window.size = ImageSize;
     if (!app_init()) {
@@ -1125,7 +1147,7 @@ func main(argc: int, argv: char**): int {
 
     diffraction_rotation = random_unit_vector2();
 
-    starfield := create_starfield(starfield_text);
+    starfield := Starfield {};
     starfield;
 
     min_t := 100000.;
@@ -1179,7 +1201,6 @@ func main(argc: int, argv: char**): int {
                 *it.pixel = c;
             }
             blur(&noise, 0.1);
-
             image_copy_to(&image, &noise);
 
             starfield = create_starfield(starfield_text);
@@ -1247,7 +1268,7 @@ func main(argc: int, argv: char**): int {
 
             if (profiling || app.mouse.left_button.pressed) {
                 // Regen galaxy every time
-                init_star_type_really(star_types + 12, true);
+                // init_star_type_really(star_types + 12, true);
 
                 printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
 

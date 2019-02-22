@@ -94,7 +94,7 @@ struct PixelIter {
     dy: float2;
 
     pos: float2;
-    abs_pos: float2;
+    img_pos: float2;
     pixel: Color*;
 }
 
@@ -105,45 +105,42 @@ func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter: PixelIter = {};
 
-    aspect_ratio := float(image.size.x) / float(image.size.y);
+    if (is_zero(&rect, sizeof(rect))) {
+        rect = all_rect(image);
+    }
+
+    aspect_ratio := rect.size.x / rect.size.y;
 
     x_min := 0.;
-    x_max := 1.;
+    x_max := aspect_ratio;
     y_min := 0.;
     y_max := 1.;
-    start_pos := clamp2(0, 1,  rect_absolute(rect, aspect_ratio, {0, 0}));
 
-    if (!is_zero(&rect, sizeof(rect))) {
-        a := start_pos;
-        b := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {1, 0}));
-        c := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {0, 1}));
-        d := clamp2(0, 1, rect_absolute(rect, aspect_ratio, {1, 1}));
+    a := rect_to_image(image, rect, { x_min,  y_min });
+    b := rect_to_image(image, rect, { x_max,  y_min });
+    c := rect_to_image(image, rect, { x_min,  y_max });
+    d := rect_to_image(image, rect, { x_max,  y_max });
 
-        x_min = hmin4(a.x, b.x, c.x, d.x);
-        x_max = hmax4(a.x, b.x, c.x, d.x);
-        y_min = hmin4(a.y, b.y, c.y, d.y);
-        y_max = hmax4(a.y, b.y, c.y, d.y);
+    x_min = smin4(a.x, b.x, c.x, d.x);
+    x_max = smax4(a.x, b.x, c.x, d.x);
+    y_min = smin4(a.y, b.y, c.y, d.y);
+    y_max = smax4(a.y, b.y, c.y, d.y);
 
-        origin := rect_relative(rect, aspect_ratio, { 0, 0 });
-        iter.dx = sub2(rect_relative(rect, aspect_ratio, { 1. / image.size.x, 0 }), origin);
-        iter.dy = sub2(rect_relative(rect, aspect_ratio, { 0, 1. / image.size.y }), origin);
-    } else {
-        rect = all_rect();
-        iter.dx = { 1. / image.size.x, 0. };
-        iter.dy = { 0., 1. / image.size.y };
-    }
+    origin := image_to_rect(rect, image, { 0, 0 });
+    iter.dx = sub2(image_to_rect(rect, image, { 1. / image.size.y, 0 }), origin);
+    iter.dy = sub2(image_to_rect(rect, image, { 0, 1. / image.size.y }), origin);
 
     iter.image = *image;
     iter.image.wr = explicit_writable_region(image);
 
-    iter.start.x = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.x - 0.5)));
+    iter.start.x = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.y - 0.5)));
     iter.start.y = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(ceil(y_min * image.size.y - 0.5)));
-    iter.end.x   = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.x - 0.5)) + 1;
+    iter.end.x   = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.y - 0.5)) + 1;
     iter.end.y   = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1;
 
     iter.pixel_pos = { iter.start.x - 1, iter.start.y };
-    iter.pos = rect_relative(rect, aspect_ratio, { float(0.5 + iter.pixel_pos.x) / image.size.x, float(0.5 + iter.pixel_pos.y) / image.size.y });
-    iter.abs_pos = rect_relative(rect, aspect_ratio, iter.pos);
+    iter.img_pos = { (0.5 + iter.pixel_pos.x) / image.size.y, (0.5 + iter.pixel_pos.y) / image.size.y };
+    iter.pos = image_to_rect(rect, image, iter.img_pos);
     iter.line_start = iter.pos;
     iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
@@ -159,9 +156,9 @@ func pixel_iter_next(it: PixelIter*): bool {
             // Todo: used fixed point instead?
             it.pos = add2(it.pos, it.dx);
 
-            if (inside_normal_rect(it.pos) && writable_at(it.image.wr, it.pixel_pos)) {
+            if (inside_normal_rect(it.pos, it.aspect_ratio) && writable_at(it.image.wr, it.pixel_pos)) {
                 it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
-                it.abs_pos = rect_relative(it.rect, it.aspect_ratio, it.pos);
+                it.img_pos =  { (0.5 + it.pixel_pos.x) / it.image.size.y, (0.5 + it.pixel_pos.y) / it.image.size.y };
                 return true;
             }
         }
@@ -174,8 +171,7 @@ func pixel_iter_next(it: PixelIter*): bool {
     return false;
 }
 
-func test_iterator() {
-    dim := int2 { 32, 32 };
+func test_pixel_iterator(dim: int2) {
     img := make_image(dim);
 
     for (i := 0; i < dim.x; i++) {
@@ -191,28 +187,63 @@ func test_iterator() {
         }
     }
 
-    i := 0;
-    j := 0;
-    for (it := pixel_iter_begin(&img, all_rect()); pixel_iter_next(&it)) {
-        p := img.pixels[i + j*dim.x];
-        c := image_sample_linear(&img, it.pos);
-        d := image_sample_nearest(&img, it.pos);
-        #assert(p.r - c.r < 1e-5);
-        #assert(p.g - c.g < 1e-5);
-        #assert(p.b - c.b < 1e-5);
-        #assert(p.a - c.a < 1e-5);
-        #assert(p.r == d.r);
-        #assert(p.g == d.g);
-        #assert(p.b == d.b);
-        #assert(p.a == d.a);
+    {
+        i := 0;
+        j := 0;
+        for (it := pixel_iter_begin(&img, all_rect(&img)); pixel_iter_next(&it)) {
+            p := img.pixels[i + j*dim.x];
+            c := image_sample_linear(&img, it.pos);
+            d := image_sample_nearest(&img, it.pos);
+            #assert(fabs(p.r - c.r) < 1e-5);
+            #assert(fabs(p.g - c.g) < 1e-5);
+            #assert(fabs(p.b - c.b) < 1e-5);
+            #assert(fabs(p.a - c.a) < 1e-5);
+            #assert(p.r == d.r);
+            #assert(p.g == d.g);
+            #assert(p.b == d.b);
+            #assert(p.a == d.a);
 
-        i++;
-        if (i == dim.x) {
-            i = 0;
-            j++;
+            i++;
+            if (i == dim.x) {
+                i = 0;
+                j++;
+            }
         }
+        #assert(i + j*dim.x == dim.x*dim.y);
     }
-    #assert(i + j*dim.x == dim.x*dim.y);
+
+    {
+        half_dim := div2si(dim, 2);
+
+        i := 0;
+        j := 0;
+        rect := all_rect(&img);
+        rect.size.x /= 2;
+        rect.size.y /= 2;
+        pp := img.pixels + dim.x/4 + (dim.y/4)*dim.x;
+        for (it := pixel_iter_begin(&img, rect); pixel_iter_next(&it)) {
+            p := *pp++;
+            c := image_sample_linear(&img, it.img_pos);
+            d := image_sample_nearest(&img, it.img_pos);
+            #assert(fabs(p.r - c.r) < 1e-5);
+            #assert(fabs(p.g - c.g) < 1e-5);
+            #assert(fabs(p.b - c.b) < 1e-5);
+            #assert(fabs(p.a - c.a) < 1e-5);
+            #assert(p.r == d.r);
+            #assert(p.g == d.g);
+            #assert(p.b == d.b);
+            #assert(p.a == d.a);
+
+            i++;
+            if (i == half_dim.x) {
+                i = 0;
+                j++;
+                pp = pp - half_dim.x + dim.x;
+            }
+        }
+        #assert(i + j*half_dim.x == half_dim.x*half_dim.y);
+    }
+    free_image(&img);
 }
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {
@@ -229,12 +260,13 @@ func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd:
 }
 
 enum EdgeBehavior {
+    Edge_Black,
     Edge_Clamp,
     Edge_Wrap
 }
 
 func image_sample_linear(img: Image*, pos: float2): Color {
-    return image_sample_linear_edge(img, pos, Edge_Clamp);
+    return image_sample_linear_edge(img, pos, Edge_Black);
 }
 
 func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehavior): Color {
@@ -246,19 +278,9 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     #assert(img.size.y);
 
     scaled := float2 {
-        pos.x * img.size.x - 0.5,
+        pos.x * img.size.y - 0.5,
         pos.y * img.size.y - 0.5,
     };
-
-    if (edge_behavior == Edge_Clamp) {
-        scaled.x = clamp(0, float(img.size.x) - 1, scaled.x);
-        scaled.y = clamp(0, float(img.size.y) - 1, scaled.y);
-    } else if (edge_behavior == Edge_Wrap) {
-        scaled.x = wrap(scaled.x, float(img.size.x) - 1);
-        scaled.y = wrap(scaled.y, float(img.size.y) - 1);
-    } else {
-        #assert(0);
-    }
 
     vi := float2_to_int2(scaled);
     vf := sub2(scaled, int2_to_float2(vi));
@@ -268,95 +290,51 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     c := add2i(a, {0, 1});
     d := add2i(a, {1, 1});
 
-    #assert(a.x >= 0 && a.x < img.size.x);
-    #assert(a.y >= 0 && a.y < img.size.y);
+    A: Color;
+    B: Color;
+    C: Color;
+    D: Color;
 
-    if (edge_behavior == Edge_Clamp) {
-        b.x = clampi_high(img.size.x - 1, b.x);
-        c.x = clampi_high(img.size.x - 1, c.x);
-        d.x = clampi_high(img.size.x - 1, d.x);
-        b.y = clampi_high(img.size.y - 1, b.y);
-        c.y = clampi_high(img.size.y - 1, c.y);
-        d.y = clampi_high(img.size.y - 1, d.y);
-    } else if (edge_behavior == Edge_Wrap) {
-        b.x = (b.x == img.size.x) ? 0 : b.x;
-        c.x = (c.x == img.size.x) ? 0 : c.x;
-        d.x = (d.x == img.size.x) ? 0 : d.x;
-        b.y = (b.y == img.size.y) ? 0 : b.y;
-        c.y = (c.y == img.size.y) ? 0 : c.y;
-        d.y = (d.y == img.size.y) ? 0 : d.y;
+    if (edge_behavior == Edge_Black) {
+        a_idx: uint = a.x + a.y*img.size.x;
+        b_idx: uint = b.x + b.y*img.size.x;
+        c_idx: uint = c.x + c.y*img.size.x;
+        d_idx: uint = d.x + d.y*img.size.x;
+        end: uint = img.size.x*img.size.y;
+        A = (a_idx < end) ? img.pixels[a_idx] : {};
+        B = (b_idx < end) ? img.pixels[b_idx] : {};
+        C = (c_idx < end) ? img.pixels[c_idx] : {};
+        D = (d_idx < end) ? img.pixels[d_idx] : {};
+    } else {
+        if (edge_behavior == Edge_Clamp) {
+            a.x = clampi(0, img.size.x - 1, a.x);
+            b.x = clampi(0, img.size.x - 1, b.x);
+            c.x = clampi(0, img.size.x - 1, c.x);
+            d.x = clampi(0, img.size.x - 1, d.x);
+            a.y = clampi(0, img.size.y - 1, a.y);
+            b.y = clampi(0, img.size.y - 1, b.y);
+            c.y = clampi(0, img.size.y - 1, c.y);
+            d.y = clampi(0, img.size.y - 1, d.y);
+        } else if (edge_behavior == Edge_Wrap) {
+            a.x = (a.x == img.size.x) ? a.x - img.size.x : a.x;
+            b.x = (b.x == img.size.x) ? b.x - img.size.x : b.x;
+            c.x = (c.x == img.size.x) ? c.x - img.size.x : c.x;
+            d.x = (d.x == img.size.x) ? d.x - img.size.x : d.x;
+            a.y = (a.y == img.size.y) ? a.y - img.size.y : a.y;
+            b.y = (b.y == img.size.y) ? b.y - img.size.y : b.y;
+            c.y = (c.y == img.size.y) ? c.y - img.size.y : c.y;
+            d.y = (d.y == img.size.y) ? d.y - img.size.y : d.y;
+        }
+
+        A = img.pixels[a.x + a.y*img.size.x];
+        B = img.pixels[b.x + b.y*img.size.x];
+        C = img.pixels[c.x + c.y*img.size.x];
+        D = img.pixels[d.x + d.y*img.size.x];
     }
-
-    A := img.pixels[a.x + a.y*img.size.x];
-    B := img.pixels[b.x + b.y*img.size.x];
-    C := img.pixels[c.x + c.y*img.size.x];
-    D := img.pixels[d.x + d.y*img.size.x];
 
     AB := color_lerp(A, B, vf.x);
     CD := color_lerp(C, D, vf.x);
     ABCD := color_lerp(AB, CD, vf.y);
-
-    return ABCD;
-}
-
-func sample_linear(pixels: float*, size: int2, pos: float2, edge_behavior: EdgeBehavior): float {
-    if (pixels == 0) {
-        return {};
-    }
-
-    #assert(size.x);
-    #assert(size.y);
-
-    scaled := float2 {
-        pos.x * size.x - 0.5,
-        pos.y * size.y - 0.5,
-    };
-
-    if (edge_behavior == Edge_Clamp) {
-        scaled.x = clamp(0, float(size.x), scaled.x);
-        scaled.y = clamp(0, float(size.y), scaled.y);
-    } else if (edge_behavior == Edge_Wrap) {
-        scaled.x = wrap(scaled.x, float(size.x));
-        scaled.y = wrap(scaled.y, float(size.y));
-    } else {
-        #assert(0);
-    }
-
-    vi := float2_to_int2(scaled);
-    vf := sub2(scaled, int2_to_float2(vi));
-
-    a := vi;
-    b := add2i(a, {1, 0});
-    c := add2i(a, {0, 1});
-    d := add2i(a, {1, 1});
-
-    #assert(a.x >= 0 && a.x < size.x);
-    #assert(a.y >= 0 && a.y < size.y);
-
-    if (edge_behavior == Edge_Clamp) {
-        b.x = clampi_high(size.x - 1, b.x);
-        c.x = clampi_high(size.x - 1, c.x);
-        d.x = clampi_high(size.x - 1, d.x);
-        b.y = clampi_high(size.y - 1, b.y);
-        c.y = clampi_high(size.y - 1, c.y);
-        d.y = clampi_high(size.y - 1, d.y);
-    } else if (edge_behavior == Edge_Wrap) {
-        b.x = (b.x == size.x) ? 0 : b.x;
-        c.x = (c.x == size.x) ? 0 : c.x;
-        d.x = (d.x == size.x) ? 0 : d.x;
-        b.y = (b.y == size.y) ? 0 : b.y;
-        c.y = (c.y == size.y) ? 0 : c.y;
-        d.y = (d.y == size.y) ? 0 : d.y;
-    }
-
-    A := pixels[a.x + a.y*size.x];
-    B := pixels[b.x + b.y*size.x];
-    C := pixels[c.x + c.y*size.x];
-    D := pixels[d.x + d.y*size.x];
-
-    AB := lerp(A, B, vf.x);
-    CD := lerp(C, D, vf.x);
-    ABCD := lerp(AB, CD, vf.y);
 
     return ABCD;
 }
@@ -370,7 +348,7 @@ func image_sample_nearest(img: Image*, pos: float2): Color {
     #assert(img.size.y);
 
     // Round to pixel center. x + .5 - .5 = x
-    p := int2 { int(pos.x * img.size.x), int(pos.y * img.size.y) };
+    p := int2 { int(pos.x * img.size.y), int(pos.y * img.size.y) };
     return image_fetch(img, p);
 }
 

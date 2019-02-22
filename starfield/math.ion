@@ -82,11 +82,11 @@ func safe_div(a: float, b: float): float {
     return b == 0 ? b : a / b;
 }
 
-func hmin4(a: float, b: float, c: float, d: float): float {
+func smin4(a: float, b: float, c: float, d: float): float {
     return min(min(a, b), min(c, d));
 }
 
-func hmax4(a: float, b: float, c: float, d: float): float {
+func smax4(a: float, b: float, c: float, d: float): float {
     return max(max(a, b), max(c, d));
 }
 
@@ -257,6 +257,7 @@ func float_from_random_bits(b: int): float {
     i := (b & f_sig_mask) | f_exp_1_2_mask;
     f := fbits { i = i }.f - 1.;
     return f;
+    // return (b & f_sig_mask) * (1. / f_sig_mask);
 }
 
 func random01(): float {

@@ -195,6 +195,8 @@ func random_star_color_for_type(type: StarType*, alpha: float): Color {
 func create_starfield(starfield: char const*): Starfield {
     result: Starfield = {};
 
+    aspect_ratio := float(ImageSize.x) / float(ImageSize.y);
+
     width := 0;
     height := 0;
     line_width := 0;
@@ -240,13 +242,14 @@ func create_starfield(starfield: char const*): Starfield {
     R := maxi(width, height);
     x_pad := 4 + (R - width) / 2;
     y_pad := 4 + (R - height) / 2;
+    star_size := exp(randomr(-5, -5.8)); // 0.005
 
     for (i := 0; i < starfield_len(&result); i++) {
         s := result.stars + i;
-        s.rect.pos.x = (ImageSize.x/ ImageSize.y) * (s.rect.pos.x + x_pad) / R;
+        s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
-        s.rect.size.x = s.type.size.x * s.type.tex.size.x * s.rect.size.x / ImageSize.x;
-        s.rect.size.y = s.type.size.y * s.type.tex.size.y * s.rect.size.y / ImageSize.y;
+        s.rect.size.x = s.type.size.x * s.type.tex.size.x * s.rect.size.x * star_size;
+        s.rect.size.y = s.type.size.y * s.type.tex.size.y * s.rect.size.y * star_size;
     }
 
     star_count_noise := make_tex({ 8, 8 });
@@ -257,18 +260,17 @@ func create_starfield(starfield: char const*): Starfield {
     }
 
     tiles := 25;
-    w := (0.+ImageSize.x / ImageSize.y) / tiles;
-    background_star_size := 0.005;
-    xy := float2 { (w * ImageSize.x / ImageSize.y) / 2., w / 2. };
-    for (i := 0; i < tiles ; i++) {
-        for (j := 0; j < tiles; j++) {
+    w := 1. / tiles;
+    xy := float2 {};
+    for (i := 0; i < tiles; i++) {
+        for (j := 0; j < tiles*aspect_ratio; j++) {
             count := max(1., tex_lookup(&star_count_noise, xy).r);
             for (k := 0; k < count; k++) {
-                size := max(1. / ImageSize.x, random_normal()*background_star_size*(1 + count - int(count)));
+                size := clamp_low(star_size, random_normal()*star_size*(1 + count - int(count)));
 
                 push_star(&result, &{
                     rect = {
-                        pos = add2(xy, {(random01() - 0.5) * w, (random01() - 0.5) * w}),
+                        pos = add2(xy, { random01() * w, random01() * w }),
                         size = { size, size },
                         rot = random_unit_vector2()
                     },
@@ -280,7 +282,7 @@ func create_starfield(starfield: char const*): Starfield {
             xy.x += w;
         }
 
-        xy.x = w / 2;
+        xy.x = 0;
         xy.y += w;
     }
 
@@ -296,7 +298,7 @@ func create_starfield(starfield: char const*): Starfield {
 
     scales : float[4] = {1,1.5,1.75,2};
 
-    layer_count := 3; //clampi(0, 4, random_poisson(exp(-2.1)));
+    layer_count := clampi(0, 4, random_poisson(exp(-2.1)));
     color_x := randomr(2, StarColorCount - 2);
     variability := randomr(0.05, .3);
     color_width := variability*StarColorCount/1.5;
@@ -379,7 +381,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
 
         push_star(s, &{
             rect = {
-                pos = add2s(mul2s(pos, .51), 0.5),
+                pos = add2s(mul2s(pos, 0.5), 0.5),
                 size = { size, size },
                 rot = random_unit_vector2()
             },
@@ -514,6 +516,7 @@ func init_star_type_really(type: StarType*, redraw: bool) {
         case 8: // ✦
             type.tex = make_tex({ 64, 64 });
             type.size = { 1, 1 };
+            type.fixed_rotation = true;
             draw_simple_star(&type.tex);
             blur(&{type.tex.pixels, type.tex.size}, .5);
             diffract(&{type.tex.pixels, type.tex.size}, { alpha = 3, radius = .75, transform = rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
@@ -548,6 +551,9 @@ func init_star_type_really(type: StarType*, redraw: bool) {
             type.size = { 1./3., 1./3. };
             type.nonsquare = true;
             draw_galaxy(&type.tex, randomn(1,8));
+
+            // Reveal rendering bug:
+            // draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
         case 13: // '　'
             type.tex = make_tex({ 8, 8 });
             type.size = { 1, 1 };
@@ -716,16 +722,18 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
 
     for (it := pixel_iter_begin(&nebula, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * .1;
-        p := perlin_octaves(it.abs_pos, 5) * .5 + .5;
+        p := perlin_octaves(it.pos, 5) * .5 + .5;
         warp_scale := d * turbulence*(1 - p);
-        w1 := worley_octaves(random_warp(add2s(it.abs_pos, 1.6939), 4, warp_scale), 5+p*0.2).x;
-        w2 := worley_octaves(random_warp(add2s(it.abs_pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).y;
-        w3 := 4*worley_octaves(random_warp(add2s(it.abs_pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2).y;
+        w1 := worley_octaves(random_warp(add2s(it.pos, 1.6939), 4, warp_scale), 5+p*0.2).x;
+        w2 := worley_octaves(random_warp(add2s(it.pos, 3.32849), 6 + 5*turbulence2, warp_scale), 7+p*0.2).y;
+        w3 := 4*worley_octaves(random_warp(add2s(it.pos, 8.22643), 10 + 10*turbulence2, warp_scale), 10 + detail+p*0.2).y;
         w := w1*w1*w2*w3;
         *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
-    // Todo: downsample this
+    // Todo: downsample this. This is also technically incorrect when
+    // mulithreaded as the blur is incorrect at region boundaries.
+    // But I can't notice it.
     blur_nebula := image_copy(&nebula);
     blur_region(&blur_nebula, 16);
 

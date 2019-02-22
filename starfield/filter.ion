@@ -267,9 +267,8 @@ func transform_image(src: Image*, rotate: float2, scale: float2): Image {
     size := int2 { int(scale.x * src.size.x), int(scale.y * src.size.y) };
     result := make_image(size);
 
-    inverse_rect := all_rect();
-    inverse_rect.size = { 1. / scale.x, 1. / scale.y };
-    inverse_rect.size.x /= (float(src.size.x) / src.size.y);
+    inverse_rect := all_rect(src);
+    inverse_rect.size = { 1. / scale.y, 1. / scale.y };
     inverse_rect.rot = { rotate.x, -rotate.y };
 
     for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
@@ -279,18 +278,18 @@ func transform_image(src: Image*, rotate: float2, scale: float2): Image {
     return result;
 }
 
-func bounds_after_transform(transform: float2, aspect_ratio: float): float2 {
-    r := all_rect();
+func bounds_after_transform(img: Image*, transform: float2): float2 {
+    r := all_rect(img);
     r.rot = transform;
-    a := rect_absolute(r, aspect_ratio, {0,0});
-    b := rect_absolute(r, aspect_ratio, {1,0});
-    c := rect_absolute(r, aspect_ratio, {0,1});
-    d := rect_absolute(r, aspect_ratio, {1,1});
+    a := rect_to_image(img, r, {0,0});
+    b := rect_to_image(img, r, {1,0});
+    c := rect_to_image(img, r, {0,1});
+    d := rect_to_image(img, r, {1,1});
 
-    x_min := hmin4(a.x, b.x, c.x, d.x);
-    x_max := hmax4(a.x, b.x, c.x, d.x);
-    y_min := hmin4(a.y, b.y, c.y, d.y);
-    y_max := hmax4(a.y, b.y, c.y, d.y);
+    x_min := smin4(a.x, b.x, c.x, d.x);
+    x_max := smax4(a.x, b.x, c.x, d.x);
+    y_min := smin4(a.y, b.y, c.y, d.y);
+    y_max := smax4(a.y, b.y, c.y, d.y);
 
     x := x_max - x_min;
     y := y_max - y_min;
@@ -320,13 +319,12 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
             dest.pixels[i] = color_add(dest.pixels[i], color_mul(img.pixels[i], alpha));
         }
     } else {
-        scale := float2 { 1. / transformed_bounds.x, 1. / transformed_bounds.y };
-        scale.x /= (float(dest.size.x) / dest.size.y);
+        scale := float2 { 1. / transformed_bounds.y, 1. / transformed_bounds.y };
         offset := float2 { 0.5, 0.5 };
         for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
-            pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), { 0.5, 0.5 });
+            pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), { 0.5 * it.aspect_ratio, 0.5 });
 
-            if (inside_normal_rect(pos)) {
+            if (inside_normal_rect(pos, it.aspect_ratio)) {
                 *it.pixel = color_add(*it.pixel, color_mul(image_sample_linear(img, pos), alpha));
             }
         }
@@ -360,7 +358,7 @@ func diffract(img: Image*, args: DiffractionArguments) {
     transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
     aspect_ratio := float(img.size.x) / float(img.size.y);
 
-    bounds := bounds_after_transform(transform, aspect_ratio);
+    bounds := bounds_after_transform(img, transform);
     m := magnitude2(transform);
     working_size := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
@@ -378,7 +376,7 @@ func diffract(img: Image*, args: DiffractionArguments) {
 
     if (args.type == Diffraction_CrossOrthoRed) {
         ortho := rotate(args.transform, mul2s({ InvSqrt2, InvSqrt2 }, 0.7));
-        ortho_bounds := bounds_after_transform(ortho, aspect_ratio);
+        ortho_bounds := bounds_after_transform(img, ortho);
         ortho_working_size := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
         #assert(maxi(ortho_working_size.x, ortho_working_size.y) < scratch_buf_size);
         #assert((ortho_working_size.x * ortho_working_size.y) < transpose_scratch_size);
