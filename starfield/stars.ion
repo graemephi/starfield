@@ -568,35 +568,6 @@ func init_star_type_really(type: StarType*, redraw: bool) {
     tex_preprocess(&type.tex);
 }
 
-func rwo_gradient(p: int2): float2 {
-    // bad_hash_int2 with fnv-32 values so it gives the same results as the sse version
-    h := (((0x811c9dc5 ^ uint(p.x)) * 16777619u) ^ uint(p.y)) * 16777619u;
-    a := xor_shift(h);
-    b := float_from_random_bits(a);
-
-    // Generate a random direction (x, y). (sqrt(b), sqrt(1 - b)) follows from
-    // the usual (b, sqrt(1 - b*b)), but we take the sqrt of b for x for two
-    // reasons. Firstly, the two sqrts seems to fare better speed wise--possibly
-    // due to pipelining? Secondly, if we generate y from a uniform x, then x is
-    // uniformly distributed on the unit interval, *not* the x part of the unit
-    // circle. sqrt(b) pushes the points in (0,1) towards 1, to be more
-    // cosine-weighted-like, so it's slightly better (but still worse than
-    // sincos(2piX)). Another option is randomly swapping x and y, but that
-    // tanks throughput.
-    x := sqrt(b);
-    y := sqrt(1 - b);
-
-    // This positive in both x and y, but we don't use all the bits in a to
-    // generate the random float, so we use those to dump it in some quadrant
-    // of the unit circle.
-    x_sign := a & (1<<31);
-    y_sign := (a<<1) & (1<<31);
-    xx := fbits{i = (fbits{f=x}.i + x_sign)}.f;
-    yy := fbits{i = (fbits{f=y}.i + y_sign)}.f;
-
-    return { xx, yy };
-}
-
 func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
     nebula := make_image_like(img, 1);
 

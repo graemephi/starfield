@@ -303,6 +303,35 @@ func worley_octaves(p: float2, grid_size: float): float2 {
     return mul2s(add2(a, add2(b, add2(c, d))), s);
 }
 
+func rwo_gradient(p: int2): float2 {
+    // bad_hash_int2 with fnv-32 values so it gives the same results as the sse version
+    h := (((0x811c9dc5 ^ uint(p.x)) * 16777619u) ^ uint(p.y)) * 16777619u;
+    a := xor_shift(h);
+    b := float_from_random_bits(a);
+
+    // Generate a random direction (x, y). (sqrt(b), sqrt(1 - b)) follows from
+    // the usual (b, sqrt(1 - b*b)), but we take the sqrt of b for x for two
+    // reasons. Firstly, the two sqrts seems to fare better speed wise--possibly
+    // due to pipelining? Secondly, if we generate y from a uniform x, then x is
+    // uniformly distributed on the unit interval, *not* the x part of the unit
+    // circle. sqrt(b) pushes the points in (0,1) towards 1, to be more
+    // cosine-weighted-like, so it's slightly better (but still worse than
+    // sincos(2piX)). Another option is randomly swapping x and y, but that
+    // tanks throughput.
+    x := sqrt(b);
+    y := sqrt(1 - b);
+
+    // This positive in both x and y, but we don't use all the bits in a to
+    // generate the random float, so we use those to dump it in some quadrant
+    // of the unit circle.
+    x_sign := a & (1<<31);
+    y_sign := (a<<1) & (1<<31);
+    xx := fbits{i = (fbits{f=x}.i + x_sign)}.f;
+    yy := fbits{i = (fbits{f=y}.i + y_sign)}.f;
+
+    return { xx, yy };
+}
+
 func random_warp_one(p: float2, scale: float): float2 {
     a := rwo_gradient(float2_to_int2(add2(p, { 0, 0 })));
     b := rwo_gradient(float2_to_int2(add2(p, { 1, 0 })));
