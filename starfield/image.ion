@@ -48,6 +48,18 @@ func image_copy(img: Image*): Image {
     return result;
 }
 
+func image_copy_region(img: Image*): Image {
+    #assert(img.pixels);
+    result := make_image(img.size);
+
+    // Contiguous bytes.
+    wr := explicit_writable_region(img);
+    #assert(wr.x0 == 0 && wr.x1 == img.size.x);
+
+    memcpy(result.pixels, img.pixels + wr.y0*img.size.x, img.size.x*(wr.y1-wr.y0)*sizeof(Color));
+    return result;
+}
+
 func image_copy_to(dest: Image*, src: Image*) {
     if ((src.size.x == dest.size.x) && (src.size.y == dest.size.y)) {
         memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));

@@ -734,7 +734,7 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
     // Todo: downsample this. This is also technically incorrect when
     // mulithreaded as the blur is incorrect at region boundaries.
     // But I can't notice it.
-    blur_nebula := image_copy(&nebula);
+    blur_nebula := image_copy_region(&nebula);
     blur_region(&blur_nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {

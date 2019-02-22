@@ -9,6 +9,10 @@ func blur_asym(img: Image*, radius: float2) {
 // Nothing else in this file knows about writable regions
 func blur_region(img: Image*, radius: float) {
     wr := explicit_writable_region(img);
+
+    // Contiguous bytes.
+    #assert(wr.x0 == 0 && wr.x1 == img.size.x);
+
     region := *img;
     region.pixels = img.pixels + (wr.x0 + wr.y0*img.size.x);
     region.size = { wr.x1 - wr.x0, wr.y1 - wr.y0 };
