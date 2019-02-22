@@ -81,7 +81,7 @@ func blur_horizontal(dest: Image*, src: Image*, radius: float) {
         blur_row(row_dest, scratch, src.size.x, radius);
     }
 
-    free(scratch);
+    xfree(scratch);
 }
 
 func blur_vertical(dest: Image*, src: Image*, radius: float) {
@@ -105,7 +105,7 @@ func blur_vertical(dest: Image*, src: Image*, radius: float) {
         }
     }
 
-    free(scratch);
+    xfree(scratch);
 }
 
 func blur_to(dest: Image*, src: Image*, radius: float) {
@@ -134,7 +134,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
 
 
     free_image(&temp);
-    free(scratch);
+    xfree(scratch);
 }
 
 func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
@@ -147,7 +147,6 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     for (i := 0; i < 3; i++) {
         for (y := 0; y < src.size.y; y++) {
             row_src := src.pixels + y*src.size.x;
-            row_dest := dest.pixels + y*dest.size.x;
             blur_row(scratch, row_src, src.size.x, radius.x);
             blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
         }
@@ -160,7 +159,7 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     }
 
     free_image(&temp);
-    free(scratch);
+    xfree(scratch);
 }
 
 func diffract_fetch(row: float*, len: int, i: int): float {
@@ -305,11 +304,12 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
     rotation := float2 { 1, 0 };
 
     img := dest;
+    transformed: Image;
     if (is_identity_transform(transform) == false) {
         m := magnitude2(transform);
         rotation = float2 { transform.x / m,  transform.y / m };
-        transformed_img := transform_image(dest, rotation, transformed_bounds);
-        img = &transformed_img;
+        transformed = transform_image(dest, rotation, transformed_bounds);
+        img = &transformed;
     }
 
     inner_radius: float[4] = { radius * .25, radius * .25 * 1.1, radius * .25 * 1.2, radius * .25 * 1.2 };
@@ -360,7 +360,6 @@ func diffract(img: Image*, args: DiffractionArguments) {
     alpha := args.alpha == 0 ? 1 : args.alpha;
     radius := args.radius == 0 ? 1 : args.radius;
     transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
-    aspect_ratio := float(img.size.x) / float(img.size.y);
 
     bounds := bounds_after_transform(img, transform);
     m := magnitude2(transform);
@@ -387,5 +386,5 @@ func diffract(img: Image*, args: DiffractionArguments) {
         apply_diffraction(img, { alpha, alpha*.6, alpha*.2, 1 }, radius, ortho, ortho_bounds, scratch_buf, tranpose_scratch);
     }
 
-    free(scratch_buf);
+    xfree(scratch_buf);
 }

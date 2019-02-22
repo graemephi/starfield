@@ -7,10 +7,19 @@ import noir { ... }
 @foreign
 func isnan(f: float): bool;
 
+@foreign("_aligned_malloc")
+func _aligned_malloc(n: usize, a: usize): void*;
+@foreign("_aligned_calloc")
+func _aligned_calloc(n: usize, a: usize): void*;
+@foreign("_aligned_realloc")
+func _aligned_realloc(p: void*, n: usize, a: usize): void*;
+@foreign("_aligned_free")
+func xfree(p: void*);
+
 var ImageSize: int2 const = { 500, 500 };
 
 func xrealloc(mem: void*, size: usize): void* {
-    result := realloc(mem, size);
+    result := _aligned_realloc(mem, size, 16);
     if (!result) {
         printf("Failed to realloc");
         #assert(!"Bad realloc");
@@ -20,7 +29,7 @@ func xrealloc(mem: void*, size: usize): void* {
 }
 
 func xmalloc(size: usize): void* {
-    result := malloc(size);
+    result := _aligned_malloc(size, 16);
     if (!result) {
         printf("Failed to malloc");
         #assert(!"Bad malloc");
@@ -30,13 +39,16 @@ func xmalloc(size: usize): void* {
     return result;
 }
 
-func xcalloc(count: usize, size: usize): void* {
-    result := calloc(count, size);
+func xcalloc(count: usize, elem_size: usize): void* {
+    #assert(count < 0xffffffffffffffff/elem_size);
+    size := count*elem_size;
+    result := _aligned_malloc(size, 16);
     if (!result) {
         printf("Failed to calloc");
         #assert(!"Bad calloc");
         exit(1);
     }
+    memset(result, 0, size);
     return result;
 }
 
@@ -74,7 +86,7 @@ func buf_cap(buf: void*): ssize {
 func buf_free(buf: void*) {
     h := buf_header(buf);
     if (h) {
-        free(h);
+        xfree(h);
     }
 }
 
@@ -110,27 +122,6 @@ func buf_push(buf: void**, data: void*, len: ssize): void* {
     header.len += len;
     #assert(header.len <= header.cap);
     return slot;
-}
-
-func buf_pop(buf: void*, len: ssize): void* {
-    header := buf_header(buf);
-    if (header.len > 0) {
-        #assert(header.len >= len);
-        result := header.data + (header.len - len);
-        header.len -= len;
-        return result;
-    }
-
-    return 0;
-}
-
-func buf_u32_push(buf: uint32**, v: uint32) {
-    buf_push((:void**)buf, &v, sizeof(v));
-}
-
-func buf_u32_pop(buf: uint32*): uint32 {
-    p: uint32* = buf_pop(buf, sizeof(uint32));
-    return p ? *p : 0;
 }
 
 func hash(p: void*, len: ssize): usize {
@@ -194,7 +185,7 @@ func make_tex(size: int2): Tex {
 
 func free_tex(tex: Tex*) {
     #assert(tex.pixels);
-    free(tex.pixels);
+    xfree(tex.pixels);
     tex.pixels = 0;
     tex.size = { 0, 0 };
 }
@@ -467,13 +458,11 @@ func rect_to_rect(dest: Rect, src: Rect, src_pos: float2): float2 {
 }
 
 func rect_to_image(dest: Image*, src: Rect, src_pos: float2): float2 {
-    ar := float(dest.size.x) / float(dest.size.y);
-    return rect_to_rect({ pos = { ar * .5, .5 }, size = { ar, 1. } }, src, src_pos);
+    return rect_to_rect(all_rect(dest), src, src_pos);
 }
 
 func image_to_rect(dest: Rect, src: Image*, src_pos: float2): float2 {
-    ar := float(src.size.x) / float(src.size.y);
-    return rect_to_rect(dest, { pos = { ar * .5, .5 }, size = { ar, 1. } }, src_pos);
+    return rect_to_rect(dest, all_rect(src), src_pos);
 }
 
 func gray(c: float): Color {
@@ -699,7 +688,7 @@ func get_work(completed: int): WorkItem* {
         token := interlocked_increment(&threads.work_token) - 1;
 
         if (token < threads.work_index) {
-            work = threads.work + (token & (WorkItems - 1));
+            work = threads.work + (token % WorkItems);
             #assert(work.type != WorkType_None);
             SDL_SemPost(threads.work_available_sem);
             break;

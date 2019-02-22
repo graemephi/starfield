@@ -32,7 +32,7 @@ func make_image_like(img: Image*, downsample: int): Image {
 
 func free_image(img: Image*) {
     #assert(img.pixels);
-    free(img.pixels);
+    xfree(img.pixels);
     img.pixels = 0;
     img.size = { 0, 0 };
 }
