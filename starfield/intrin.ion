@@ -147,7 +147,7 @@ func unord4(a: float4, b: float4): float4;
 func blend4(a: float4, b: float4, c: int): float4;
 
 @foreign("_mm_blendv_ps")
-func blendv4(a: float4, b: float4, c: int4): float4;
+func blendv4(a: float4, b: float4, c: float4): float4;
 
 @foreign("_mm_shuffle_ps")
 func shuffle4(a: float4, b: float4, c: int): float4;

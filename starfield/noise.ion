@@ -101,9 +101,13 @@ func init_worley_squares() {
         }
     }
 }
-func worley_square(p: float2): WorleySquare* {
-    #assert(worley_squares);
-    result := worley_squares + ((int(p.y)*WorleySquareCountRoot + int(p.x)) & (WorleySquareCount -1));
+
+func worley_square_index(p: int2): ssize {
+    // This hash is bad enough that my processor can predict the subsequent load
+    // perfectly but good enough that the noise looks fine up to way higher
+    // frequencies than we need it for!!
+    base := bad_hash_int2_u32(p);
+    result := base & (WorleySquareCount - 1);
     return result;
 }
 
@@ -133,7 +137,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
     // yes, this is faster than a loop
 
     {
-        w := worley_square(pi);
+        w := worley_squares + worley_square_index({ int(pi.x), int(pi.y) });
 
         for (m := 0; m < w.count; m++) {
             d := distance_squared2(pf, w.points[m]);
@@ -159,7 +163,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -180,7 +184,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -201,7 +205,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -222,7 +226,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -243,7 +247,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -265,7 +269,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -286,7 +290,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -307,7 +311,7 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 
         if (face_dist < f2) {
             p_ij := add2(pi, { i, j });
-            w := worley_square(p_ij);
+            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
 
             for (m := 0; m < w.count; m++) {
                 d := distance_squared2(p, add2(p_ij, w.points[m]));
@@ -320,6 +324,9 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
             }
         }
     }
+
+    // We only check the 8 adjacent squares. There are more that the
+    // closest point could theoretically be in but I have never seen this happen.
 
     #assert(f1 <= f2);
     #assert(f2 >= 0);
@@ -381,7 +388,7 @@ func worley_sse(p01: float2, grid_size: float): float2 {
     min_dists := max_dists;
     for (y := 0; y < 3; y++) {
         for (x := 0; x < 3; x++) {
-            w := worley_squares16 + ((y_faces[y]*WorleySquareCountRoot + x_faces[x]) & (WorleySquareCount - 1));
+            w := worley_squares16 + worley_square_index({ x_faces[x], y_faces[y] });
             pos := int2 { face_offsets[x], face_offsets[y] };
             XY := set4si((pos.y << 16) + pos.x);
             xy := add8i(load8i((:short8*)&w.points[0].x), XY);
