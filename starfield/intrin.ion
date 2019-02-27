@@ -22,10 +22,13 @@ func _MM_SET_FLUSH_ZERO_MODE(mask: uint32);
 @foreign
 func _MM_SET_DENORMALS_ZERO_MODE(mask: uint32);
 
-@foreign
-var _MM_FLUSH_ZERO_ON: uint32;
-@foreign
-var _MM_DENORMALS_ZERO_ON: uint32;
+// @foreign
+// var _MM_FLUSH_ZERO_ON: uint32;
+// @foreign
+// var _MM_DENORMALS_ZERO_ON: uint32;
+
+var ION_FLUSH_ZERO_ON = 0x8000;
+var ION_DENORMALS_ZERO_ON = 0x0040;
 
 @foreign("__m128")
 struct float4 {

@@ -1,4 +1,4 @@
-import libc { ... }
+import libc { strlen, printf, fabs, cos, sin, memset, exp, ceil, sqrt, log, memcpy, exit, memcmp, pow, log2, abs, fflush }
 import sdl { ... }
 import noir { ... }
 
@@ -40,7 +40,7 @@ func xmalloc(size: usize): void* {
 }
 
 func xcalloc(count: usize, elem_size: usize): void* {
-    #assert(count < 0xffffffffffffffff/elem_size);
+    #assert(count < INT64_MAX/elem_size);
     size := count*elem_size;
     result := _aligned_malloc(size, 16);
     if (!result) {
@@ -427,7 +427,7 @@ func rotate(v: float2, cos_sin_theta: float2): float2 {
 }
 
 func rotate_theta(v: float2, theta: float): float2 {
-    return rotate(v, { cos(theta), sin(theta) });
+    return rotate(v, rotation(theta));
 }
 
 func inside_normal_rect(pos: float2, aspect_ratio: float): bool {
@@ -701,8 +701,8 @@ func get_work(completed: int): WorkItem* {
 }
 
 func threads_thread(data: void*): int {
-    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
     completed := threads.work_completed;
     SDL_SemWait(threads.work_available_sem);
@@ -820,8 +820,8 @@ func main(argc: int, argv: char**): int {
         test_pixel_iterator({32,64});
         test_pixel_iterator({8,1024});
     }
-    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
     app.window.size = ImageSize;
     if (!app_init()) {
@@ -990,7 +990,7 @@ func main(argc: int, argv: char**): int {
 
         SDL_UpdateWindowSurface(app.window.sdl);
 
-        fflush(stdout);
+        fflush(0);
 
         if (!profiling) {
             SDL_WaitEvent(0);
