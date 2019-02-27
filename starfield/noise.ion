@@ -13,18 +13,19 @@ func perlin_gradient(p: int2): float2 {
         }
     }
 
-    result = perlin_gradients[(int(p.y)*PerlinGradientCountRoot + int(p.x)) & (PerlinGradientCount -1)];
+    // See worley_square_index regarding hash
+    result = perlin_gradients[bad_hash_int2_u32(p) & (PerlinGradientCount -1)];
     return result;
 }
 
 func perlin(p: float2, grid_size: float): float {
-    p.x = mod(p.x * grid_size, grid_size);
-    p.y = mod(p.y * grid_size, grid_size);
+    p.x = (p.x + grid_size*0.137) * grid_size;
+    p.y = (p.y + grid_size*0.137) * grid_size;
 
     a := float2_to_int2(p);
-    b := float2_to_int2(mod2s(add2(p, {1, 0}), grid_size));
-    c := float2_to_int2(mod2s(add2(p, {0, 1}), grid_size));
-    d := float2_to_int2(mod2s(add2(p, {1, 1}), grid_size));
+    b := float2_to_int2(add2(p, {1, 0}));
+    c := float2_to_int2(add2(p, {0, 1}));
+    d := float2_to_int2(add2(p, {1, 1}));
 
     A := perlin_gradient(a);
     B := perlin_gradient(b);
