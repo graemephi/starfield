@@ -16,7 +16,7 @@ set SDLLib=%Starfield_SDL%\lib\x64\SDL2.lib %Starfield_SDL%\lib\x64\SDL2main.lib
 
 set LinkerOptions=-subsystem:windows /debug:fastlink
 
-set NOpt=-Od -Ob1 -MT
+set NOpt=-Od -Ob1 -MTd
 set Opt=-Ox -Ob2 -MT
 set MSVCOptions=-W3 -WX
 set ClangOptions=-mfma -W0 -arch:AVX2
