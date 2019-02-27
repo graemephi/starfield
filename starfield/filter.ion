@@ -177,13 +177,16 @@ func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], o
 
         src_f32 := ((:float*)src) + k;
 
-        r := clampi(0, len - 2, int(inner_radius[k]));
-        r2 := clampi(0, len - 3, int(outer_radius[k]));
+        ir := clamp(0, len - 2., inner_radius[k]);
+        or := clamp(0, len - 3., outer_radius[k]);
 
-        a := inner_radius[k] - r;
-        a2 := outer_radius[k] - r2;
+        r := int(ir);
+        r2 := int(or);
 
-        r_rcp :=  1. / (2 * (outer_radius[k] - inner_radius[k]));
+        a := ir - r;
+        a2 := or - r2;
+
+        r_rcp :=  1. / (2 * (or - ir));
 
         c_sub := diffract_fetch(src_f32, len, r + 1) * a;
         c_acc := diffract_fetch(src_f32, len, r2 + 1) * a2;
@@ -227,7 +230,6 @@ func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], o
         #assert((:Color*)dest_cursor_c - dest == len);
     }
 }
-
 
 const diffraction_iters = 4;
 func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, size: int2, inner_radius: float[4], outer_radius: float[4]) {
@@ -366,6 +368,11 @@ func diffract(img: Image*, args: DiffractionArguments) {
     working_size := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
     scratch_buf_size := maxi(working_size.x, working_size.y);
+
+    if (scratch_buf_size & 15) {
+        scratch_buf_size += 16 - (scratch_buf_size & 15);
+    }
+
     transpose_scratch_size := 0;
 
     if (args.type != Diffraction_Single) {

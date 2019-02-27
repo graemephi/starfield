@@ -33,9 +33,16 @@ struct float4 {
 }
 
 @foreign("__m128i")
-struct int4 {
+union __m128i {
     m128i_i32: int[4];
+    m128i_i16: short[8];
 }
+
+typedef int4 = __m128i;
+typedef short8 = __m128i;
+
+@foreign("_MM_SHUFFLE")
+func SHUFFLE(d: int, c: int, b: int, a: int): int;
 
 //
 // floats
@@ -145,9 +152,6 @@ func blendv4(a: float4, b: float4, c: int4): float4;
 @foreign("_mm_shuffle_ps")
 func shuffle4(a: float4, b: float4, c: int): float4;
 
-@foreign("_MM_SHUFFLE")
-func SHUFFLE(d: int, c: int, b: int, a: int): int;
-
 @foreign("_mm_broadcastss_ps")
 func broadcastss4(a: float4): float4;
 
@@ -175,11 +179,38 @@ func unpacklo4(a: float4, b: float4): float4;
 @foreign("_mm_unpackhi_ps")
 func unpackhi4(a: float4, b: float4): float4;
 
-@foreign("_mm_cvtps_epi32")
-func float4_to_int4(a: float4): int4;
+@foreign("_mm_cvtepi32_ps")
+func int4_to_float4(a: int4): float4;
 
 @foreign("_mm_castsi128_ps")
 func cast_int4_to_float4(a: int4): float4;
+
+//
+// ints
+
+@foreign("_mm_and_si128")
+func and128i(a: __m128i, b: __m128i): __m128i;
+
+@foreign("_mm_or_si128")
+func or128i(a: __m128i, b: __m128i): __m128i;
+
+@foreign("_mm_xor_si128")
+func xor128i(a: __m128i, b: __m128i): __m128i;
+
+@foreign("_mm_testz_si128")
+func testz128i(a: __m128i, b: __m128i): int;
+
+@foreign("_mm_movemask_epi8")
+func movemask128i(a: __m128i): int;
+
+@foreign("_mm_blendv_epi8")
+func blendv16i(a: int4, b: int4, c: int4): int4;
+
+@foreign("_mm_castps_si128")
+func cast_float4_to_int4(a: float4): __m128i;
+
+@foreign("_mm_cvtsi128_si64")
+func i128_to_i64(a: int4): int64;
 
 //
 // 32 bit ints
@@ -196,11 +227,29 @@ func mul4i(a: int4, b: int4): int4;
 @foreign("_mm_div_epi32")
 func div4i(a: int4, b: int4): int4;
 
+@foreign("_mm_slli_epi32")
+func shl4si(a: int4, c: int): int4;
+
+@foreign("_mm_srai_epi32")
+func shr4si(a: int4, c: int): int4;
+
+@foreign("_mm_min_epu32")
+func min4i(a: int4, b: int4): int4;
+
+@foreign("_mm_max_epi32")
+func max4i(a: int4, b: int4): int4;
+
+@foreign("_mm_min_epu32")
+func min4u(a: int4, b: int4): int4;
+
+@foreign("_mm_max_epi32")
+func max4u(a: int4, b: int4): int4;
+
 @foreign("_mm_load_epi32")
 func load4i(p: int const*): int4;
 
-@foreign("_mm_store_epi32")
-func store4i(p: int const*, a: int4);
+@foreign("_mm_store_si128")
+func store4i(p: __m128i const*, a: int4);
 
 @foreign("_mm_set_epi32")
 func set4i(a: int, b: int, c: int, d: int): int4;
@@ -208,27 +257,57 @@ func set4i(a: int, b: int, c: int, d: int): int4;
 @foreign("_mm_set1_epi32")
 func set4si(a: int): int4;
 
-@foreign("_mm_and_si128")
-func and4i(a: int4, b: int4): int4;
+@foreign("_mm_cvtps_epi32")
+func float4_to_int4(a: float4): int4;
 
-@foreign("_mm_or_si128")
-func or4i(a: int4, b: int4): int4;
+@foreign("_mm_shuffle_epi32")
+func shuffle4i(a: int4, c: int): int4;
 
-@foreign("_mm_xor_si128")
-func xor4i(a: int4, b: int4): int4;
+@foreign("_mm_cmpeq_epi32")
+func eq4i(a: int4, b: int4): int4;
 
-@foreign("_mm_slli_epi32")
-func shl4si(a: int4, c: int): int4;
+@foreign("_mm_cmpgt_epi32")
+func gt4i(a: int4, b: int4): int4;
 
-@foreign("_mm_srli_epi32")
-func shr4si(a: int4, c: int): int4;
+@foreign("_mm_cmplt_epi32")
+func lt4i(a: int4, b: int4): int4;
 
-@foreign("_mm_cvtepi32_ps")
-func int4_to_float4(a: int4): float4;
 
-@foreign("_mm_castps_si128")
-func cast_float4_to_int4(a: float4): int4;
+//
+// 16 bit ints
 
+@foreign("_mm_add_epi16")
+func add8i(a: short8, b: short8): short8;
+
+@foreign("_mm_sub_epi16")
+func sub8i(a: short8, b: short8): short8;
+
+@foreign("_mm_mullo_epi16")
+func mul8i(a: short8, b: short8): short8;
+
+@foreign("_mm_div_epi16")
+func div8i(a: short8, b: short8): short8;
+
+@foreign("_mm_madd_epi16")
+func madd8i(a: short8, b: short8): int4;
+
+@foreign("_mm_load_si128")
+func load8i(p: __m128i const*): short8;
+
+@foreign("_mm_store_si128")
+func store8i(p: short const*, a: short8);
+
+@foreign("_mm_set_epi16")
+func set8i(e7: short, e6: short, e5: short, e4: short, e3: short, e2: short, e1: short): short8;
+
+@foreign("_mm_set1_epi16")
+func set8si(a: short): short8;
+
+@foreign("_mm_cmpeq_epi16")
+func equals8i(a: short8, b: short8): short8;
+
+@foreign("_mm_blend_epi16")
+func blend8i(a: short8, b: short8, c: int): short8;
 
 //
 //
@@ -241,7 +320,7 @@ func lerp4s(a: float4, b: float4, t: float): float4 {
     return fma4(sub4(b, a), set4s(t), a);
 }
 
-func clamp14(a: float, b: float, t: float4): float4 {
+func clamp4s(a: float, b: float, t: float4): float4 {
     return min4(max4(t, set4s(a)), set4s(b));
 }
 

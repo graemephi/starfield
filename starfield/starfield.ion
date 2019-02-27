@@ -886,6 +886,10 @@ func main(argc: int, argv: char**): int {
                 buf_free(worley_squares);
                 worley_squares = 0;
             }
+            if (worley_squares16) {
+                buf_free(worley_squares16);
+                worley_squares16 = 0;
+            }
             if (perlin_gradients) {
                 buf_free(perlin_gradients);
                 perlin_gradients = 0;
@@ -894,6 +898,9 @@ func main(argc: int, argv: char**): int {
 
             t0 := time_now();
             t0f := float(t0);
+
+            init_worley_squares();
+            diffraction_rotation = random_unit_vector2();
 
             noise := make_image(ImageSize);
             noise_level := (1 - square(random01())) / randomn(2048, 5192);
@@ -910,7 +917,6 @@ func main(argc: int, argv: char**): int {
             image_copy_to(&image, &noise);
 
             starfield = create_starfield(starfield_text);
-            worley_square({});
             perlin_gradient({});
 
             bands := threads.thread_count;

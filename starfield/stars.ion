@@ -296,9 +296,9 @@ func create_starfield(starfield: char const*): Starfield {
         sparsity = randomr(0.4, 1),
     };
 
-    scales : float[4] = {1,1.5,1.75,2};
+    scales: float[] = {1,1.5,1.75,2,2.4,2.7,3.4,4.};
 
-    layer_count := clampi(0, 4, random_poisson(exp(-2.1)));
+    layer_count := clampi(0, sizeof(scales)/sizeof(scales[0]), random_poisson(exp(-1.8)));
     color_x := randomr(2, StarColorCount - 2);
     variability := randomr(0.05, .3);
     color_width := variability*StarColorCount/1.5;
