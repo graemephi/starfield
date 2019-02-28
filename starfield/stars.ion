@@ -17,15 +17,9 @@ enum StarTypes {
 
 var star_types: StarType[StarTypeCount] = {};
 
-struct StarsHeader {
-    len: int64;
-    cap: int64;
-    data: Star[1];
-}
-
 struct Star {
-    rect: Rect;
     type: StarType*;
+    rect: Rect;
     color: Color;
 }
 
@@ -43,7 +37,7 @@ struct NebulaLayer {
 struct NebulaProperties {
     density: Tex;
     layer_count: int;
-    layers: NebulaLayer*;
+    layers: NebulaLayer[];
     turbulence: float2;
     detail: float;
     negative_space: float;
@@ -51,30 +45,23 @@ struct NebulaProperties {
 }
 
 struct Starfield {
-    stars: Star*;
+    stars: Star[];
     star_count: int32;
     nebula_properties: NebulaProperties;
 }
 
 func free_starfield(starfield: Starfield*) {
-    buf_free(starfield.stars);
+    if (starfield.stars) {
+        // afree(starfield.stars);
+    }
     if (starfield.nebula_properties.density.pixels) {
         free_tex(&starfield.nebula_properties.density);
     }
     if (starfield.nebula_properties.layers) {
-        buf_free(starfield.nebula_properties.layers);
+        afree(starfield.nebula_properties.layers);
     }
     starfield.stars = 0;
     starfield.star_count = 0;
-}
-
-func starfield_len(starfield: Starfield*): int64 {
-    h := buf_header(starfield.stars);
-    return h ? h.len / sizeof(Star) : 0;
-}
-
-func push_star(starfield: Starfield*, star: Star*) {
-    buf_push((:void**)&starfield.stars, (:char*)star, sizeof(Star));
 }
 
 func consume_star(c: char const*, star: Star*): char const* {
@@ -96,34 +83,34 @@ func consume_star(c: char const*, star: Star*): char const* {
     } else if (*c == '.') {
         star.type = star_types + 3;
         next = 1;
-    } else if (memcmp(c, "·", sizeof("·") - 1) == 0) {
+    } else if (cmp(c, "·", sizeof("·") - 1) == 0) {
         star.type = star_types + 4;
         next = sizeof("·") - 1;
-    } else if (memcmp(c, "˚", sizeof("˚") - 1) == 0) {
+    } else if (cmp(c, "˚", sizeof("˚") - 1) == 0) {
         star.type = star_types + 5;
         next = sizeof("˚") - 1;
-    } else if (memcmp(c, "⊹", sizeof("⊹") - 1) == 0) {
+    } else if (cmp(c, "⊹", sizeof("⊹") - 1) == 0) {
         star.type = star_types + 6;
         next = sizeof("⊹") - 1;
-    } else if (memcmp(c, "⋆", sizeof("⋆") - 1) == 0) {
+    } else if (cmp(c, "⋆", sizeof("⋆") - 1) == 0) {
         star.type = star_types + 7;
         next = sizeof("⋆") - 1;
-    } else if (memcmp(c, "✦", sizeof("✦") - 1) == 0) {
+    } else if (cmp(c, "✦", sizeof("✦") - 1) == 0) {
         star.type = star_types + 8;
         next = sizeof("✦") - 1;
-    } else if (memcmp(c, "✧", sizeof("✧") - 1) == 0) {
+    } else if (cmp(c, "✧", sizeof("✧") - 1) == 0) {
         star.type = star_types + 9;
         next = sizeof("✧") - 1;
-    } else if (memcmp(c, "✫", sizeof("✫") - 1) == 0) {
+    } else if (cmp(c, "✫", sizeof("✫") - 1) == 0) {
         star.type = star_types + 10;
         next = sizeof("✫") - 1;
-    } else if (memcmp(c, "✹", sizeof("✹") - 1) == 0) {
+    } else if (cmp(c, "✹", sizeof("✹") - 1) == 0) {
         star.type = star_types + 11;
         next = sizeof("✹") - 1;
-    } else if (memcmp(c, "✺", sizeof("✺") - 1) == 0) {
+    } else if (cmp(c, "✺", sizeof("✺") - 1) == 0) {
         star.type = star_types + 12;
         next = sizeof("✺") - 1;
-    } else if (memcmp(c, "　", sizeof("　") - 1) == 0) {
+    } else if (cmp(c, "　", sizeof("　") - 1) == 0) {
         #static_assert(StarType_BigSpace == 13);
         star.type = star_types + StarType_BigSpace;
         next = sizeof("　") - 1;
@@ -222,7 +209,7 @@ func create_starfield(starfield: char const*): Starfield {
                 star.rect.size = float2 { x, y };
                 star.rect.rot = star.type.fixed_rotation ? {} : random_unit_vector2();
                 star.color = random_star_color_for_type(star.type, 1 + x*x);
-                push_star(&result, &star);
+                apush(result.stars, star);
             }
         }
 
@@ -244,7 +231,7 @@ func create_starfield(starfield: char const*): Starfield {
     y_pad := 4 + (R - height) / 2;
     star_size := exp(randomr(-5, -5.8)); // 0.005
 
-    for (i := 0; i < starfield_len(&result); i++) {
+    for (i := 0; i < alen(result.stars); i++) {
         s := result.stars + i;
         s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
@@ -268,7 +255,7 @@ func create_starfield(starfield: char const*): Starfield {
             for (k := 0; k < count; k++) {
                 size := clamp_low(star_size, random_normal()*star_size*(1 + count - int(count)));
 
-                push_star(&result, &{
+                apush(result.stars, {
                     rect = {
                         pos = add2(xy, { random01() * w, random01() * w }),
                         size = { size, size },
@@ -303,18 +290,18 @@ func create_starfield(starfield: char const*): Starfield {
     variability := randomr(0.05, .3);
     color_width := variability*StarColorCount/1.5;
     for (i := 0; i < layer_count; i++) {
-        buf_push((:void**)&result.nebula_properties.layers, &NebulaLayer {
+        apush(result.nebula_properties.layers, NebulaLayer {
             color = star_color(color_x + random_normal()*color_width),
             scale = scales[i],
             turbulence = {},
             detail = random_normal()*variability*3,
             negative_space = 1,
             sparsity = random_normal()*variability*.1,
-        }, sizeof(NebulaLayer));
+        });
     }
     result.nebula_properties.layer_count = layer_count;
 
-    result.star_count = (:int)starfield_len(&result);
+    result.star_count = (:int)alen(result.stars);
     return result;
 }
 
@@ -335,7 +322,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
     tilt := random01();
 
     s := &Starfield {};
-    buf_fit((:void**)&s.stars, sizeof(Star)*30000);
+    afit(s.stars, 30000);
     for (i := 0; i < 30000; i++) {
         w := arm_width;
         x := random_normal() / 8;
@@ -379,7 +366,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
         // Dim large/bright stars towards the edge
         size := (Sqrt2 - magnitude2(pos) + z + y * tilt) * random01() * 0.016 * brightness;
 
-        push_star(s, &{
+        apush(s.stars, {
             rect = {
                 pos = add2s(mul2s(pos, 0.5), 0.5),
                 size = { size, size },
@@ -616,7 +603,7 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
 }
 
 func draw_stars(dest: Image*, starfield: Starfield*) {
-    for (i := starfield_len(starfield) - 1; i >= 0; i--) {
+    for (i := 0; i < starfield.star_count; i++) {
         star := starfield.stars + i;
         draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
     }

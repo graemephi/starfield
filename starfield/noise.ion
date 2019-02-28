@@ -1,5 +1,5 @@
 
-var perlin_gradients: float2* = 0;
+var perlin_gradients: float2[];
 const PerlinGradientCountRoot = 16;
 const PerlinGradientCount = PerlinGradientCountRoot*PerlinGradientCountRoot;
 #static_assert((PerlinGradientCount & (PerlinGradientCount - 1)) == 0)
@@ -8,8 +8,7 @@ func perlin_gradient(p: int2): float2 {
 
     if (perlin_gradients == 0) {
         for (i := 0; i < PerlinGradientCount; i++) {
-            v := random_unit_vector2();
-            buf_push((:void**)&perlin_gradients, &v, sizeof(v));
+            apush(perlin_gradients, random_unit_vector2());
         }
     }
 
@@ -64,7 +63,7 @@ struct WorleySquare {
     points: float2[WorleyMaxPointsPerSquare];
 }
 
-var worley_squares: WorleySquare* = 0;
+var worley_squares: WorleySquare[];
 const WorleySquareCountRoot = 8;
 const WorleySquareCount = WorleySquareCountRoot*WorleySquareCountRoot;
 const UseWorleySSE = true;
@@ -84,7 +83,7 @@ func init_worley_squares() {
                 for (j := count; j < 4; j++) {
                     w.points[j] = { SHORT_MAX, SHORT_MAX };
                 }
-                buf_push((:void**)&worley_squares16, &w, sizeof(w));
+                apush(worley_squares16, w);
             }
         }
     } else {
@@ -97,7 +96,7 @@ func init_worley_squares() {
                 for (j := 0; j < w.count; j++) {
                     w.points[j] = { random01(), random01() };
                 }
-                buf_push((:void**)&worley_squares, &w, sizeof(w));
+                apush(worley_squares, w);
             }
         }
     }
@@ -358,7 +357,7 @@ struct WorleySquare16 {
 const WorleyPrecisionBitPos = 13;
 const WorleyPrecision = (1 << WorleyPrecisionBitPos);
 
-var worley_squares16: WorleySquare16* = 0;
+var worley_squares16: WorleySquare16[];
 func worley_sse(p01: float2, grid_size: float): float2 {
     #assert(worley_squares16);
     p := mul2s(p01, grid_size);

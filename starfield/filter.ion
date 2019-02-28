@@ -19,13 +19,9 @@ func blur_region(img: Image*, radius: float) {
     blur(&region, radius);
 }
 
-func color_load(c: Color*): Color {
-    return { xmm = loadu4((:float*)c) };
-}
-
-func blur_fetch(row: Color*, len: int, i: int): Color {
+func blur_fetch(row: Color*, len: int, i: int): float4 {
     if (i < 0 || i >= len) {
-        return { xmm = zero4() };
+        return zero4();
     }
 
     return color_load(row + i);
@@ -37,26 +33,26 @@ func blur_row(dest: Color*, src: Color*, len: int, radius: float) {
     a := radius - r;
 
     r_rcp :=  1. / (2. * radius + 1.);
-    c_acc := color_mul1(blur_fetch(src, len, r + 1), a);
+    c_acc := mul4s(blur_fetch(src, len, r + 1), a);
 
     for (i := 0; i <= r; i++) {
-        c_acc = color_add(c_acc, blur_fetch(src, len, i));
+        c_acc = add4(c_acc, blur_fetch(src, len, i));
     }
 
     for (i := 0; i < r + 1; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
+        store4((:float*)(dest + i), mul4s(c_acc, r_rcp));
+        c_acc = add4(c_acc, lerp4s(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
+        c_acc = sub4(c_acc, lerp4s(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
     }
     for (i := r + 1; i < len - r - 2; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(src[i+r+1], src[i+r+2], a));
-        c_acc = color_sub(c_acc, color_lerp(src[i-r], src[i-r-1], a));
+        store4((:float*)(dest + i), mul4s(c_acc, r_rcp));
+        c_acc = add4(c_acc, lerp4s(color_load(src + i+r+1), color_load(src + i+r+2), a));
+        c_acc = sub4(c_acc, lerp4s(color_load(src + i-r), color_load(src + i-r-1), a));
     }
     for (i := len - r - 2; i < len; i++) {
-        dest[i] = color_mul1(c_acc, r_rcp);
-        c_acc = color_add(c_acc, color_lerp(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
-        c_acc = color_sub(c_acc, color_lerp(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
+        store4((:float*)(dest + i), mul4s(c_acc, r_rcp));
+        c_acc = add4(c_acc, lerp4s(blur_fetch(src, len, i+r+1), blur_fetch(src, len, i+r+2), a));
+        c_acc = sub4(c_acc, lerp4s(blur_fetch(src, len, i-r), blur_fetch(src, len, i-r-1), a));
     }
 }
 

@@ -1,6 +1,7 @@
-import libc { strlen, printf, fabs, cos, sin, memset, exp, ceil, sqrt, log, memcpy, exit, memcmp, pow, log2, abs, fflush }
+import libc { printf, fabs, cos, sin, exp, ceil, sqrt, log, exit, pow, log2, abs, fflush }
 import sdl { ... }
 import noir { ... }
+import std { ... }
 
 #foreign(header = "<SDL_bits.h>")
 
@@ -35,7 +36,7 @@ func xmalloc(size: usize): void* {
         #assert(!"Bad malloc");
         exit(1);
     }
-    memset(result, 0, size);
+    zero(result, size);
     return result;
 }
 
@@ -48,7 +49,7 @@ func xcalloc(count: usize, elem_size: usize): void* {
         #assert(!"Bad calloc");
         exit(1);
     }
-    memset(result, 0, size);
+    zero(result, size);
     return result;
 }
 
@@ -58,80 +59,11 @@ func is_zero(buf: void const*, len: usize): bool {
         return false;
     }
 
-    return memcmp(p + 1, buf, len - 1) == 0;
+    return cmp(p + 1, buf, len - 1) == 0;
 }
 
 func is_equal(a: void const*, b: void const*, len: usize): bool {
-    return memcmp(a, b, len) == 0;
-}
-
-struct BufHeader {
-    len: ssize;
-    cap: ssize;
-    data: uint8[1];
-}
-
-func buf_header(buf: void*): BufHeader* {
-    return buf ? (:BufHeader*)((:uint8*)buf - offsetof(BufHeader, data)) : 0;
-}
-
-func buf_len(buf: void*): ssize {
-    return buf ? buf_header(buf).len : 0;
-}
-
-func buf_cap(buf: void*): ssize {
-    return buf ? buf_header(buf).cap : 0;
-}
-
-func buf_free(buf: void*) {
-    h := buf_header(buf);
-    if (h) {
-        xfree(h);
-    }
-}
-
-func buf_fit(buf: void**, len: ssize) {
-    #assert(buf);
-    #assert(len);
-
-    if (!*buf) {
-        initial_cap := len > 1024 ? len : len * 32;
-        alloc_size := initial_cap + sizeof(BufHeader);
-        header: BufHeader* = xmalloc(alloc_size);
-        header.cap = initial_cap;
-        header.len = 0;
-        *buf = header.data;
-    }
-
-    header := buf_header(*buf);
-
-    if (header.len + len > header.cap) {
-        new_cap := header.cap * 2;
-        header = xrealloc(header, len*new_cap + sizeof(BufHeader));
-        header.cap = new_cap;
-        *buf = header.data;
-    }
-}
-
-func buf_push(buf: void**, data: void*, len: ssize): void* {
-    buf_fit(buf, len);
-    #assert(*buf);
-    header := buf_header(*buf);
-    slot := header.data + header.len;
-    memcpy(slot, data, len);
-    header.len += len;
-    #assert(header.len <= header.cap);
-    return slot;
-}
-
-func hash(p: void*, len: ssize): usize {
-    h := 0xcbf29ce484222325u;
-    b := (:uint8*)p;
-    for (i := 0; i < len; i++) {
-        h ^= b[i];
-        h *= 1099511628211u;
-    }
-    return h;
+    return cmp(a, b, len) == 0;
 }
 
 func bad_hash_int2(p: int2): usize {
@@ -144,14 +76,11 @@ func bad_hash_int2_u32(p: int2): uint32 {
     return uint32((h >> 32) ^ h);
 }
 
-union Color {
-    struct {
-        r: float;
-        g: float;
-        b: float;
-        a: float;
-    }
-    xmm: float4;
+struct Color {
+    r: float;
+    g: float;
+    b: float;
+    a: float;
 }
 
 struct RGB8 {
@@ -469,8 +398,19 @@ func gray(c: float): Color {
     return { c, c, c, 1 };
 }
 
+// These tank perf in debug builds :(
+func color_cvt4(f: float4): Color {
+    result: Color;
+    storeu4((:float*)&result, f);
+    return result;
+}
+
+func color_load(c: Color*): float4 {
+    return loadu4((:float*)c);
+}
+
 func color_lerp(a: Color, b: Color, t: float): Color {
-    return { xmm = lerp4s(a.xmm, b.xmm, t) };
+    return color_cvt4(lerp4s(color_load(&a), color_load(&b), t));
 }
 
 func color_pow(a: Color, p: float): Color {
@@ -483,19 +423,19 @@ func color_pow(a: Color, p: float): Color {
 }
 
 func color_add(a: Color, b: Color): Color {
-    return { xmm = add4(a.xmm, b.xmm) };
+    return color_cvt4(add4(color_load(&a), color_load(&b)));
 }
 
 func color_sub(a: Color, b: Color): Color {
-    return { xmm = sub4(a.xmm, b.xmm) };
+    return color_cvt4(sub4(color_load(&a), color_load(&b)));
 }
 
 func color_mul(a: Color, b: Color): Color {
-    return { xmm = mul4(a.xmm, b.xmm) };
+    return color_cvt4(mul4(color_load(&a), color_load(&b)));
 }
 
 func color_div(a: Color, b: Color): Color {
-    return { xmm = div4(a.xmm, b.xmm) };
+    return color_cvt4(div4(color_load(&a), color_load(&b)));
 }
 
 func color_exp(a: Color): Color {
@@ -508,20 +448,23 @@ func color_exp(a: Color): Color {
 }
 
 func color_add1(a: Color, b: float): Color {
-    return { xmm = add4(a.xmm, set4s(b)) };
+    return color_cvt4(add4s(color_load(&a), b));
 }
 
 func color_mul1(a: Color, b: float): Color {
-    return { xmm = mul4(a.xmm, set4s(b)) };
+    return color_cvt4(mul4s(color_load(&a), b));
 }
 
 func color_mul1_rgb(a: Color, b: float): Color {
-    return { xmm = blend4(mul4(a.xmm, set4s(b)), a.xmm, 0b1000) };
+    c := color_load(&a);
+    v := blend4(mul4(color_load(&a), set4s(b)), c, 0b1000);
+    return color_cvt4(v);
 }
 
 func color_blend(dest: Color, src: Color): Color {
     // src + (dest * (1 - src_alpha))
-    return { xmm = fma4(dest.xmm, set4s(1 - src.a), src.xmm) };
+    v := fma4(color_load(&dest), set4s(1 - src.a), color_load(&src));
+    return color_cvt4(v);
 }
 
 func color_nan(c: Color): bool {
@@ -615,7 +558,7 @@ func post_process(img: Image*, small_blur: Image*, big_blur: Image*, Lw: float, 
 }
 
 struct Threads {
-    threads: SDL_Thread*;
+    threads: SDL_Thread*[];
     thread_count: int;
     work_available_sem: SDL_sem*;
     work_completed_sem: SDL_sem*;
@@ -751,7 +694,7 @@ func threads_init(threads: Threads*) {
 
     for (i := 0; i < threads.thread_count; i++) {
         thread := SDL_CreateThread(threads_thread, 0, 0);
-        buf_push((:void**)&threads.threads, &thread, sizeof(thread));
+        apush(threads.threads, thread);
     }
 }
 
@@ -844,7 +787,7 @@ func main(argc: int, argv: char**): int {
     　　  +   ✫
 """;
 
-    text_len := strlen(starfield_text);
+    text_len := slen(starfield_text);
 
     text_hash := hash(starfield_text, text_len);
 
@@ -883,15 +826,15 @@ func main(argc: int, argv: char**): int {
             image_clear(&image);
 
             if (worley_squares) {
-                buf_free(worley_squares);
+                afree(worley_squares);
                 worley_squares = 0;
             }
             if (worley_squares16) {
-                buf_free(worley_squares16);
+                afree(worley_squares16);
                 worley_squares16 = 0;
             }
             if (perlin_gradients) {
-                buf_free(perlin_gradients);
+                afree(perlin_gradients);
                 perlin_gradients = 0;
             }
             free_starfield(&starfield);

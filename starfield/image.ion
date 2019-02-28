@@ -38,13 +38,13 @@ func free_image(img: Image*) {
 }
 
 func image_clear(img: Image*) {
-    memset(img.pixels, 0, img.size.x*img.size.y*sizeof(Color));
+    zero(img.pixels, img.size.x*img.size.y*sizeof(Color));
 }
 
 func image_copy(img: Image*): Image {
     #assert(img.pixels);
     result := make_image(img.size);
-    memcpy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
+    copy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
     return result;
 }
 
@@ -56,13 +56,13 @@ func image_copy_region(img: Image*): Image {
     wr := explicit_writable_region(img);
     #assert(wr.x0 == 0 && wr.x1 == img.size.x);
 
-    memcpy(result.pixels, img.pixels + wr.y0*img.size.x, img.size.x*(wr.y1-wr.y0)*sizeof(Color));
+    copy(result.pixels, img.pixels + wr.y0*img.size.x, img.size.x*(wr.y1-wr.y0)*sizeof(Color));
     return result;
 }
 
 func image_copy_to(dest: Image*, src: Image*) {
     if ((src.size.x == dest.size.x) && (src.size.y == dest.size.y)) {
-        memcpy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
+        copy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
     } else {
         for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
             *it.pixel = image_sample_nearest(src, it.pos);
