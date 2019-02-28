@@ -624,7 +624,6 @@ func get_work(completed: int): WorkItem* {
 
     if (completed == threads.work_index) {
         SDL_SemPost(threads.work_completed_sem);
-        SDL_SemWait(threads.work_available_sem);
     }
 
     while (true) {
@@ -633,7 +632,6 @@ func get_work(completed: int): WorkItem* {
         if (token < threads.work_index) {
             work = threads.work + (token % WorkItems);
             #assert(work.type != WorkType_None);
-            SDL_SemPost(threads.work_available_sem);
             break;
         }
 
@@ -647,8 +645,7 @@ func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
-    completed := threads.work_completed;
-    SDL_SemWait(threads.work_available_sem);
+    completed := -1;
 
     while(true) {
         work := get_work(completed);
@@ -701,7 +698,11 @@ func threads_init(threads: Threads*) {
 func threads_fork(threads: Threads*) {
     if (threads.started == false) {
         threads.started = true;
-        SDL_SemPost(threads.work_available_sem);
+        threads.work_completed = 0;
+        threads.work_token = 0;
+        for (i := 0; i < threads.work_index; i++) {
+            SDL_SemPost(threads.work_available_sem);
+        }
     }
 }
 
@@ -711,9 +712,7 @@ func threads_join(threads: Threads*) {
     #assert(threads.work_completed == threads.work_index);
 
     threads.started = false;
-    threads.work_completed = 0;
     threads.work_index = 0;
-    threads.work_token = 0;
 }
 
 func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
