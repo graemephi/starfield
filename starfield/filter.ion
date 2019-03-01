@@ -2,13 +2,18 @@ func blur(img: Image*, radius: float) {
     blur_to(img, img, radius);
 }
 
+func blur_tex(tex: Tex*, radius: float) {
+    img := tex_image(tex);
+    blur(&img, radius);
+}
+
 func blur_asym(img: Image*, radius: float2) {
     blur_to_asym(img, img, radius);
 }
 
 // Nothing else in this file knows about writable regions
 func blur_region(img: Image*, radius: float) {
-    wr := explicit_writable_region(img);
+    wr := strict_writable_region(img);
 
     // Contiguous bytes.
     #assert(wr.x0 == 0 && wr.x1 == img.size.x);
@@ -70,8 +75,8 @@ func blur_horizontal(dest: Image*, src: Image*, radius: float) {
     scratch: Color* = xcalloc(src.size.x, sizeof(Color));
 
     for (y := 0; y < src.size.y; y++) {
-        row_src := src.pixels + y*src.size.x;
-        row_dest := dest.pixels + y*dest.size.x;
+        row_src := src.pixels + y*src.stride;
+        row_dest := dest.pixels + y*dest.stride;
         blur_row(row_dest, row_src, src.size.x, radius);
         blur_row(scratch, row_dest, src.size.x, radius);
         blur_row(row_dest, scratch, src.size.x, radius);
@@ -89,7 +94,7 @@ func blur_vertical(dest: Image*, src: Image*, radius: float) {
 
     for (x := 0; x < src.size.x; x++) {
         for (i := 0; i < src.size.y; i++) {
-            scratch_a[i] = src.pixels[x + i*src.size.x];
+            scratch_a[i] = src.pixels[x + i*src.stride];
         }
 
         blur_row(scratch_b, scratch_a, src.size.y, radius);
@@ -112,8 +117,8 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
 
     for (y := 0; y < src.size.y; y++) {
-        row_src := src.pixels + y*src.size.x;
-        row_dest := dest.pixels + y*dest.size.x;
+        row_src := src.pixels + y*src.stride;
+        row_dest := dest.pixels + y*dest.stride;
         blur_row(scratch, row_src, src.size.x, radius);
         blur_row(row_dest, scratch, src.size.x, radius);
         blur_row(scratch, row_dest, src.size.x, radius);
@@ -121,7 +126,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     }
 
     for (y := 0; y < temp.size.y; y++) {
-        row := temp.pixels + y*temp.size.x;
+        row := temp.pixels + y*temp.stride;
         blur_row(scratch, row, temp.size.x, radius);
         blur_row(row, scratch, temp.size.x, radius);
         blur_row(scratch, row, temp.size.x, radius);
@@ -142,13 +147,13 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
 
     for (i := 0; i < 3; i++) {
         for (y := 0; y < src.size.y; y++) {
-            row_src := src.pixels + y*src.size.x;
+            row_src := src.pixels + y*src.stride;
             blur_row(scratch, row_src, src.size.x, radius.x);
             blur_transpose(temp.pixels + y, temp.size.x, scratch, src.size.x);
         }
 
         for (y := 0; y < temp.size.y; y++) {
-            row := temp.pixels + y*temp.size.x;
+            row := temp.pixels + y*temp.stride;
             blur_row(scratch, row, temp.size.x, radius.y);
             blur_transpose(dest.pixels + y, dest.size.x, scratch, temp.size.x);
         }
@@ -228,9 +233,11 @@ func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], o
 }
 
 const diffraction_iters = 4;
-func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, size: int2, inner_radius: float[4], outer_radius: float[4]) {
+func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, inner_radius: float[4], outer_radius: float[4]) {
+    stride := img.stride;
+    size := img.size;
     for (y := 0; y < size.y; y++) {
-        row := img.pixels + y*size.x;
+        row := img.pixels + y*stride;
 
         if (transpose_scratch) {
             for (i := 0; i < size.x; i++) {
@@ -254,7 +261,7 @@ func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, size
             }
 
             for (i := 0; i < size.y; i++) {
-                img.pixels[x + i*size.x] = color_add(img.pixels[x + i*size.x], transpose_row[i]);
+                img.pixels[x + i*stride] = color_add(img.pixels[x + i*stride], transpose_row[i]);
             }
         }
     }
@@ -314,7 +321,7 @@ func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: flo
     outer_radius: float[4] = { radius * .70, radius * .70 * 1.2, radius * .70 * 1.4, radius * .70 * 1.4 };
 
     pixel_count := img.size.x*img.size.y;
-    diffract_blur(img, scratch, transpose_scratch, img.size, inner_radius, outer_radius);
+    diffract_blur(img, scratch, transpose_scratch, inner_radius, outer_radius);
 
     if (img.pixels == dest.pixels) {
         for (i := 0; i < pixel_count; i++) {
@@ -351,6 +358,8 @@ struct DiffractionArguments {
 }
 
 func diffract(img: Image*, args: DiffractionArguments) {
+    #assert(img.stride == img.size.x);
+
     if (args.type == Diffraction_None) {
         return;
     }
@@ -390,4 +399,9 @@ func diffract(img: Image*, args: DiffractionArguments) {
     }
 
     xfree(scratch_buf);
+}
+
+func diffract_tex(tex: Tex*, args: DiffractionArguments) {
+    img := tex_image(tex);
+    diffract(&img, args);
 }

@@ -11,13 +11,15 @@ struct Image {
     pixels: Color*;
     size: int2;
     wr: WritableRegion;
+    stride: int;
 }
 
 func make_image(size: int2): Image {
     return Image {
         pixels = xcalloc(size.x*size.y, sizeof(Color)),
         size = size,
-        wr = { 0, 0, size.x, size.y }
+        wr = { 0, 0, size.x, size.y },
+        stride = size.x
     };
 }
 
@@ -26,7 +28,17 @@ func make_image_like(img: Image*, downsample: int): Image {
     return Image {
         pixels = xcalloc(size.x*size.y, sizeof(Color)),
         size = size,
-        wr = { img.wr.x0 / downsample, img.wr.y0 / downsample, img.wr.x1 / downsample, img.wr.y1 / downsample }
+        wr = { img.wr.x0 / downsample, img.wr.y0 / downsample, img.wr.x1 / downsample, img.wr.y1 / downsample },
+        stride = img.size.y
+    };
+}
+
+func image_from_pixels(pixels: Color*, size: int2): Image {
+    return Image {
+        pixels = pixels,
+        size = size,
+        wr = { 0, 0, size.x, size.y },
+        stride = size.x
     };
 }
 
@@ -51,12 +63,11 @@ func image_copy(img: Image*): Image {
 func image_copy_region(img: Image*): Image {
     #assert(img.pixels);
     result := make_image(img.size);
-
-    // Contiguous bytes.
-    wr := explicit_writable_region(img);
-    #assert(wr.x0 == 0 && wr.x1 == img.size.x);
-
-    copy(result.pixels, img.pixels + wr.y0*img.size.x, img.size.x*(wr.y1-wr.y0)*sizeof(Color));
+    wr := strict_writable_region(img);
+    row_size := (wr.x1 - wr.x0) * sizeof(Color);
+    for (i := wr.y0; i < wr.y1; i++) {
+        copy(result.pixels + i*img.stride, img.pixels + wr.x0 + i*img.stride, row_size);
+    }
     return result;
 }
 
@@ -73,14 +84,14 @@ func image_copy_to(dest: Image*, src: Image*) {
 func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     #assert(src.size.x == size.x);
     #assert(src.size.y == size.y);
-    src_end := src.pixels + src.size.x*src.size.y;
+    src_end := src.pixels + src.stride*src.size.y;
     for (src_it := src.pixels; src_it != src_end; src_it++) {
         *dest = color_to_rgb8(*src_it);
         dest++;
     }
 }
 
-func explicit_writable_region(img: Image*): WritableRegion {
+func strict_writable_region(img: Image*): WritableRegion {
     return {
         x0 = img.wr.x0,
         y0 = img.wr.y0,
@@ -96,11 +107,13 @@ func writable_at(wr: WritableRegion, pos: int2): bool {
 
 struct PixelIter {
     image: Image;
+    wr_pixels: Color*;
     aspect_ratio: float;
     start: int2;
     end: int2;
     rect: Rect;
-    pixel_pos: int2;
+    wr_pos: int2;
+    it_pos: float2;
     line_start: float2;
     dx: float2;
     dy: float2;
@@ -111,7 +124,8 @@ struct PixelIter {
 }
 
 func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
-    return pixel_iter_begin(&{tex.pixels, tex.size}, rect);
+    img := tex_image(tex);
+    return pixel_iter_begin(&img, rect);
 }
 
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
@@ -143,41 +157,53 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter.dy = sub2(image_to_rect(rect, image, { 0, 1. / image.size.y }), origin);
 
     iter.image = *image;
-    iter.image.wr = explicit_writable_region(image);
-
-    iter.start.x = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.y - 0.5)));
-    iter.start.y = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(ceil(y_min * image.size.y - 0.5)));
-    iter.end.x   = clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.y - 0.5)) + 1;
-    iter.end.y   = clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1;
-
-    iter.pixel_pos = { iter.start.x - 1, iter.start.y };
-    iter.img_pos = { (0.5 + iter.pixel_pos.x) / image.size.y, (0.5 + iter.pixel_pos.y) / image.size.y };
-    iter.pos = image_to_rect(rect, image, iter.img_pos);
-    iter.line_start = iter.pos;
+    iter.image.wr = strict_writable_region(image);
     iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
+
+    start := int2 {
+        clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.y - 0.5))),
+        clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(ceil(y_min * image.size.y - 0.5)))
+    };
+
+    end := int2 {
+        clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.y - 0.5)) + 1,
+        clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1
+    };
+
+    iter.img_pos = { (0.5 + start.x - 1) / image.size.y, (0.5 + start.y) / image.size.y };
+    iter.pos = image_to_rect(rect, &iter.image, iter.img_pos);
+
+    iter.wr_pixels = iter.image.pixels + (iter.image.wr.x0 + iter.image.wr.y0*iter.image.stride);
+    iter.wr_pos = { start.x - 1 - iter.image.wr.x0, start.y - iter.image.wr.y0 };
+    iter.it_pos = iter.pos;
+    iter.line_start = iter.pos;
+    iter.start = sub2i(start, { iter.image.wr.x0, iter.image.wr.y0 });
+    iter.end = sub2i(end, { iter.image.wr.x0, iter.image.wr.y0 });
 
     return iter;
 }
 
 func pixel_iter_next(it: PixelIter*): bool {
-    it.pixel_pos.x++;
+    it.wr_pos.x++;
 
-    for (; it.pixel_pos.y < it.end.y; it.pixel_pos.y++) {
-        for (; it.pixel_pos.x < it.end.x; it.pixel_pos.x++) {
+    for (; it.wr_pos.y < it.end.y; it.wr_pos.y++) {
+        for (; it.wr_pos.x < it.end.x; it.wr_pos.x++) {
             // Todo: used fixed point instead?
-            it.pos = add2(it.pos, it.dx);
+            it.it_pos = add2(it.it_pos, it.dx);
 
-            if (inside_normal_rect(it.pos, it.aspect_ratio) && writable_at(it.image.wr, it.pixel_pos)) {
-                it.pixel = it.image.pixels + (it.pixel_pos.x + it.pixel_pos.y*it.image.size.x);
-                it.img_pos =  { (0.5 + it.pixel_pos.x) / it.image.size.y, (0.5 + it.pixel_pos.y) / it.image.size.y };
+            if (inside_normal_rect(it.it_pos, it.aspect_ratio)) {
+                #assert(it.image.stride);
+                it.pixel = it.wr_pixels + (it.wr_pos.x + it.wr_pos.y*it.image.stride);
+                it.pos = it.it_pos;
+                it.img_pos = rect_to_image(&it.image, it.rect, it.it_pos);
                 return true;
             }
         }
 
         it.line_start = add2(it.line_start, it.dy);
-        it.pos = it.line_start;
-        it.pixel_pos.x = it.start.x;
+        it.it_pos = it.line_start;
+        it.wr_pos.x = it.start.x;
     }
 
     return false;
@@ -203,13 +229,16 @@ func test_pixel_iterator(dim: int2) {
         i := 0;
         j := 0;
         for (it := pixel_iter_begin(&img, all_rect(&img)); pixel_iter_next(&it)) {
-            p := img.pixels[i + j*dim.x];
+            p := &img.pixels[i + j*dim.x];
+            p_it := it.pixel;
             c := image_sample_linear(&img, it.pos);
             d := image_sample_nearest(&img, it.pos);
-            #assert(fabs(p.r - c.r) < 1e-5);
-            #assert(fabs(p.g - c.g) < 1e-5);
-            #assert(fabs(p.b - c.b) < 1e-5);
-            #assert(fabs(p.a - c.a) < 1e-5);
+            #assert(p == p_it);
+            // No epsilon necessary
+            #assert(p.r == c.r);
+            #assert(p.g == c.g);
+            #assert(p.b == c.b);
+            #assert(p.a == c.a);
             #assert(p.r == d.r);
             #assert(p.g == d.g);
             #assert(p.b == d.b);
@@ -234,13 +263,15 @@ func test_pixel_iterator(dim: int2) {
         rect.size.y /= 2;
         pp := img.pixels + dim.x/4 + (dim.y/4)*dim.x;
         for (it := pixel_iter_begin(&img, rect); pixel_iter_next(&it)) {
-            p := *pp++;
+            p := pp++;
+            p_it := it.pixel;
             c := image_sample_linear(&img, it.img_pos);
             d := image_sample_nearest(&img, it.img_pos);
-            #assert(fabs(p.r - c.r) < 1e-5);
-            #assert(fabs(p.g - c.g) < 1e-5);
-            #assert(fabs(p.b - c.b) < 1e-5);
-            #assert(fabs(p.a - c.a) < 1e-5);
+            #assert(p == p_it);
+            #assert(p.r == c.r);
+            #assert(p.g == c.g);
+            #assert(p.b == c.b);
+            #assert(p.a == c.a);
             #assert(p.r == d.r);
             #assert(p.g == d.g);
             #assert(p.b == d.b);
@@ -288,6 +319,7 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
 
     #assert(img.size.x);
     #assert(img.size.y);
+    #assert(img.stride);
 
     scaled := float2 {
         pos.x * img.size.y - 0.5,
@@ -308,11 +340,11 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     D: Color;
 
     if (edge_behavior == Edge_Black) {
-        a_idx: uint = a.x + a.y*img.size.x;
-        b_idx: uint = b.x + b.y*img.size.x;
-        c_idx: uint = c.x + c.y*img.size.x;
-        d_idx: uint = d.x + d.y*img.size.x;
-        end: uint = img.size.x*img.size.y;
+        a_idx: uint = a.x + a.y*img.stride;
+        b_idx: uint = b.x + b.y*img.stride;
+        c_idx: uint = c.x + c.y*img.stride;
+        d_idx: uint = d.x + d.y*img.stride;
+        end: uint = img.stride*img.size.y;
         A = (a_idx < end) ? img.pixels[a_idx] : {};
         B = (b_idx < end) ? img.pixels[b_idx] : {};
         C = (c_idx < end) ? img.pixels[c_idx] : {};
@@ -338,10 +370,10 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
             d.y = (d.y == img.size.y) ? d.y - img.size.y : d.y;
         }
 
-        A = img.pixels[a.x + a.y*img.size.x];
-        B = img.pixels[b.x + b.y*img.size.x];
-        C = img.pixels[c.x + c.y*img.size.x];
-        D = img.pixels[d.x + d.y*img.size.x];
+        A = img.pixels[a.x + a.y*img.stride];
+        B = img.pixels[b.x + b.y*img.stride];
+        C = img.pixels[c.x + c.y*img.stride];
+        D = img.pixels[d.x + d.y*img.stride];
     }
 
     AB := color_lerp(A, B, vf.x);
@@ -358,6 +390,7 @@ func image_sample_nearest(img: Image*, pos: float2): Color {
 
     #assert(img.size.x);
     #assert(img.size.y);
+    #assert(img.stride);
 
     // Round to pixel center. x + .5 - .5 = x
     p := int2 { int(pos.x * img.size.y), int(pos.y * img.size.y) };
@@ -370,6 +403,6 @@ func image_fetch(img: Image*, pos: int2): Color {
         return {};
     }
 
-    #assert(pos.x + pos.y*img.size.x < img.size.x*img.size.y);
-    return img.pixels[pos.x + pos.y*img.size.x];
+    #assert(pos.x + pos.y*img.size.x < img.size.y*img.size.x);
+    return img.pixels[pos.x + pos.y*img.stride];
 }

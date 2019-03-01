@@ -41,7 +41,7 @@ func xmalloc(size: usize): void* {
 }
 
 func xcalloc(count: usize, elem_size: usize): void* {
-    #assert(count < INT64_MAX/elem_size);
+    #assert(count < SSIZE_MAX/elem_size);
     size := count*elem_size;
     result := _aligned_malloc(size, 16);
     if (!result) {
@@ -112,6 +112,16 @@ func make_tex(size: int2): Tex {
     };
 }
 
+func tex_image(tex: Tex*): Image {
+    return image_from_pixels(tex.pixels, tex.size);
+}
+
+func tex_image_copy(tex: Tex*): Image {
+    tex_img := tex_image(tex);
+    result := image_copy(&tex_img);
+    return result;
+}
+
 func free_tex(tex: Tex*) {
     #assert(tex.pixels);
     xfree(tex.pixels);
@@ -121,7 +131,8 @@ func free_tex(tex: Tex*) {
 
 func make_tex_from_image(img: Image*): Tex {
     tex := make_tex(img.size);
-    image_copy_to(&{tex.pixels, tex.size}, img);
+    tex_as_img := tex_image(&tex);
+    image_copy_to(&tex_as_img, img);
     // Note: no mip mapping or premultiplied alpha.
     return tex;
 }
@@ -138,7 +149,8 @@ func generate_lods(tex: Tex*) {
     #assert(tex.size.x == tex.size.y);
     tex.lod_levels = maxi(1, log2i(tex.size.x) + 1);
 
-    blurry := image_copy(&{tex.pixels, tex.size});
+    as_img := tex_image(tex);
+    blurry := image_copy(&as_img);
 
     size := tex.size;
     for (i := 0; i < tex.lod_levels; i++) {
@@ -148,7 +160,7 @@ func generate_lods(tex: Tex*) {
         if (i > 0) {
             // Square pyramid
             prev_lod := tex_get_lod(tex, { i - 1, i - 1 });
-            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+            blurry_subrect := image_from_pixels(blurry.pixels, prev_lod.size);
 
             blur_to(&blurry_subrect, &prev_lod, .707);
             lod := tex_get_lod(tex, { i, i });
@@ -162,12 +174,16 @@ func generate_lods(tex: Tex*) {
 
         for (j := i + 1; j < tex.lod_levels; j++) {
             prev_lod := tex_get_lod(tex, { j - 1, i });
-            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+            blurry_subrect := image_from_pixels(blurry.pixels, prev_lod.size);
 
             blur_horizontal(&blurry_subrect, &prev_lod, 0.5);
             lod := tex_get_lod(tex, { j, i });
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
+                if (!is_zero(it.pixel, sizeof(Color))) {
+                    x:=0;
+                    is_zero(it.pixel, sizeof(Color));
+                }
                 #assert(is_zero(it.pixel, sizeof(Color)));
                 *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
                 #assert(!color_nan(*it.pixel));
@@ -176,7 +192,7 @@ func generate_lods(tex: Tex*) {
 
         for (k := i + 1; k < tex.lod_levels; k++) {
             prev_lod := tex_get_lod(tex, { i, k - 1 });
-            blurry_subrect := Image { blurry.pixels, prev_lod.size };
+            blurry_subrect := image_from_pixels(blurry.pixels, prev_lod.size);
 
             blur_vertical(&blurry_subrect, &prev_lod, 0.5);
             lod := tex_get_lod(tex, { i, k });
@@ -257,13 +273,14 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
     }
 
     #assert(pixels < tex.pixels + tex.size.x*tex.size.y*4);
-    return { pixels, lod_size };
+    return image_from_pixels(pixels, lod_size);
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
     // Todo: Make edge behaviour configurable? We only use this for looking up
     // low resolution noise right now...
-    return image_sample_linear_edge(&{tex.pixels, tex.size}, pos, Edge_Wrap);
+    img := tex_image(tex);
+    return image_sample_linear_edge(&img, pos, Edge_Wrap);
 }
 
 func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
@@ -541,11 +558,11 @@ func post_process(img: Image*, small_blur: Image*, big_blur: Image*, Lw: float, 
     a := remap(0, 10000, 6, 1, clamp(0, 10000, Lmax));
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         // Layer blurs
-        bp := image_fetch(small_blur, it.pixel_pos);
+        bp := image_sample_nearest(small_blur, it.img_pos);
         mbp := color_mul(*it.pixel, bp);
         xbp := color_lerp(bp, mbp, 0.1);
 
-        bp2 := image_fetch(big_blur, it.pixel_pos);
+        bp2 := image_sample_nearest(big_blur, it.img_pos);
         mbp2 := color_mul(*it.pixel, bp2);
         xbp2 := color_lerp(bp2, mbp2, .9);
         c := color_add(*it.pixel, color_add(xbp, xbp2));
