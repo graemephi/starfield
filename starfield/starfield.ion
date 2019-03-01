@@ -180,10 +180,6 @@ func generate_lods(tex: Tex*) {
             lod := tex_get_lod(tex, { j, i });
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
-                if (!is_zero(it.pixel, sizeof(Color))) {
-                    x:=0;
-                    is_zero(it.pixel, sizeof(Color));
-                }
                 #assert(is_zero(it.pixel, sizeof(Color)));
                 *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
                 #assert(!color_nan(*it.pixel));
