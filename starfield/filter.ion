@@ -3,6 +3,7 @@ func blur(img: Image*, radius: float) {
 }
 
 func blur_tex(tex: Tex*, radius: float) {
+    #assert(tex.lod_levels == 1);
     img := tex_image(tex);
     blur(&img, radius);
 }
@@ -402,6 +403,7 @@ func diffract(img: Image*, args: DiffractionArguments) {
 }
 
 func diffract_tex(tex: Tex*, args: DiffractionArguments) {
+    #assert(tex.lod_levels == 1);
     img := tex_image(tex);
     diffract(&img, args);
 }
