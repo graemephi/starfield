@@ -1,10 +1,32 @@
+// WritableRegion provides a mechanism to allow concurrent access to an image's
+// pixels but this places some constraints on how you do that. Most of the time
+// you want to write to an image you want to write to multiple pixels, which you
+// do with PixelIter, which handles this for you. But in the case you want to
+// access the pixels buffer directly, you need to call image_writable to get a
+// view into the buffer that you are allowed to write to.
+
 struct WritableRegion {
     // Top left inclusive
     x0: int;
     y0: int;
-    // Bottom right exclusive
+    // Bottom right exclusive. Can be zero or exceed image bounds.
     x1: int;
     y1: int;
+}
+
+struct StrictWritableRegion {
+    x0: int;
+    y0: int;
+    // Must be set and does not exceed image bounds.
+    x1: int;
+    y1: int;
+    // &[x0, y0]
+    pixels: Color*;
+}
+
+enum ImageFlags {
+    // If you see this flag outside of this file something has gone very wrong
+    IsWritableRegionCopyOnly = 1
 }
 
 struct Image {
@@ -12,24 +34,31 @@ struct Image {
     size: int2;
     wr: WritableRegion;
     stride: int;
+    flags: uint;
+}
+
+func image_writable(img: Image*): Image {
+    wr := strict_writable_region(img);
+    result: Image;
+    result.pixels = wr.pixels;
+    result.size = { wr.x1 - wr.x0, wr.y1 - wr.y0 };
+    result.wr = { 0, 0, result.size.x, result.size.y };
+    result.stride = img.stride;
+    return result;
 }
 
 func make_image(size: int2): Image {
-    return Image {
-        pixels = xcalloc(size.x*size.y, sizeof(Color)),
-        size = size,
-        wr = { 0, 0, size.x, size.y },
-        stride = size.x
-    };
+    return image_from_pixels(xcalloc(size.x*size.y, sizeof(Color)), size);
 }
 
-func make_image_like(img: Image*, downsample: int): Image {
-    size := div2si(img.size, downsample);
+func make_image_like(img: Image*): Image {
+    writable := image_writable(img);
     return Image {
-        pixels = xcalloc(size.x*size.y, sizeof(Color)),
-        size = size,
-        wr = { img.wr.x0 / downsample, img.wr.y0 / downsample, img.wr.x1 / downsample, img.wr.y1 / downsample },
-        stride = img.size.y
+        pixels = xcalloc(writable.size.x*writable.size.y, sizeof(Color)),
+        size = img.size,
+        wr = { img.wr.x0, img.wr.y0, img.wr.x1, img.wr.y1 },
+        stride = writable.size.x,
+        flags = IsWritableRegionCopyOnly
     };
 }
 
@@ -50,24 +79,15 @@ func free_image(img: Image*) {
 }
 
 func image_clear(img: Image*) {
+    #assert(img.size.x == img.stride);
     zero(img.pixels, img.size.x*img.size.y*sizeof(Color));
 }
 
 func image_copy(img: Image*): Image {
     #assert(img.pixels);
+    #assert(img.size.x == img.stride);
     result := make_image(img.size);
     copy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
-    return result;
-}
-
-func image_copy_region(img: Image*): Image {
-    #assert(img.pixels);
-    result := make_image(img.size);
-    wr := strict_writable_region(img);
-    row_size := (wr.x1 - wr.x0) * sizeof(Color);
-    for (i := wr.y0; i < wr.y1; i++) {
-        copy(result.pixels + i*img.stride, img.pixels + wr.x0 + i*img.stride, row_size);
-    }
     return result;
 }
 
@@ -91,23 +111,25 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     }
 }
 
-func strict_writable_region(img: Image*): WritableRegion {
+func has_complete_writable_region(img: Image*): bool {
+    return img.wr.x0 == 0 && img.wr.y0 == 0 &&
+        ((img.wr.x1 == 0 && img.wr.y1 == 0) || (img.wr.x1 == img.size.x && img.wr.y1 == img.size.y));
+}
+
+func strict_writable_region(img: Image*): StrictWritableRegion {
     return {
         x0 = img.wr.x0,
         y0 = img.wr.y0,
         x1 = img.wr.x1 ? clampi(0, img.size.x, img.wr.x1) : img.size.x,
         y1 = img.wr.y1 ? clampi(0, img.size.y, img.wr.y1) : img.size.y,
+        pixels = (img.flags & IsWritableRegionCopyOnly) ? img.pixels : (img.pixels + (img.wr.x0 + img.wr.y0*img.stride))
     };
 }
 
-func writable_at(wr: WritableRegion, pos: int2): bool {
-    return (pos.x >= wr.x0 && pos.x < wr.x1) &&
-           (pos.y >= wr.y0 && pos.y < wr.y1);
-}
-
 struct PixelIter {
-    image: Image;
-    wr_pixels: Color*;
+    image: Image*;
+    wr: StrictWritableRegion;
+    stride: int;
     aspect_ratio: float;
     start: int2;
     end: int2;
@@ -131,55 +153,52 @@ func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter: PixelIter = {};
 
-    if (is_zero(&rect, sizeof(rect))) {
+    if (is_zero_rect(rect)) {
         rect = all_rect(image);
     }
 
     aspect_ratio := rect.size.x / rect.size.y;
 
-    x_min := 0.;
-    x_max := aspect_ratio;
-    y_min := 0.;
-    y_max := 1.;
+    a := rect_to_image(image, rect, { 0, 0 });
+    b := rect_to_image(image, rect, { aspect_ratio, 0 });
+    c := rect_to_image(image, rect, { 0, 1 });
+    d := rect_to_image(image, rect, { aspect_ratio, 1 });
 
-    a := rect_to_image(image, rect, { x_min,  y_min });
-    b := rect_to_image(image, rect, { x_max,  y_min });
-    c := rect_to_image(image, rect, { x_min,  y_max });
-    d := rect_to_image(image, rect, { x_max,  y_max });
-
-    x_min = smin4(a.x, b.x, c.x, d.x);
-    x_max = smax4(a.x, b.x, c.x, d.x);
-    y_min = smin4(a.y, b.y, c.y, d.y);
-    y_max = smax4(a.y, b.y, c.y, d.y);
+    x_min := smin4(a.x, b.x, c.x, d.x);
+    x_max := smax4(a.x, b.x, c.x, d.x);
+    y_min := smin4(a.y, b.y, c.y, d.y);
+    y_max := smax4(a.y, b.y, c.y, d.y);
 
     origin := image_to_rect(rect, image, { 0, 0 });
     iter.dx = sub2(image_to_rect(rect, image, { 1. / image.size.y, 0 }), origin);
     iter.dy = sub2(image_to_rect(rect, image, { 0, 1. / image.size.y }), origin);
 
-    iter.image = *image;
-    iter.image.wr = strict_writable_region(image);
+    iter.image = image;
+    iter.wr = strict_writable_region(image);
+    iter.stride = image.stride;
     iter.aspect_ratio = aspect_ratio;
     iter.rect = rect;
 
     start := int2 {
-        clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(ceil(x_min * image.size.y - 0.5))),
-        clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(ceil(y_min * image.size.y - 0.5)))
+        clampi(iter.wr.x0, iter.wr.x1, int(ceil(x_min * image.size.y - 0.5))),
+        clampi(iter.wr.y0, iter.wr.y1, int(ceil(y_min * image.size.y - 0.5)))
     };
 
     end := int2 {
-        clampi(iter.image.wr.x0, iter.image.wr.x1 - 1, int(x_max * image.size.y - 0.5)) + 1,
-        clampi(iter.image.wr.y0, iter.image.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1
+        clampi(iter.wr.x0, iter.wr.x1 - 1, int(x_max * image.size.y - 0.5)) + 1,
+        clampi(iter.wr.y0, iter.wr.y1 - 1, int(y_max * image.size.y - 0.5)) + 1
     };
 
     iter.img_pos = { (0.5 + start.x - 1) / image.size.y, (0.5 + start.y) / image.size.y };
-    iter.pos = image_to_rect(rect, &iter.image, iter.img_pos);
+    iter.pos = image_to_rect(rect, iter.image, iter.img_pos);
 
-    iter.wr_pixels = iter.image.pixels + (iter.image.wr.x0 + iter.image.wr.y0*iter.image.stride);
-    iter.wr_pos = { start.x - 1 - iter.image.wr.x0, start.y - iter.image.wr.y0 };
+    wr_offset := int2 { iter.wr.x0, iter.wr.y0 };
+
+    iter.wr_pos = sub2i({ start.x - 1, start.y }, wr_offset);
     iter.it_pos = iter.pos;
     iter.line_start = iter.pos;
-    iter.start = sub2i(start, { iter.image.wr.x0, iter.image.wr.y0 });
-    iter.end = sub2i(end, { iter.image.wr.x0, iter.image.wr.y0 });
+    iter.start = sub2i(start, wr_offset);
+    iter.end = sub2i(end, wr_offset);
 
     return iter;
 }
@@ -193,10 +212,9 @@ func pixel_iter_next(it: PixelIter*): bool {
             it.it_pos = add2(it.it_pos, it.dx);
 
             if (inside_normal_rect(it.it_pos, it.aspect_ratio)) {
-                #assert(it.image.stride);
-                it.pixel = it.wr_pixels + (it.wr_pos.x + it.wr_pos.y*it.image.stride);
+                it.pixel = it.wr.pixels + (it.wr_pos.x + it.wr_pos.y*it.stride);
                 it.pos = it.it_pos;
-                it.img_pos = rect_to_image(&it.image, it.rect, it.it_pos);
+                it.img_pos = rect_to_image(it.image, it.rect, it.it_pos);
                 return true;
             }
         }
@@ -302,6 +320,18 @@ func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd:
     }
 }
 
+// Ideally... this wouldn't be necessary. But I want to allow threads to make
+// miminal copies of the regions of images they write to in usage code that is
+// mostly threading oblivious. So, we need to allow sampling of Images whose
+// pixel buffers point to the start of their writable region, not [0,0].
+func get_wr_read_offset(img: Image*): int {
+    if (img.flags & IsWritableRegionCopyOnly) {
+        return img.wr.x0 + img.wr.y0*img.stride;
+    }
+
+    return {};
+}
+
 enum EdgeBehavior {
     Edge_Black,
     Edge_Clamp,
@@ -321,6 +351,8 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     #assert(img.size.y);
     #assert(img.stride);
 
+    wr_offset := get_wr_read_offset(img);
+
     scaled := float2 {
         pos.x * img.size.y - 0.5,
         pos.y * img.size.y - 0.5,
@@ -328,6 +360,9 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
 
     vi := float2_to_int2(scaled);
     vf := sub2(scaled, int2_to_float2(vi));
+
+    #assert(!(wr_offset > 0) || (edge_behavior == Edge_Black));
+    vi.x -= wr_offset;
 
     a := vi;
     b := add2i(a, {1, 0});
@@ -344,7 +379,7 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
         b_idx: uint = b.x + b.y*img.stride;
         c_idx: uint = c.x + c.y*img.stride;
         d_idx: uint = d.x + d.y*img.stride;
-        end: uint = img.stride*img.size.y;
+        end: uint = img.stride*img.size.y - wr_offset;
         A = (a_idx < end) ? img.pixels[a_idx] : {};
         B = (b_idx < end) ? img.pixels[b_idx] : {};
         C = (c_idx < end) ? img.pixels[c_idx] : {};
@@ -404,5 +439,5 @@ func image_fetch(img: Image*, pos: int2): Color {
     }
 
     #assert(pos.x + pos.y*img.size.x < img.size.y*img.size.x);
-    return img.pixels[pos.x + pos.y*img.stride];
+    return img.pixels[pos.x + pos.y*img.stride - get_wr_read_offset(img)];
 }

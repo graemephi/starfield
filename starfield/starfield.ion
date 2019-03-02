@@ -368,8 +368,18 @@ func rotate(v: float2, cos_sin_theta: float2): float2 {
     return v;
 }
 
+func is_identity_transform(transform: float2): bool {
+    return (transform.x == 0 || transform.x == 1) && (transform.y == 0);
+}
+
 func rotate_theta(v: float2, theta: float): float2 {
     return rotate(v, rotation(theta));
+}
+
+func is_zero_rect(rect: Rect): bool {
+    #assert(!(rect.size.x == 0 && rect.size.y == 0) || (rect.pos.x == 0 && rect.pos.y == 0));
+    #assert(!(rect.size.x == 0 && rect.size.y == 0) || (rect.rot.x == 0 && rect.rot.y == 0));
+    return rect.size.x == 0 && rect.size.y == 0;
 }
 
 func inside_normal_rect(pos: float2, aspect_ratio: float): bool {
@@ -685,7 +695,7 @@ func threads_thread(data: void*): int {
         }
 
         t1 := time_now();
-        printf("type %d: %f elapsed\n", work.type, (t1-t0)*1000);
+        printf("type %d: %.2fms\n", work.type, (t1-t0)*1000);
         work.type = WorkType_None;
 
         completed = interlocked_increment(&threads.work_completed);

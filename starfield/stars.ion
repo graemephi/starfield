@@ -311,7 +311,7 @@ func draw_simple_star(tex: Tex*) {
 }
 
 func draw_galaxy(tex: Tex*, arms: int) {
-    tex_img := &Image { tex.pixels, tex.size };
+    tex_img := tex_image(tex);
 
     arm_width := 0.0125 + randomr(-1, 1)*0.01;
     arms = clampi(2, 6, arms);
@@ -377,12 +377,10 @@ func draw_galaxy(tex: Tex*, arms: int) {
         });
     }
 
-    draw_stars(tex_img, s);
+    draw_stars(&tex_img, s);
 
-    bloom_less := image_copy(tex_img);
-    bloom_more := image_copy(tex_img);
-    blur(&bloom_less, 3);
-    blur(&bloom_more, 20 * tilt);
+    bloom_less := blur_to_copy(&tex_img, 3);
+    bloom_more := blur_to_copy(&tex_img, 20 * tilt);
     bloom_amount := randomr(.4, .8);
 
     blue := star_colors[StarColorCount - 3];
@@ -556,7 +554,7 @@ func init_star_type_really(type: StarType*, redraw: bool) {
 }
 
 func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
-    nebula := make_image_like(img, 1);
+    nebula := make_image_like(img);
 
     color := layer.color;
     scale := layer.scale;
@@ -579,11 +577,9 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
         *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
     }
 
-    // Todo: downsample this. This is also technically incorrect when
-    // mulithreaded as the blur is incorrect at region boundaries.
-    // But I can't notice it.
-    blur_nebula := image_copy_region(&nebula);
-    blur_region(&blur_nebula, 16);
+    // This is technically incorrect when rendered in blocks as the blur is incorrect
+    // at block boundaries. But I can't notice it.
+    blur_nebula := blur_to_copy(&nebula, 16);
 
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         d := tex_lookup(density, it.pos).r * 0.05;
