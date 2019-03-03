@@ -7,10 +7,12 @@ func is_power_2(x: int32): bool {
     return x != 0 && x & (x - 1) == 0;
 }
 
+@inline
 func log2i(x: int): int {
     return int(SDL_MostSignificantBitIndex32(uint32(x)));
 }
 
+@inline
 func square(x: float): float {
     return x*x;
 }
@@ -21,10 +23,12 @@ func clamp(a: float, b: float, x: float): float {
                      x;
 }
 
+@inline
 func clamp_low(a: float, x: float): float {
     return max(a, x);
 }
 
+@inline
 func clamp_high(b: float, x: float): float {
     return min(b, x);
 }
@@ -35,176 +39,218 @@ func clampi(a: int32, b: int32, x: int32): int32 {
                      x;
 }
 
+@inline
 func clampi_low(a: int, x: int): int {
     return maxi(a, x);
 }
 
+@inline
 func clampi_high(b: int, x: int): int {
     return mini(b, x);
 }
 
+@inline
 func clamp01(x: float): float {
     return clamp(0, 1, x);
 }
 
+@inline
 func clamp2(a: float, b: float, v: float2): float2 {
     return { clamp(a, b, v.x), clamp(a, b, v.y) };
 }
 
+@inline
 func maxi(a: int, b: int): int {
     return (a > b) ? a : b;
 }
 
+@inline
 func mini(a: int, b: int): int {
     return (a < b) ? a : b;
 }
 
+@inline
 func max(a: float, b: float): float {
     return (a > b) ? a : b;
 }
 
+@inline
 func min(a: float, b: float): float {
     return (a < b) ? a : b;
 }
 
+@inline
 func safe_div(a: float, b: float): float {
     return b == 0 ? b : a / b;
 }
 
+@inline
 func smin4(a: float, b: float, c: float, d: float): float {
     return min(min(a, b), min(c, d));
 }
 
+@inline
 func smax4(a: float, b: float, c: float, d: float): float {
     return max(max(a, b), max(c, d));
 }
 
+@inline
 func float2_to_int2(x: float2): int2 {
     return { int32(x.x), int32(x.y) };
 }
 
+@inline
 func int2_to_float2(x: int2): float2 {
     return { float(x.x), float(x.y) };
 }
 
+@inline
 func mul2(a: float2, b: float2): float2 {
     return { a.x * b.x, a.y * b.y };
 }
 
+@inline
 func mul2s(a: float2, s: float): float2 {
     return { a.x * s, a.y * s };
 }
 
+@inline
 func div2(a: float2, b: float2): float2 {
     return { a.x / b.x, a.y / b.y };
 }
 
+@inline
 func div2s(a: float2, s: float): float2 {
     return { a.x / s, a.y / s };
 }
 
+@inline
 func add2(a: float2, b: float2): float2 {
     return { a.x + b.x, a.y + b.y };
 }
 
+@inline
 func add2s(a: float2, s: float): float2 {
     return { a.x + s, a.y + s };
 }
 
+@inline
 func sub2(a: float2, b: float2): float2 {
     return { a.x - b.x, a.y - b.y };
 }
 
+@inline
 func sub2s(a: float2, s: float): float2 {
     return { a.x - s, a.y - s };
 }
 
+@inline
 func mul2i(a: int2, b: int2): int2 {
     return { a.x * b.x, a.y * b.y };
 }
 
+@inline
 func mul2si(a: int2, s: int): int2 {
     return { a.x * s, a.y * s };
 }
 
+@inline
 func div2i(a: int2, b: int2): int2 {
     return { a.x / b.x, a.y / b.y };
 }
 
+@inline
 func div2si(a: int2, s: int): int2 {
     return { a.x / s, a.y / s };
 }
 
+@inline
 func add2i(a: int2, b: int2): int2 {
     return { a.x + b.x, a.y + b.y };
 }
 
+@inline
 func add2si(a: int2, s: int): int2 {
     return { a.x + s, a.y + s };
 }
 
+@inline
 func sub2i(a: int2, b: int2): int2 {
     return { a.x - b.x, a.y - b.y };
 }
 
+@inline
 func sub2si(a: int2, s: int): int2 {
     return { a.x - s, a.y - s };
 }
 
+@inline
 func dot2i(a: int2, b: int2): int32 {
     return a.x*b.x + a.y*b.y;
 }
 
+@inline
 func distance_squared2i(a: int2, b: int2): int32 {
     d := int2 { a.x - b.x, a.y - b.y };
     return dot2i(d, d);
 }
 
+@inline
 func distance2i(a: int2, b: int2): float {
     d := distance_squared2i(a, b);
     return sqrt(float(d));
 }
 
+@inline
 func dot2(a: float2, b: float2): float {
     return a.x*b.x + a.y*b.y;
 }
 
+@inline
 func distance_squared2(a: float2, b: float2): float {
     d := sub2(a, b);
     return dot2(d, d);
 }
 
+@inline
 func distance2(a: float2, b: float2): float {
     d := distance_squared2(a, b);
     return sqrt(d);
 }
 
+@inline
 func magnitude_squared2(v: float2): float {
     vv := dot2(v, v);
     return vv;
 }
 
+@inline
 func magnitude2(v: float2): float {
     vv := dot2(v, v);
     return vv ? sqrt(vv) : 0;
 }
 
+@inline
 func magnitude2i(v: int2): float {
     return sqrt((:float)dot2i(v, v));
 }
 
+@inline
 func mod2s(v: float2, m: float): float2 {
     return { mod(v.x, m), mod(v.y, m) };
 }
 
+@inline
 func floor2(v: float2): float2 {
     return { float(int(v.x)), float(int(v.y)) };
 }
 
+@inline
 func fract(x: float): float {
     return int(x) - x;
 }
 
+@inline
 func fract2(v: float2): float2 {
     return sub2(floor2(v), v);
 }

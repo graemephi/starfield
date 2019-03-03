@@ -411,25 +411,30 @@ func image_to_rect(dest: Rect, src: Image*, src_pos: float2): float2 {
     return rect_to_rect(dest, all_rect(src), src_pos);
 }
 
+@inline
 func gray(c: float): Color {
     return { c, c, c, 1 };
 }
 
 // These tank perf in debug builds :(
+@inline
 func color_cvt4(f: float4): Color {
     result: Color;
     storeu4((:float*)&result, f);
     return result;
 }
 
+@inline
 func color_load(c: Color*): float4 {
     return loadu4((:float*)c);
 }
 
+@inline
 func color_lerp(a: Color, b: Color, t: float): Color {
     return color_cvt4(lerp4s(color_load(&a), color_load(&b), t));
 }
 
+@inline
 func color_pow(a: Color, p: float): Color {
     return Color {
         pow(a.r, p),
@@ -439,22 +444,27 @@ func color_pow(a: Color, p: float): Color {
     };
 }
 
+@inline
 func color_add(a: Color, b: Color): Color {
     return color_cvt4(add4(color_load(&a), color_load(&b)));
 }
 
+@inline
 func color_sub(a: Color, b: Color): Color {
     return color_cvt4(sub4(color_load(&a), color_load(&b)));
 }
 
+@inline
 func color_mul(a: Color, b: Color): Color {
     return color_cvt4(mul4(color_load(&a), color_load(&b)));
 }
 
+@inline
 func color_div(a: Color, b: Color): Color {
     return color_cvt4(div4(color_load(&a), color_load(&b)));
 }
 
+@inline
 func color_exp(a: Color): Color {
     return Color {
         exp(a.r),
@@ -464,30 +474,36 @@ func color_exp(a: Color): Color {
     };
 }
 
+@inline
 func color_add1(a: Color, b: float): Color {
     return color_cvt4(add4s(color_load(&a), b));
 }
 
+@inline
 func color_mul1(a: Color, b: float): Color {
     return color_cvt4(mul4s(color_load(&a), b));
 }
 
+@inline
 func color_mul1_rgb(a: Color, b: float): Color {
     c := color_load(&a);
     v := blend4(mul4(color_load(&a), set4s(b)), c, 0b1000);
     return color_cvt4(v);
 }
 
+@inline
 func color_blend(dest: Color, src: Color): Color {
     // src + (dest * (1 - src_alpha))
     v := fma4(color_load(&dest), set4s(1 - src.a), color_load(&src));
     return color_cvt4(v);
 }
 
+@inline
 func color_nan(c: Color): bool {
     return isnan(c.r) || isnan(c.b) || isnan(c.g) || isnan(c.a);
 }
 
+@inline
 func color_premultiply(c: Color): Color {
     return color_mul1_rgb(c, c.a);
 }

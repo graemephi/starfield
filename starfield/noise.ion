@@ -428,6 +428,7 @@ func worley_sse(p01: float2, grid_size: float): float2 {
     return { f1, f2 };
 }
 
+@inline
 func worley(p01: float2, grid_size: float): float2 {
     if (UseWorleySSE) {
         return worley_sse(p01, grid_size);
@@ -581,6 +582,7 @@ func random_warp_sse(p: float2, freq: float, scale: float): float2 {
     return result[0];
 }
 
+@inline
 func random_warp(p: float2, freq: float, scale: float): float2 {
     return random_warp_sse(p, freq, scale);
 }
