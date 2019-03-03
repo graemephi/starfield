@@ -14,7 +14,7 @@ if "%1" == "clear" (
 set SDLInclude=%Starfield_SDL%\include
 set SDLLib=%Starfield_SDL%\lib\x64\SDL2.lib %Starfield_SDL%\lib\x64\SDL2main.lib
 
-set LinkerOptions=-subsystem:windows /debug:fastlink
+set LinkerOptions=-subsystem:windows
 
 set NOpt=-Od -Ob1 -MTd
 set Opt=-O2 -GL -Ob2 -MT
