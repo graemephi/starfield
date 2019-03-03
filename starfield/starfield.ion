@@ -270,7 +270,7 @@ func tex_lookup(tex: Tex*, pos: float2): Color {
     // Todo: Make edge behaviour configurable? We only use this for looking up
     // low resolution noise right now...
     img := tex_image(tex);
-    return image_sample_linear_edge(&img, pos, Edge_Wrap);
+    return image_sample_linear_edge(&img, pos, Edge_Repeat);
 }
 
 func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
@@ -679,7 +679,7 @@ func threads_thread(data: void*): int {
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
     temp_size := MB(128);
-    temp_buf := alloc(temp_size, 1);
+    temp_buf := alloc(temp_size, sizeof(usize));
     temp :=  temp_allocator(temp_buf, temp_size);
     current_allocator = (:Allocator*)&temp;
 
@@ -850,7 +850,7 @@ func main(argc: int, argv: char**): int {
     blurred2 := make_image(ImageSize);
     blurred;
     blurred2;
-    while (app_update() && iters < 15) {
+    while (app_update() && iters < 30) {
         if (app.error) {
             print_and_clear_error();
         }

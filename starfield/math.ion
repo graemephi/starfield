@@ -236,8 +236,8 @@ func magnitude2i(v: int2): float {
 }
 
 @inline
-func mod2s(v: float2, m: float): float2 {
-    return { mod(v.x, m), mod(v.y, m) };
+func mirror2s(v: float2, m: float): float2 {
+    return { mirror(v.x, m), mirror(v.y, m) };
 }
 
 @inline
@@ -349,7 +349,7 @@ func lerp2(a: float2, b: float2, t: float): float2 {
     };
 }
 
-func mod(x: float, m: float): float {
+func repeat(x: float, m: float): float {
     if (x < 0) {
         x = m - x;
     }
@@ -359,8 +359,27 @@ func mod(x: float, m: float): float {
     return p;
 }
 
-func wrap(x: float, m: float): float {
-    y := mod(x, m * 2);
+func repeati(x: int, m: int): int {
+    if (x < 0) {
+        x = m - x;
+    }
+    y := x % m;
+    return y;
+}
+
+func mirror(x: float, m: float): float {
+    y := repeat(x, m * 2);
+    if (y > m) {
+        y = m - (y - m);
+    }
+    return y;
+}
+
+func mirrori(x: int, m: int): int {
+    if (x < 0) {
+        x = m - x;
+    }
+    y := x % (m * 2);
     if (y > m) {
         y = m - (y - m);
     }

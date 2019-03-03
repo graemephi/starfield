@@ -27,8 +27,8 @@ if errorlevel 1 goto end
 
 mkdir build 2> nul
 pushd build
-call cl %MSVCOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
-REM call clang-cl %ClangOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
+REM call cl %MSVCOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
+call clang-cl %ClangOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
 popd
 
 :end

@@ -330,7 +330,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
         rot := 0.;
 
         if (arms > 0) {
-            x = mod(x + w/2, w) - w/2;
+            x = repeat(x + w/2, w) - w/2;
 
             if (arms & 1) {
                 y = fabs(y);

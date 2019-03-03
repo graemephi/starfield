@@ -338,11 +338,68 @@ func get_wr_read_offset(img: Image*): int {
 enum EdgeBehavior {
     Edge_Black,
     Edge_Clamp,
-    Edge_Wrap
+    Edge_Repeat,
+    Edge_Mirror,
 }
 
 func image_sample_linear(img: Image*, pos: float2): Color {
     return image_sample_linear_edge(img, pos, Edge_Black);
+}
+
+func sample_edge(img: Image*, edge_behavior: EdgeBehavior, a: int2, samples_out: Color[4]) {
+    b := add2i(a, {1, 0});
+    c := add2i(a, {0, 1});
+    d := add2i(a, {1, 1});
+
+    switch (edge_behavior) {
+        case Edge_Black: {
+            a_idx: uint = a.x + a.y*img.stride;
+            b_idx: uint = b.x + b.y*img.stride;
+            c_idx: uint = c.x + c.y*img.stride;
+            d_idx: uint = d.x + d.y*img.stride;
+            end: uint = img.stride*img.size.y - get_wr_read_offset(img);
+            samples_out[0] = (a_idx < end) ? img.pixels[a_idx] : {};
+            samples_out[1] = (b_idx < end) ? img.pixels[b_idx] : {};
+            samples_out[2] = (c_idx < end) ? img.pixels[c_idx] : {};
+            samples_out[3] = (d_idx < end) ? img.pixels[d_idx] : {};
+
+            return;
+        }
+        case Edge_Clamp: {
+            a.x = clampi(0, img.size.x - 1, a.x);
+            b.x = clampi(0, img.size.x - 1, b.x);
+            c.x = clampi(0, img.size.x - 1, c.x);
+            d.x = clampi(0, img.size.x - 1, d.x);
+            a.y = clampi(0, img.size.y - 1, a.y);
+            b.y = clampi(0, img.size.y - 1, b.y);
+            c.y = clampi(0, img.size.y - 1, c.y);
+            d.y = clampi(0, img.size.y - 1, d.y);
+        }
+        case Edge_Repeat: {
+            a.x = repeati(a.x, img.size.x);
+            b.x = repeati(b.x, img.size.x);
+            c.x = repeati(c.x, img.size.x);
+            d.x = repeati(d.x, img.size.x);
+            a.y = repeati(a.y, img.size.y);
+            b.y = repeati(b.y, img.size.y);
+            c.y = repeati(c.y, img.size.y);
+            d.y = repeati(d.y, img.size.y);
+        } case Edge_Mirror: {
+            a.x = mirrori(a.x, img.size.x);
+            b.x = mirrori(b.x, img.size.x);
+            c.x = mirrori(c.x, img.size.x);
+            d.x = mirrori(d.x, img.size.x);
+            a.y = mirrori(a.y, img.size.y);
+            b.y = mirrori(b.y, img.size.y);
+            c.y = mirrori(c.y, img.size.y);
+            d.y = mirrori(d.y, img.size.y);
+        }
+    }
+
+    samples_out[0] = img.pixels[a.x + a.y*img.stride];
+    samples_out[1] = img.pixels[b.x + b.y*img.stride];
+    samples_out[2] = img.pixels[c.x + c.y*img.stride];
+    samples_out[3] = img.pixels[d.x + d.y*img.stride];
 }
 
 func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehavior): Color {
@@ -367,51 +424,23 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     #assert(!(wr_offset > 0) || (edge_behavior == Edge_Black));
     vi.x -= wr_offset;
 
-    a := vi;
-    b := add2i(a, {1, 0});
-    c := add2i(a, {0, 1});
-    d := add2i(a, {1, 1});
-
     A: Color;
     B: Color;
     C: Color;
     D: Color;
 
-    if (edge_behavior == Edge_Black) {
-        a_idx: uint = a.x + a.y*img.stride;
-        b_idx: uint = b.x + b.y*img.stride;
-        c_idx: uint = c.x + c.y*img.stride;
-        d_idx: uint = d.x + d.y*img.stride;
-        end: uint = img.stride*img.size.y - wr_offset;
-        A = (a_idx < end) ? img.pixels[a_idx] : {};
-        B = (b_idx < end) ? img.pixels[b_idx] : {};
-        C = (c_idx < end) ? img.pixels[c_idx] : {};
-        D = (d_idx < end) ? img.pixels[d_idx] : {};
+    if (uint(vi.x) < uint(img.size.x - wr_offset - 1) && uint(vi.y) < uint(img.size.y - 1)) {
+        A = img.pixels[vi.x + vi.y*img.stride];
+        B = img.pixels[vi.x + vi.y*img.stride + 1];
+        C = img.pixels[vi.x + vi.y*img.stride + img.stride];
+        D = img.pixels[vi.x + vi.y*img.stride + img.stride + 1];
     } else {
-        if (edge_behavior == Edge_Clamp) {
-            a.x = clampi(0, img.size.x - 1, a.x);
-            b.x = clampi(0, img.size.x - 1, b.x);
-            c.x = clampi(0, img.size.x - 1, c.x);
-            d.x = clampi(0, img.size.x - 1, d.x);
-            a.y = clampi(0, img.size.y - 1, a.y);
-            b.y = clampi(0, img.size.y - 1, b.y);
-            c.y = clampi(0, img.size.y - 1, c.y);
-            d.y = clampi(0, img.size.y - 1, d.y);
-        } else if (edge_behavior == Edge_Wrap) {
-            a.x = (a.x == img.size.x) ? a.x - img.size.x : a.x;
-            b.x = (b.x == img.size.x) ? b.x - img.size.x : b.x;
-            c.x = (c.x == img.size.x) ? c.x - img.size.x : c.x;
-            d.x = (d.x == img.size.x) ? d.x - img.size.x : d.x;
-            a.y = (a.y == img.size.y) ? a.y - img.size.y : a.y;
-            b.y = (b.y == img.size.y) ? b.y - img.size.y : b.y;
-            c.y = (c.y == img.size.y) ? c.y - img.size.y : c.y;
-            d.y = (d.y == img.size.y) ? d.y - img.size.y : d.y;
-        }
-
-        A = img.pixels[a.x + a.y*img.stride];
-        B = img.pixels[b.x + b.y*img.stride];
-        C = img.pixels[c.x + c.y*img.stride];
-        D = img.pixels[d.x + d.y*img.stride];
+        samples: Color[4];
+        sample_edge(img, edge_behavior, vi, samples);
+        A = samples[0];
+        B = samples[1];
+        C = samples[2];
+        D = samples[3];
     }
 
     AB := color_lerp(A, B, vf.x);
