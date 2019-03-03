@@ -8,49 +8,33 @@ import std { ... }
 @foreign
 func isnan(f: float): bool;
 
-@foreign("_aligned_malloc")
-func _aligned_malloc(n: usize, a: usize): void*;
-@foreign("_aligned_calloc")
-func _aligned_calloc(n: usize, a: usize): void*;
-@foreign("_aligned_realloc")
-func _aligned_realloc(p: void*, n: usize, a: usize): void*;
-@foreign("_aligned_free")
-func xfree(p: void*);
-
 var ImageSize: int2 const = { 500, 500 };
 
-func xrealloc(mem: void*, size: usize): void* {
-    result := _aligned_realloc(mem, size, 16);
-    if (!result) {
-        printf("Failed to realloc");
-        #assert(!"Bad realloc");
-        exit(1);
-    }
-    return result;
+func checked_mul2(a: usize, b: usize): usize {
+    // a * b < INT_MAX
+    // a < INT_MAX / b
+    // INT_MAX because anything that tries to allocate 4GB in this program is out of its mind
+    #assert(a < INT_MAX / b);
+    return a*b;
 }
 
-func xmalloc(size: usize): void* {
-    result := _aligned_malloc(size, 16);
-    if (!result) {
-        printf("Failed to malloc");
-        #assert(!"Bad malloc");
-        exit(1);
-    }
-    zero(result, size);
-    return result;
+func checked_mul3(a: usize, b: usize, c: usize): usize {
+    return checked_mul2(checked_mul2(a, b), c);
 }
 
-func xcalloc(count: usize, elem_size: usize): void* {
-    #assert(count < SSIZE_MAX/elem_size);
-    size := count*elem_size;
-    result := _aligned_malloc(size, 16);
-    if (!result) {
-        printf("Failed to calloc");
-        #assert(!"Bad calloc");
-        exit(1);
-    }
-    zero(result, size);
-    return result;
+func alloc_zero(size: usize, align: usize): void* {
+    mem := alloc(size, align);
+    zero(mem, size);
+    return mem;
+}
+
+func alloc2(dim: int2, bytes_per: usize): void* {
+    return alloc(checked_mul3(dim.x, dim.y, bytes_per), sizeof(float4));
+}
+
+func alloc2_zero(dim: int2, bytes_per: usize): void* {
+    size := checked_mul3(dim.x, dim.y, bytes_per);
+    return alloc_zero(size, sizeof(float4));
 }
 
 func is_zero(buf: void const*, len: usize): bool {
@@ -74,6 +58,16 @@ func bad_hash_int2(p: int2): usize {
 func bad_hash_int2_u32(p: int2): uint32 {
     h := bad_hash_int2(p);
     return uint32((h >> 32) ^ h);
+}
+
+@inline
+func KB(kb: ssize): ssize {
+    return kb * 1024;
+}
+
+@inline
+func MB(mb: ssize): ssize {
+    return mb * 1024 * 1024;
 }
 
 struct Color {
@@ -104,7 +98,7 @@ func make_tex(size: int2): Tex {
     #assert(is_power_2(size.x));
     #assert(size.x == size.y);
     // Allocate space for lods as well.
-    pixels := xcalloc(size.x*size.y*4, sizeof(Color));
+    pixels := alloc2_zero(size, 4*sizeof(Color));
     return Tex {
         size = size,
         lod_levels = 1,
@@ -124,7 +118,7 @@ func tex_image_copy(tex: Tex*): Image {
 
 func free_tex(tex: Tex*) {
     #assert(tex.pixels);
-    xfree(tex.pixels);
+    free(tex.pixels);
     tex.pixels = 0;
     tex.size = { 0, 0 };
 }
@@ -586,7 +580,7 @@ struct Threads {
     work_available_sem: SDL_sem*;
     work_completed_sem: SDL_sem*;
 
-    work: WorkItem*;
+    work: WorkItem[WorkItems];
 
     // Only the main thread touches these.
     started: bool;
@@ -599,7 +593,7 @@ struct Threads {
 }
 
 var threads: Threads;
-const WorkItems = 8;
+const WorkItems = 64;
 
 enum WorkType {
     WorkType_None = 0,
@@ -668,12 +662,17 @@ func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
+    temp_size := MB(128);
+    temp_buf := alloc(temp_size, 1);
+    temp :=  temp_allocator(temp_buf, temp_size);
+    current_allocator = (:Allocator*)&temp;
+
     completed := -1;
 
     while(true) {
         work := get_work(completed);
-
         t0 := time_now();
+        mark := temp_begin(&temp);
         switch (work.type) {
             case WorkType_DrawStarfield: {
                 img := *work.args.draw_starfield.img;
@@ -694,6 +693,7 @@ func threads_thread(data: void*): int {
             default: #assert(!"Bad work type");
         }
 
+        temp_end(&temp, mark);
         t1 := time_now();
         printf("type %d: %.2fms\n", work.type, (t1-t0)*1000);
         work.type = WorkType_None;
@@ -710,7 +710,6 @@ func threads_init(threads: Threads*) {
     threads.thread_count = SDL_GetCPUCount();
 
     threads.work_count = WorkItems;
-    threads.work = xcalloc(sizeof(WorkItem), threads.work_count);
 
     for (i := 0; i < threads.thread_count; i++) {
         thread := SDL_CreateThread(threads_thread, 0, 0);
@@ -852,7 +851,7 @@ func main(argc: int, argv: char**): int {
                 worley_squares = 0;
             }
             if (worley_squares16) {
-                afree(worley_squares16);
+                free(worley_squares16);
                 worley_squares16 = 0;
             }
             if (perlin_gradients) {
@@ -884,14 +883,19 @@ func main(argc: int, argv: char**): int {
             starfield = create_starfield(starfield_text);
             perlin_gradient({});
 
-            bands := threads.thread_count;
-            y_wr_step := image.size.y / bands;
-            wr := WritableRegion { 0, 0, image.size.x, y_wr_step };
+            block_dim := int2 { 125, 125 };
+            wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
 
             while (wr.y0 < image.size.y) {
-                threads_draw_starfield(&threads, &image, wr, &starfield);
-                wr.y0 += y_wr_step;
-                wr.y1 += y_wr_step;
+                while (wr.x0 < image.size.x) {
+                    threads_draw_starfield(&threads, &image, wr, &starfield);
+                    wr.x0 += block_dim.x;
+                    wr.x1 += block_dim.x;
+                }
+                wr.x0 = 0;
+                wr.x1 = block_dim.x;
+                wr.y0 += block_dim.y;
+                wr.y1 += block_dim.y;
             }
 
             threads_join(&threads);
@@ -912,7 +916,6 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
-            wr = WritableRegion { 0, 0, image.size.x, y_wr_step };
             color_adjustment := Color {
                 clamp_low(.1, 2.3 + random_normal()*0.5),
                 clamp_low(.1, 2 + random_normal()*0.5),
@@ -920,10 +923,18 @@ func main(argc: int, argv: char**): int {
                 1 - square(random01())
             };
 
+            wr = WritableRegion { 0, 0, block_dim.x, block_dim.y };
+
             while (wr.y0 < image.size.y) {
-                threads_post_process(&threads, &image, wr, &blurred, &blurred2, lum.x, lum.y, color_adjustment);
-                wr.y0 += y_wr_step;
-                wr.y1 += y_wr_step;
+                while (wr.x0 < image.size.x) {
+                    threads_post_process(&threads, &image, wr, &blurred, &blurred2, lum.x, lum.y, color_adjustment);
+                    wr.x0 += block_dim.x;
+                    wr.x1 += block_dim.x;
+                }
+                wr.x0 = 0;
+                wr.x1 = block_dim.x;
+                wr.y0 += block_dim.y;
+                wr.y1 += block_dim.y;
             }
 
             threads_join(&threads);

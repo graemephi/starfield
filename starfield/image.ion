@@ -47,14 +47,17 @@ func image_writable(img: Image*): Image {
     return result;
 }
 
-func make_image(size: int2): Image {
-    return image_from_pixels(xcalloc(size.x*size.y, sizeof(Color)), size);
+func make_image(dim: int2): Image {
+    size := checked_mul3(dim.x, dim.y, sizeof(Color));
+    pixels := alloc_zero(size, alignof(float4));
+    return image_from_pixels(pixels, dim);
 }
 
-func make_image_like(img: Image*): Image {
+func make_uninitialised_image_like(img: Image*): Image {
     writable := image_writable(img);
+    size := checked_mul3(writable.size.x, writable.size.y, sizeof(Color));
     return Image {
-        pixels = xcalloc(writable.size.x*writable.size.y, sizeof(Color)),
+        pixels = alloc(size, alignof(float4)),
         size = img.size,
         wr = { img.wr.x0, img.wr.y0, img.wr.x1, img.wr.y1 },
         stride = writable.size.x,
@@ -73,7 +76,7 @@ func image_from_pixels(pixels: Color*, size: int2): Image {
 
 func free_image(img: Image*) {
     #assert(img.pixels);
-    xfree(img.pixels);
+    free(img.pixels);
     img.pixels = 0;
     img.size = { 0, 0 };
 }

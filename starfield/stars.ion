@@ -554,7 +554,7 @@ func init_star_type_really(type: StarType*, redraw: bool) {
 }
 
 func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
-    nebula := make_image_like(img);
+    nebula := make_uninitialised_image_like(img);
 
     color := layer.color;
     scale := layer.scale;

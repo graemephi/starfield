@@ -62,7 +62,7 @@ func blur_horizontal(dest: Image*, src: Image*, radius: float) {
     #assert(src.size.y == dest.size.y);
     #assert(has_complete_writable_region(dest));
 
-    scratch: Color* = xcalloc(src.size.x, sizeof(Color));
+    scratch: Color* = alloc(src.size.x*sizeof(Color), alignof(float4));
 
     for (y := 0; y < src.size.y; y++) {
         row_src := src.pixels + y*src.stride;
@@ -72,7 +72,7 @@ func blur_horizontal(dest: Image*, src: Image*, radius: float) {
         blur_row(row_dest, scratch, src.size.x, radius);
     }
 
-    xfree(scratch);
+    free(scratch);
 }
 
 func blur_vertical(dest: Image*, src: Image*, radius: float) {
@@ -80,7 +80,7 @@ func blur_vertical(dest: Image*, src: Image*, radius: float) {
     #assert(src.size.y == dest.size.y);
     #assert(has_complete_writable_region(dest));
 
-    scratch: Color* = xcalloc(src.size.y * 2, sizeof(Color));
+    scratch: Color* = alloc(src.size.y * 2 * sizeof(Color), alignof(float4));
     scratch_a := scratch;
     scratch_b := scratch + src.size.y;
 
@@ -98,7 +98,7 @@ func blur_vertical(dest: Image*, src: Image*, radius: float) {
         }
     }
 
-    xfree(scratch);
+    free(scratch);
 }
 
 func blur_to(dest: Image*, src: Image*, radius: float) {
@@ -107,7 +107,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     #assert(has_complete_writable_region(dest));
 
     temp := make_image({src.size.y, src.size.x});
-    scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
+    scratch: Color* = alloc(maxi(src.size.x, src.size.y)*sizeof(Color), alignof(float4));
 
     for (y := 0; y < src.size.y; y++) {
         row_src := src.pixels + y*src.stride;
@@ -128,11 +128,11 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
 
 
     free_image(&temp);
-    xfree(scratch);
+    free(scratch);
 }
 
 func blur_to_copy(img: Image*, radius: float): Image {
-    result := make_image_like(img);
+    result := make_uninitialised_image_like(img);
     src := image_writable(img);
     dest := image_writable(&result);
     blur_to(&dest, &src, radius);
@@ -145,7 +145,7 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     #assert(has_complete_writable_region(dest));
 
     temp := make_image({src.size.y, src.size.x});
-    scratch: Color* = xcalloc(maxi(src.size.x, src.size.y), sizeof(Color));
+    scratch: Color* = alloc2(src.size, sizeof(Color));
 
     for (i := 0; i < 3; i++) {
         for (y := 0; y < src.size.y; y++) {
@@ -162,7 +162,7 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     }
 
     free_image(&temp);
-    xfree(scratch);
+    free(scratch);
 }
 
 func diffract_fetch(row: float*, len: int, i: int): float {
@@ -368,30 +368,30 @@ func diffract(img: Image*, args: DiffractionArguments) {
 
     bounds := bounds_after_transform(img, transform);
     m := magnitude2(transform);
-    working_size := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
+    working_dim := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
-    scratch_buf_size := maxi(working_size.x, working_size.y);
-    transpose_scratch_size := 0;
+    scratch_buf_len := maxi(working_dim.x, working_dim.y);
+    transpose_scratch_len := 0;
 
     if (args.type != Diffraction_Single) {
-        transpose_scratch_size = working_size.x * working_size.y;
+        transpose_scratch_len = working_dim.x * working_dim.y;
     }
 
-    scratch_buf: Color* = xcalloc(scratch_buf_size + transpose_scratch_size, sizeof(Color));
-    transpose_scratch := transpose_scratch_size ? (scratch_buf + scratch_buf_size) : 0;
+    scratch_buf: Color* = alloc((scratch_buf_len + transpose_scratch_len)*sizeof(Color), alignof(Color));
+    transpose_scratch := transpose_scratch_len ? (scratch_buf + scratch_buf_len) : 0;
 
     apply_diffraction(img, { alpha, alpha, alpha, 1 }, radius, transform, bounds, scratch_buf, transpose_scratch);
 
     if (args.type == Diffraction_CrossOrthoRed) {
         ortho := rotate(args.transform, mul2s({ InvSqrt2, InvSqrt2 }, 0.7));
         ortho_bounds := bounds_after_transform(img, ortho);
-        ortho_working_size := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
-        #assert(maxi(ortho_working_size.x, ortho_working_size.y) < scratch_buf_size);
-        #assert((ortho_working_size.x * ortho_working_size.y) < transpose_scratch_size);
+        ortho_working_dim := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
+        #assert(maxi(ortho_working_dim.x, ortho_working_dim.y) < scratch_buf_len);
+        #assert((ortho_working_dim.x * ortho_working_dim.y) < transpose_scratch_len);
         apply_diffraction(img, { alpha, alpha*.6, alpha*.2, 1 }, radius, ortho, ortho_bounds, scratch_buf, transpose_scratch);
     }
 
-    xfree(scratch_buf);
+    free(scratch_buf);
 }
 
 func diffract_tex(tex: Tex*, args: DiffractionArguments) {
