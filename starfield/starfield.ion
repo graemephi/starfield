@@ -528,9 +528,12 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-func time_now(): double {
-    ticks := SDL_GetPerformanceCounter() - app.time.sdl_start_ticks;
-    return double(ticks) / double(app.time.ticks_per_sec);
+func ticks(): ssize {
+    return SDL_GetPerformanceCounter();
+}
+
+func seconds_between(t0: ssize, t1: ssize): double {
+    return double(t1 - t0) / double(app.time.ticks_per_sec);
 }
 
 func luminance(c: Color): float {
@@ -687,7 +690,7 @@ func threads_thread(data: void*): int {
 
     while(true) {
         work := get_work(completed);
-        t0 := time_now();
+        t0 := ticks();
         mark := temp_begin(&temp);
         switch (work.type) {
             case WorkType_DrawStarfield: {
@@ -710,8 +713,8 @@ func threads_thread(data: void*): int {
         }
 
         temp_end(&temp, mark);
-        t1 := time_now();
-        printf("type %d: %.2fms\n", work.type, (t1-t0)*1000);
+        t1 := ticks();
+        printf("type %d: %.2fms\n", work.type, seconds_between(t0, t1)*1000);
         work.type = WorkType_None;
 
         completed = interlocked_increment(&threads.work_completed);
@@ -840,7 +843,7 @@ func main(argc: int, argv: char**): int {
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
-    t_reset := time_now();
+    t_reset := ticks();
 
     iters := 0;
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
@@ -876,8 +879,7 @@ func main(argc: int, argv: char**): int {
             }
             free_starfield(&starfield);
 
-            t0 := time_now();
-            t0f := float(t0);
+            t0 := ticks();
 
             init_worley_squares();
             diffraction_rotation = random_unit_vector2();
@@ -957,11 +959,11 @@ func main(argc: int, argv: char**): int {
 
             image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
 
-            t1 := time_now();
+            t1 := ticks();
 
             free_image(&noise);
 
-            t := float((t1 - t0)*1000);
+            t := (:float)seconds_between(t0, t1)*1000.;
             min_t = min(t, min_t);
             max_t = max(t, max_t);
             sum_t += t;
