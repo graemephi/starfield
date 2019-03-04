@@ -52,7 +52,7 @@ struct Starfield {
 
 func free_starfield(starfield: Starfield*) {
     if (starfield.stars) {
-        // afree(starfield.stars);
+        afree(starfield.stars);
     }
     if (starfield.nebula_properties.density.pixels) {
         free_tex(&starfield.nebula_properties.density);

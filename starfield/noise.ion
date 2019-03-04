@@ -359,7 +359,7 @@ struct WorleySquare16 {
 const WorleyPrecisionBitPos = 13;
 const WorleyPrecision = (1 << WorleyPrecisionBitPos);
 
-var worley_squares16: WorleySquare16[];
+var worley_squares16: WorleySquare16*;
 func worley_sse(p01: float2, grid_size: float): float2 {
     #assert(worley_squares16);
     p := mul2s(p01, grid_size);

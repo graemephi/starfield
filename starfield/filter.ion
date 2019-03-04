@@ -106,7 +106,7 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
     #assert(dest.size.y == src.size.y);
     #assert(has_complete_writable_region(dest));
 
-    temp := make_image({src.size.y, src.size.x});
+    temp :=  make_uninitialised_image({src.size.y, src.size.x});
     scratch: Color* = alloc(maxi(src.size.x, src.size.y)*sizeof(Color), alignof(float4));
 
     for (y := 0; y < src.size.y; y++) {
@@ -144,7 +144,7 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     #assert(dest.size.y == src.size.y);
     #assert(has_complete_writable_region(dest));
 
-    temp := make_image({src.size.y, src.size.x});
+    temp :=  make_uninitialised_image({src.size.y, src.size.x});
     scratch: Color* = alloc2(src.size, sizeof(Color));
 
     for (i := 0; i < 3; i++) {
@@ -271,7 +271,7 @@ func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, inne
 
 func transform_image(src: Image*, rotate: float2, scale: float2): Image {
     size := int2 { int(scale.x * src.size.x), int(scale.y * src.size.y) };
-    result := make_image(size);
+    result :=  make_image(size);
 
     inverse_rect := all_rect(src);
     inverse_rect.size = { 1. / scale.y, 1. / scale.y };
@@ -377,18 +377,18 @@ func diffract(img: Image*, args: DiffractionArguments) {
         transpose_scratch_len = working_dim.x * working_dim.y;
     }
 
-    scratch_buf: Color* = alloc((scratch_buf_len + transpose_scratch_len)*sizeof(Color), alignof(Color));
+    scratch_buf: Color* = new[(scratch_buf_len + transpose_scratch_len)] undef;
     transpose_scratch := transpose_scratch_len ? (scratch_buf + scratch_buf_len) : 0;
 
     apply_diffraction(img, { alpha, alpha, alpha, 1 }, radius, transform, bounds, scratch_buf, transpose_scratch);
 
     if (args.type == Diffraction_CrossOrthoRed) {
-        ortho := rotate(args.transform, mul2s({ InvSqrt2, InvSqrt2 }, 0.7));
+        ortho := rotate(args.transform, { InvSqrt2, InvSqrt2 });
         ortho_bounds := bounds_after_transform(img, ortho);
         ortho_working_dim := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
         #assert(maxi(ortho_working_dim.x, ortho_working_dim.y) < scratch_buf_len);
         #assert((ortho_working_dim.x * ortho_working_dim.y) < transpose_scratch_len);
-        apply_diffraction(img, { alpha, alpha*.6, alpha*.2, 1 }, radius, ortho, ortho_bounds, scratch_buf, transpose_scratch);
+        apply_diffraction(img, { alpha, alpha*.7, alpha*.25, 1 }, radius * .7, ortho, ortho_bounds, scratch_buf, transpose_scratch);
     }
 
     free(scratch_buf);

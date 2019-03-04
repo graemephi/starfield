@@ -53,6 +53,12 @@ func make_image(dim: int2): Image {
     return image_from_pixels(pixels, dim);
 }
 
+func make_uninitialised_image(dim: int2): Image {
+    size := checked_mul3(dim.x, dim.y, sizeof(Color));
+    pixels := alloc(size, alignof(float4));
+    return image_from_pixels(pixels, dim);
+}
+
 func make_uninitialised_image_like(img: Image*): Image {
     writable := image_writable(img);
     size := checked_mul3(writable.size.x, writable.size.y, sizeof(Color));
@@ -89,7 +95,7 @@ func image_clear(img: Image*) {
 func image_copy(img: Image*): Image {
     #assert(img.pixels);
     #assert(img.size.x == img.stride);
-    result := make_image(img.size);
+    result := make_uninitialised_image(img.size);
     copy(result.pixels, img.pixels, img.size.x*img.size.y*sizeof(Color));
     return result;
 }

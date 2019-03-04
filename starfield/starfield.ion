@@ -15,6 +15,10 @@ func checked_mul2(a: usize, b: usize): usize {
     // a < INT_MAX / b
     // INT_MAX because anything that tries to allocate 4GB in this program is out of its mind
     #assert(a < INT_MAX / b);
+    if (a >= INT_MAX / b) {
+        printf("Integer overflow on allocation\n");
+        exit(1);
+    }
     return a*b;
 }
 
@@ -601,13 +605,15 @@ struct Threads {
 
     work: WorkItem[WorkItems];
 
-    // Only the main thread touches these.
+    // Only the main thread reads/writes these.
     started: bool;
     work_count: int;
 
-    // Worker threads touch this.
-    work_token: volatile_long;
+    // Only the main thread writes to this.
     work_index: volatile_long;
+
+    // Worker threads write to these.
+    work_token: volatile_long;
     work_completed: volatile_long;
 }
 
@@ -681,7 +687,7 @@ func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
-    temp_size := MB(128);
+    temp_size := 4*(ImageSize.x * ImageSize.y)*sizeof(Color);
     temp_buf := alloc(temp_size, sizeof(usize));
     temp :=  temp_allocator(temp_buf, temp_size);
     current_allocator = (:Allocator*)&temp;
@@ -843,9 +849,7 @@ func main(argc: int, argv: char**): int {
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
-    t_reset := ticks();
 
-    iters := 0;
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
 
     image := make_image(ImageSize);
@@ -853,13 +857,9 @@ func main(argc: int, argv: char**): int {
     blurred2 := make_image(ImageSize);
     blurred;
     blurred2;
-    while (app_update() && iters < 30) {
+    while (app_update() && (!profiling || n_t < 30)) {
         if (app.error) {
             print_and_clear_error();
-        }
-
-        if (profiling) {
-            iters++;
         }
 
         if (profiling || !n_t || app.mouse.left_button.pressed) {
@@ -881,12 +881,14 @@ func main(argc: int, argv: char**): int {
 
             t0 := ticks();
 
+            // Force this to be done every iteration
+            // init_star_type_really(star_types + 12, true);
+
             init_worley_squares();
             diffraction_rotation = random_unit_vector2();
 
-            noise := make_image(ImageSize);
             noise_level := (1 - square(random01())) / randomn(2048, 5192);
-            for (it := pixel_iter_begin(&noise, {}); pixel_iter_next(&it)) {
+            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
                 c := Color {
                     square(random_normal()) * (noise_level),
                     square(random_normal()) * (noise_level),
@@ -895,13 +897,12 @@ func main(argc: int, argv: char**): int {
                 };
                 *it.pixel = c;
             }
-            blur(&noise, 0.1);
-            image_copy_to(&image, &noise);
+            blur(&image, 0.1);
 
             starfield = create_starfield(starfield_text);
             perlin_gradient({});
 
-            block_dim := int2 { 125, 125 };
+            block_dim := int2 { ImageSize.x / 4, ImageSize.y / 4 };
             wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
 
             while (wr.y0 < image.size.y) {
@@ -941,6 +942,7 @@ func main(argc: int, argv: char**): int {
                 1 - square(random01())
             };
 
+            block_dim = { ImageSize.x / 2, ImageSize.y / 2 };
             wr = WritableRegion { 0, 0, block_dim.x, block_dim.y };
 
             while (wr.y0 < image.size.y) {
@@ -961,24 +963,13 @@ func main(argc: int, argv: char**): int {
 
             t1 := ticks();
 
-            free_image(&noise);
-
             t := (:float)seconds_between(t0, t1)*1000.;
             min_t = min(t, min_t);
             max_t = max(t, max_t);
             sum_t += t;
             n_t++;
 
-            if (profiling || app.mouse.left_button.pressed) {
-                // Regen galaxy every time. This is a good candidate for
-                // multithreading but is the only big bit of work not started
-                // directly by this top level
-                // init_star_type_really(star_types + 12, true);
-
-                printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
-
-                t_reset = t0;
-            }
+            printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
         }
 
 
