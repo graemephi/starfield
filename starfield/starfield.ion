@@ -687,7 +687,7 @@ func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
-    temp_size := 4*(ImageSize.x * ImageSize.y)*sizeof(Color);
+    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 4*sizeof(Color));
     temp_buf := alloc(temp_size, sizeof(usize));
     temp :=  temp_allocator(temp_buf, temp_size);
     current_allocator = (:Allocator*)&temp;
@@ -852,12 +852,19 @@ func main(argc: int, argv: char**): int {
 
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
 
+    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 16*sizeof(Color));
+    temp_buf := alloc(temp_size, sizeof(usize));
+    temp :=  temp_allocator(temp_buf, temp_size);
+    current_allocator = (:Allocator*)&temp;
+
     image := make_image(ImageSize);
     blurred := make_image(ImageSize);
     blurred2 := make_image(ImageSize);
     blurred;
     blurred2;
     while (app_update() && (!profiling || n_t < 30)) {
+        mark := temp_begin(&temp);
+
         if (app.error) {
             print_and_clear_error();
         }
@@ -880,9 +887,6 @@ func main(argc: int, argv: char**): int {
             free_starfield(&starfield);
 
             t0 := ticks();
-
-            // Force this to be done every iteration
-            // init_star_type_really(star_types + 12, true);
 
             init_worley_squares();
             diffraction_rotation = random_unit_vector2();
@@ -980,6 +984,8 @@ func main(argc: int, argv: char**): int {
         if (!profiling) {
             SDL_WaitEvent(0);
         }
+
+        temp_end(&temp, mark);
     }
 
     return 0;

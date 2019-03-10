@@ -10,12 +10,11 @@ struct StarType {
 }
 
 enum StarTypes {
-    StarType_Space = 0,
-    StarType_BigSpace = 13,
+    StarType_None = 0,
+    StarType_Space = 1,
+    StarType_BigSpace = 14,
     StarTypeCount
 }
-
-var star_types: StarType[StarTypeCount] = {};
 
 struct Star {
     type: StarType*;
@@ -45,12 +44,17 @@ struct NebulaProperties {
 }
 
 struct Starfield {
+    types: StarType[StarTypeCount];
     stars: Star[];
-    star_count: int32;
     nebula_properties: NebulaProperties;
 }
 
 func free_starfield(starfield: Starfield*) {
+    for (i := 0; i < StarTypeCount; i++) {
+        if (starfield.types[i].tex.pixels) {
+            free_tex(&starfield.types[i].tex);
+        }
+    }
     if (starfield.stars) {
         afree(starfield.stars);
     }
@@ -61,71 +65,194 @@ func free_starfield(starfield: Starfield*) {
         afree(starfield.nebula_properties.layers);
     }
     starfield.stars = 0;
-    starfield.star_count = 0;
 }
 
-func consume_star(c: char const*, star: Star*): char const* {
-    next := 0;
-    if (*c == '\n') {
+func consume_utf8_character(c: char const*, out: int*): char const* {
+    if (*c & 0x80 == 0) {
+        *out = *c;
+        return c + 1;
+    } else if (*c & 0xE0 == 0xC0) {
+        *out = (c[1] << 8) + c[0];
+        return c + 2;
+    } else if (*c & 0xF0 == 0xE0) {
+        *out = (c[2] << 16) + (c[1] << 8) + c[0];
+        return c + 3;
+    }
+
+    #assert(*c & 0xF0 == 0xF0);
+    *out = (c[3] << 24) + (c[2] << 16) + (c[1] << 8) + c[0];
+    return c + 4;
+}
+
+@inline
+func decode_utf8(c: char const*): int {
+    if (*c & 0x80 == 0) {
+        return *c;
+    } else if (*c & 0xE0 == 0xC0) {
+        return (c[1] << 8) + c[0];
+    } else if (*c & 0xF0 == 0xE0) {
+        return (c[2] << 16) + (c[1] << 8) + c[0];
+    }
+
+    #assert(*c & 0xF0 == 0xF0);
+    return (c[3] << 24) + (c[2] << 16) + (c[1] << 8) + c[0];
+}
+
+func consume_star(c: char const*, id: int*): char const* {
+    while (*c == '\n') {
         c++;
     }
 
-    if (*c == ' ') {
-        #static_assert(StarType_Space == 0);
-        star.type = star_types + StarType_Space;
-        next = 1;
-    } else if (*c == '*') {
-        star.type = star_types + 1;
-        next = 1;
-    } else if (*c == '+') {
-        star.type = star_types + 2;
-        next = 1;
-    } else if (*c == '.') {
-        star.type = star_types + 3;
-        next = 1;
-    } else if (cmp(c, "·", sizeof("·") - 1) == 0) {
-        star.type = star_types + 4;
-        next = sizeof("·") - 1;
-    } else if (cmp(c, "˚", sizeof("˚") - 1) == 0) {
-        star.type = star_types + 5;
-        next = sizeof("˚") - 1;
-    } else if (cmp(c, "⊹", sizeof("⊹") - 1) == 0) {
-        star.type = star_types + 6;
-        next = sizeof("⊹") - 1;
-    } else if (cmp(c, "⋆", sizeof("⋆") - 1) == 0) {
-        star.type = star_types + 7;
-        next = sizeof("⋆") - 1;
-    } else if (cmp(c, "✦", sizeof("✦") - 1) == 0) {
-        star.type = star_types + 8;
-        next = sizeof("✦") - 1;
-    } else if (cmp(c, "✧", sizeof("✧") - 1) == 0) {
-        star.type = star_types + 9;
-        next = sizeof("✧") - 1;
-    } else if (cmp(c, "✫", sizeof("✫") - 1) == 0) {
-        star.type = star_types + 10;
-        next = sizeof("✫") - 1;
-    } else if (cmp(c, "✹", sizeof("✹") - 1) == 0) {
-        star.type = star_types + 11;
-        next = sizeof("✹") - 1;
-    } else if (cmp(c, "✺", sizeof("✺") - 1) == 0) {
-        star.type = star_types + 12;
-        next = sizeof("✺") - 1;
-    } else if (cmp(c, "　", sizeof("　") - 1) == 0) {
-        #static_assert(StarType_BigSpace == 13);
-        star.type = star_types + StarType_BigSpace;
-        next = sizeof("　") - 1;
+    ch: int;
+    c = consume_utf8_character(c, &ch);
+
+    if (ch == ' ') {
+        *id = StarType_Space;
+    } else if (ch == '*') {
+        *id = 2;
+    } else if (ch == '+') {
+        *id = 3;
+    } else if (ch == '.') {
+        *id = 4;
+    } else if (ch == decode_utf8("·")) {
+        *id = 5;
+    } else if (ch == decode_utf8("˚")) {
+        *id = 6;
+    } else if (ch == decode_utf8("⊹")) {
+        *id = 7;
+    } else if (ch == decode_utf8("⋆")) {
+        *id = 8;
+    } else if (ch == decode_utf8("✦")) {
+        *id = 9;
+    } else if (ch == decode_utf8("✧")) {
+        *id = 10;
+    } else if (ch == decode_utf8("✫")) {
+        *id = 11;
+    } else if (ch == decode_utf8("✹")) {
+        *id = 12;
+    } else if (ch == decode_utf8("✺")) {
+        *id = 13;
+    } else if (ch == decode_utf8("　")) {
+        #static_assert(StarType_BigSpace == 14);
+        *id = StarType_BigSpace;
     } else {
         #assert(0);
-        star.type = 0;
-        next = 1;
+        *id = 0;
     }
 
-    init_star_type(star.type);
-    return c + next;
+    return c;
+}
+
+func get_star_type(starfield: Starfield*, id: int): StarType* {
+    type := &starfield.types[id];
+    if (type.id != StarType_None) {
+        return type;
+    }
+    init_star_type(type, id);
+    return type;
+}
+
+func init_star_type(type: StarType*, id: int) {
+    #assert(id >= 0);
+    #assert(id < StarTypeCount);
+
+    if (type.tex.pixels) {
+        free_tex(&type.tex);
+    }
+
+    type.id = id;
+
+    switch (id) {
+        case 1: // ' '
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
+        case 2: // *
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            type.y_offset = .25;
+            draw_simple_star(&type.tex, 64);
+        case 3: // +
+            type.tex = make_tex({ 32, 32 });
+            type.size = { .1, .1 };
+            draw_simple_star(&type.tex, 64);
+        case 4: // .
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            type.y_offset = -.66;
+            draw_simple_star(&type.tex, 64);
+        case 5: // ·
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_simple_star(&type.tex, 64);
+        case 6: // ˚
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            type.y_offset = .66;
+            draw_simple_star(&type.tex, 64);
+        case 7: // ⊹
+            type.tex = make_tex({ 64,  64 });
+            type.size = { 16, 16 };
+            type.y_offset = -.1;
+            draw_lensed_quasar(&type.tex);
+        case 8: // ⋆
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_simple_star(&type.tex, 64);
+            diffract_tex(&type.tex, { alpha = 2, radius = .5, transform = { InvSqrt2, InvSqrt2 } });
+            diffract_tex(&type.tex, { alpha = 1, radius = .5, transform = { cos(Pi/8), sin(Pi/8)} });
+        case 9: // ✦
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_simple_star(&type.tex, 64);
+            blur_tex(&type.tex, .5);
+            diffract_tex(&type.tex, { alpha = 3, radius = .75, transform = { InvSqrt2, InvSqrt2 } });
+            diffract_tex(&type.tex, { alpha = 2, radius = .75, transform = { cos(Pi/4), sin(Pi/4)} });
+        case 10: // ✧
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_simple_star(&type.tex, 64);
+            diffract_tex(&type.tex, { 2, 2, diffraction_rotation });
+        case 11: // ✫
+            type.tex = make_tex({ 128, 128 });
+            type.size = { 128, 128 };
+
+            type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
+            img := tex_image_copy(&type.tex);
+            diffract(&img, { 1, 2, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            blur(&img, 0.1);
+            for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
+                c := image_sample_nearest(&img, it.pos);
+                str := clamp01(1 - magnitude2(sub2(it.pos, { 0.5, 0.5 })) * 12);
+                str = str*str*str*str*str;
+                to_white := color_lerp({1, 1, 1, 1}, { 1, 4, 64, 1 }, str);
+                *it.pixel = color_add(*it.pixel, color_mul(c, to_white));
+            }
+        case 12: // ✹
+            type.tex = make_tex({ 32, 32 });
+            type.size = { 32, 32 };
+            draw_simple_star(&type.tex, 64);
+        case 13: // ✺
+            type.tex = make_tex({ 256, 256 });
+            type.size = { 96, 96 };
+            // type.nonsquare = true;
+            type.random_rotation = true;
+            draw_galaxy(&type.tex, randomn(1,8));
+
+            // Reveal rendering bug:
+            // draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
+        case 14: // '　'
+            type.tex = make_tex({ 8, 8 });
+            type.size = { 32, 32 };
+            draw_outline(type.tex.pixels, type.tex.size, { 1, 0, 0, 0.5 });
+    }
+
+    tex_preprocess(&type.tex);
 }
 
 // https://en.wikipedia.org/wiki/File:TernaryColorTmap.PNG
 var star_colors: Color[] = {
+    { 0,           0,           0,              },
     { 0xff / 255., 0x01 / 255., 0.,          1. },
     { 0xff / 255., 0x0f / 255., 0.,          1. },
     { 0xff / 255., 0x29 / 255., 0x03 / 255., 1. },
@@ -145,7 +272,7 @@ var star_colors: Color[] = {
 const StarColorCount = (sizeof(star_colors)/sizeof(Color));
 
 func star_color(x: float): Color {
-    x = clamp(0, StarColorCount - 2, x);
+    x = clamp(1, StarColorCount - 2, x);
     xi := int(x);
     xf := x - xi;
     color := color_lerp((star_colors[xi]), (star_colors[xi + 1]), xf);
@@ -165,12 +292,12 @@ func random_star_color(range: float2): Color {
 }
 
 func random_star_color_for_type(type: StarType*, alpha: float): Color {
-    offset := 8;
+    offset := 9;
     r := offset + random_normal() * (StarColorCount / 7);
     x := clamp(0, StarColorCount - 1, r);
 
-    if (type.id == 12) {
-        x = clamp(8, 11, x);
+    if (type.id == 13) {
+        x = clamp(9, 12, x);
     }
 
     color := star_color(x);
@@ -179,29 +306,28 @@ func random_star_color_for_type(type: StarType*, alpha: float): Color {
     return color;
 }
 
-func create_starfield(starfield: char const*): Starfield {
-    result: Starfield = {};
+func create_starfield(starfield_text: char const*): Starfield {
+    starfield: Starfield = {};
 
     aspect_ratio := float(ImageSize.x) / float(ImageSize.y);
-    star_size_mod := square(random01());
+    star_size_mod := square(square(random01()));
     star_size := exp(-6 + star_size_mod); // 0.005
 
     width := 0;
     height := 0;
     line_width := 0;
-    star_count := 0;
 
-    c := starfield;
+    c := starfield_text;
     while (*c) {
-        star: Star;
-        c = consume_star(c, &star);
+        type_id: int;
+        c = consume_star(c, &type_id);
+        type := get_star_type(&starfield, type_id);
 
-        if (star.type) {
-            if (star.type.id == StarType_BigSpace) {
+        if (type.id) {
+            if (type.id == StarType_BigSpace) {
                 line_width += 1;
-            } else if (star.type.id != StarType_Space) {
-                star_count++;
-
+            } else if (type.id != StarType_Space) {
+                star := Star { type = type };
                 star.rect.pos = { aspect_ratio * float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 + star.type.y_offset };
                 x := star_size * clamp(0.8, 1.3, square(random_normal())) * star.type.size.x;
                 y := star.type.nonsquare ? (star_size * clamp(0.8, 1.3, square(random_normal())) * star.type.size.y) : x;
@@ -209,7 +335,7 @@ func create_starfield(starfield: char const*): Starfield {
                 star.rect.rot = star.type.random_rotation ? random_unit_vector2() : diffraction_rotation;
                 star.color = random_star_color_for_type(star.type, 1 + sqrt(x));
 
-                apush(result.stars, star);
+                apush(starfield.stars, star);
             }
         }
 
@@ -230,8 +356,8 @@ func create_starfield(starfield: char const*): Starfield {
     x_pad := 4 + (R - width) / 2;
     y_pad := 4 + (R - height) / 2;
 
-    for (i := 0; i < alen(result.stars); i++) {
-        s := result.stars + i;
+    for (i := 0; i < alen(starfield.stars); i++) {
+        s := starfield.stars + i;
         s.rect.pos.x = (s.rect.pos.x + x_pad) / R;
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
     }
@@ -252,13 +378,13 @@ func create_starfield(starfield: char const*): Starfield {
             for (k := 0; k < count; k++) {
                 size := clamp_low(star_size, random_normal()*star_size*(1 + count - int(count)));
 
-                apush(result.stars, {
+                apush(starfield.stars, {
                     rect = {
                         pos = add2(xy, { random01() * w, random01() * w }),
                         size = { size, size }
                     },
-                    type = star_types + 1,
-                    color = random_star_color_for_type(star_types + 1, 3*size*(16+4*count))
+                    type = &starfield.types[2],
+                    color = random_star_color_for_type(&starfield.types[2], 3*size*(16+4*count))
                 });
             }
 
@@ -271,7 +397,7 @@ func create_starfield(starfield: char const*): Starfield {
 
 
     turbulence := randomr(0., 0.2);
-    result.nebula_properties = {
+    starfield.nebula_properties = {
         density = star_count_noise,
         turbulence = { turbulence, randomr(turbulence, 0.35) },
         detail = clamp_low(-1, random_normal() * 2),
@@ -286,7 +412,7 @@ func create_starfield(starfield: char const*): Starfield {
     variability := randomr(0.05, .3);
     color_width := variability*StarColorCount/1.5;
     for (i := 0; i < layer_count; i++) {
-        apush(result.nebula_properties.layers, NebulaLayer {
+        apush(starfield.nebula_properties.layers, NebulaLayer {
             color = star_color(color_x + random_normal()*color_width),
             scale = scales[i],
             turbulence = {},
@@ -295,10 +421,9 @@ func create_starfield(starfield: char const*): Starfield {
             sparsity = random_normal()*variability*.1,
         });
     }
-    result.nebula_properties.layer_count = layer_count;
+    starfield.nebula_properties.layer_count = layer_count;
 
-    result.star_count = (:int)alen(result.stars);
-    return result;
+    return starfield;
 }
 
 
@@ -318,6 +443,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
     tilt := random01();
 
     s := &Starfield {};
+    star_type := get_star_type(s, 2);
     afit(s.stars, 30000);
     for (i := 0; i < 30000; i++) {
         w := arm_width;
@@ -365,11 +491,10 @@ func draw_galaxy(tex: Tex*, arms: int) {
         apush(s.stars, {
             rect = {
                 pos = add2s(mul2s(pos, 0.5), 0.5),
-                size = { size, size },
-                rot = random_unit_vector2()
+                size = { size, size }
             },
-            type = star_types + 1,
-            color = random_star_color_for_type(star_types + 1, 0.66)
+            type = star_type,
+            color = random_star_color_for_type(star_type, 0.66)
         });
     }
 
@@ -380,7 +505,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
     bloom_amount := randomr(.4, .8);
 
     blue := star_colors[StarColorCount - 3];
-    yellow := star_colors[5];
+    yellow := star_colors[6];
 
     for (it := pixel_iter_begin_tex(tex, {}); pixel_iter_next(&it)) {
         rel := sub2s(it.pos, 0.5);
@@ -407,139 +532,22 @@ func draw_galaxy(tex: Tex*, arms: int) {
 func draw_lensed_quasar(tex: Tex*) {
     center := div2si(tex.size, 2);
 
-    width := tex.size.x / int(2 + random01() * 8);
-    height := tex.size.y / int(2 + random01() * 8);
-
+    width := tex.size.x / 16;
+    height := width + int(random_normal()/6);
     top := sub2i(center, { width, 0 });
     right := add2i(center, { 0, height });
     bottom := add2i(center, { width, 0 });
     left := sub2i(center, { 0, height });
 
-    lum := Color { 16., 16., 16., 1. };
+    lum := Color { 16., 16., 20., 1. };
 
-    tex.pixels[center.x + tex.size.x*center.y] = { lum.r, lum.g, lum.b * 1.25, lum.a };
-    blur(&{ tex.pixels, tex.size }, 2);
+    tex.pixels[center.x + tex.size.x*center.y] = lum;
+    blur_tex(tex, 2);
 
     tex_poke(tex, top, lum);
     tex_poke(tex, right, lum);
     tex_poke(tex, bottom, lum);
     tex_poke(tex, left, lum);
-
-    blur(&{ tex.pixels, tex.size }, .25);
-    blur(&{ tex.pixels, tex.size }, .25);
-}
-
-func init_star_type(type: StarType*) {
-    init_star_type_really(type, false);
-}
-
-func init_star_type_really(type: StarType*, redraw: bool) {
-    idx := (:int32)(type - star_types);
-    #assert(idx >= 0);
-    #assert(idx < StarTypeCount);
-
-    if (type.tex.pixels) {
-        if (redraw == false) {
-            #assert(type.tex.size.x != 0);
-            #assert(type.tex.size.y != 0);
-            return;
-        }
-
-        free_tex(&type.tex);
-    }
-
-    type.id = idx;
-
-    switch (idx) {
-        case 0:
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
-        case 1: // *
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            type.y_offset = .25;
-            draw_simple_star(&type.tex, 64);
-        case 2: // +
-            type.tex = make_tex({ 32, 32 });
-            type.size = { .1, .1 };
-            draw_simple_star(&type.tex, 64);
-        case 3: // .
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            type.y_offset = -.66;
-            draw_simple_star(&type.tex, 64);
-        case 4: // ·
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 64);
-        case 5: // ˚
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            type.y_offset = .66;
-            draw_simple_star(&type.tex, 64);
-        case 6: // ⊹
-            type.tex = make_tex({ 64,  64 });
-            type.size = { 32, 32 };
-            type.y_offset = -.1;
-            draw_lensed_quasar(&type.tex);
-        case 7: // ⋆
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 64);
-            diffract_tex(&type.tex, { alpha = 2, radius = .5, transform = { InvSqrt2, InvSqrt2 } });
-            diffract_tex(&type.tex, { alpha = 1, radius = .5, transform = { cos(Pi/8), sin(Pi/8)} });
-        case 8: // ✦
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 64);
-            blur_tex(&type.tex, .5);
-            diffract_tex(&type.tex, { alpha = 3, radius = .75, transform = { InvSqrt2, InvSqrt2 } });
-            diffract_tex(&type.tex, { alpha = 2, radius = .75, transform = { cos(Pi/4), sin(Pi/4)} });
-        case 9: // ✧
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 64);
-            diffract_tex(&type.tex, { 2, 2, diffraction_rotation });
-        case 10: // ✫
-            type.tex = make_tex({ 128, 128 });
-            type.size = { 128, 128 };
-
-            type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
-            img := tex_image_copy(&type.tex);
-            diffract(&img, { 1, 2, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            blur(&img, 0.1);
-            for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
-                c := image_sample_nearest(&img, it.pos);
-                str := clamp01(1 - magnitude2(sub2(it.pos, { 0.5, 0.5 })) * 12);
-                str = str*str*str*str*str;
-                to_white := color_lerp({1, 1, 1, 1}, { 1, 4, 64, 1 }, str);
-                *it.pixel = color_add(*it.pixel, color_mul(c, to_white));
-            }
-        case 11: // ✹
-            type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
-        case 12: // ✺
-            type.tex = make_tex({ 256, 256 });
-            type.size = { 96, 96 };
-            type.nonsquare = true;
-            type.random_rotation = true;
-            draw_galaxy(&type.tex, randomn(1,8));
-
-            // Reveal rendering bug:
-            // draw_outline(type.tex.pixels, type.tex.size, { 0, 1, 0, 0.5 });
-        case 13: // '　'
-            type.tex = make_tex({ 8, 8 });
-            type.size = { 32, 32 };
-            draw_outline(type.tex.pixels, type.tex.size, { 1, 0, 0, 0.5 });
-        default: {
-            type.tex = make_tex({ 32, 32});
-            type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 64);
-        }
-    }
-
-    tex_preprocess(&type.tex);
 }
 
 func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
@@ -588,7 +596,7 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
 }
 
 func draw_stars(dest: Image*, starfield: Starfield*) {
-    for (i := 0; i < starfield.star_count; i++) {
+    for (i := 0; i < alen(starfield.stars); i++) {
         star := starfield.stars + i;
         draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
     }
