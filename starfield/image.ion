@@ -390,7 +390,8 @@ func sample_edge(img: Image*, edge_behavior: EdgeBehavior, a: int2, samples_out:
             b.y = repeati(b.y, img.size.y);
             c.y = repeati(c.y, img.size.y);
             d.y = repeati(d.y, img.size.y);
-        } case Edge_Mirror: {
+        }
+        case Edge_Mirror: {
             a.x = mirrori(a.x, img.size.x);
             b.x = mirrori(b.x, img.size.x);
             c.x = mirrori(c.x, img.size.x);
