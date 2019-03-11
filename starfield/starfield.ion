@@ -852,7 +852,7 @@ func main(argc: int, argv: char**): int {
 
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
 
-    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 16*sizeof(Color));
+    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 512);
     temp_buf := alloc(temp_size, sizeof(usize));
     temp :=  temp_allocator(temp_buf, temp_size);
     current_allocator = (:Allocator*)&temp;
@@ -930,14 +930,18 @@ func main(argc: int, argv: char**): int {
 
             threads_fork(&threads);
 
-            diffract(&image, {
-                alpha = 0.01,
-                radius = 2,
+            diffract_img := blur_to_copy_blend(&image, 2, .35);
+
+            diffract(&diffract_img, {
+                alpha = .25,
+                radius = 6,
                 transform = diffraction_rotation,
                 type = randomn(1, DiffractionTypeCount)
             });
 
             threads_join(&threads);
+
+            image_copy_to(&image, &diffract_img);
 
             color_adjustment := Color {
                 clamp_low(.1, 2.3 + random_normal()*0.5),
