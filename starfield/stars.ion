@@ -199,27 +199,22 @@ func init_star_type(type: StarType*, id: int) {
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             draw_simple_star(&type.tex, 64);
-            diffract_tex(&type.tex, { alpha = 2, radius = .5, transform = { InvSqrt2, InvSqrt2 } });
-            diffract_tex(&type.tex, { alpha = 1, radius = .5, transform = { cos(Pi/8), sin(Pi/8)} });
         case 9: // ✦
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             draw_simple_star(&type.tex, 64);
             blur_tex(&type.tex, .5);
-            diffract_tex(&type.tex, { alpha = 3, radius = .75, transform = { InvSqrt2, InvSqrt2 } });
-            diffract_tex(&type.tex, { alpha = 2, radius = .75, transform = { cos(Pi/4), sin(Pi/4)} });
         case 10: // ✧
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             draw_simple_star(&type.tex, 64);
-            diffract_tex(&type.tex, { 2, 2, diffraction_rotation });
         case 11: // ✫
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
 
             type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
             img := tex_image_copy(&type.tex);
-            diffract(&img, { 1, 2, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
+            diffract(&img, { {1,1,1,1}, {2,2,2,2}, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
             blur(&img, 0.1);
             for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
                 c := image_sample_nearest(&img, it.pos);

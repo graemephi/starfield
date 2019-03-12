@@ -162,6 +162,11 @@ func pixel_iter_begin_tex(tex: Tex*, rect: Rect): PixelIter {
 func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter: PixelIter = {};
 
+    if (image.pixels == 0) {
+        // Zero iterations.
+        return iter;
+    }
+
     if (is_zero_rect(rect)) {
         rect = all_rect(image);
     }
@@ -236,8 +241,8 @@ func pixel_iter_next(it: PixelIter*): bool {
     return false;
 }
 
-func test_pixel_iterator(dim: int2) {
-    img := make_image(dim);
+func test_pixel_iterator_case(img: Image*) {
+    dim := img.size;
 
     for (i := 0; i < dim.x; i++) {
         for (j := 0; j < dim.y; j++) {
@@ -255,11 +260,11 @@ func test_pixel_iterator(dim: int2) {
     {
         i := 0;
         j := 0;
-        for (it := pixel_iter_begin(&img, all_rect(&img)); pixel_iter_next(&it)) {
+        for (it := pixel_iter_begin(img, all_rect(img)); pixel_iter_next(&it)) {
             p := &img.pixels[i + j*dim.x];
             p_it := it.pixel;
-            c := image_sample_linear(&img, it.pos);
-            d := image_sample_nearest(&img, it.pos);
+            c := image_sample_linear(img, it.pos);
+            d := image_sample_nearest(img, it.pos);
             #assert(p == p_it);
             // No epsilon necessary
             #assert(p.r == c.r);
@@ -285,15 +290,15 @@ func test_pixel_iterator(dim: int2) {
 
         i := 0;
         j := 0;
-        rect := all_rect(&img);
+        rect := all_rect(img);
         rect.size.x /= 2;
         rect.size.y /= 2;
         pp := img.pixels + dim.x/4 + (dim.y/4)*dim.x;
-        for (it := pixel_iter_begin(&img, rect); pixel_iter_next(&it)) {
+        for (it := pixel_iter_begin(img, rect); pixel_iter_next(&it)) {
             p := pp++;
             p_it := it.pixel;
-            c := image_sample_linear(&img, it.img_pos);
-            d := image_sample_nearest(&img, it.img_pos);
+            c := image_sample_linear(img, it.img_pos);
+            d := image_sample_nearest(img, it.img_pos);
             #assert(p == p_it);
             #assert(p.r == c.r);
             #assert(p.g == c.g);
@@ -313,7 +318,24 @@ func test_pixel_iterator(dim: int2) {
         }
         #assert(i + j*half_dim.x == half_dim.x*half_dim.y);
     }
-    free_image(&img);
+}
+
+func test_pixel_iterator() {
+    test_pixel_iterator_case(&Image{});
+    imgs := (:Image[]) {
+        make_image({32,32}),
+        make_image({64,32}),
+        make_image({32,64}),
+        make_image({8,1024})
+    };
+    test_pixel_iterator_case(imgs + 0);
+    test_pixel_iterator_case(imgs + 1);
+    test_pixel_iterator_case(imgs + 2);
+    test_pixel_iterator_case(imgs + 3);
+    free_image(imgs + 0);
+    free_image(imgs + 1);
+    free_image(imgs + 2);
+    free_image(imgs + 3);
 }
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {

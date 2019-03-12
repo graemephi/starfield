@@ -343,6 +343,9 @@ func draw_outline(buffer: Color*, size: int2, color: Color) {
 }
 
 func all_rect(img: Image*): Rect {
+    if (img.pixels == 0) {
+        return {};
+    }
     ar := float(img.size.x) / float(img.size.y);
     return {
         pos = { 0.5 * ar, 0.5 },
@@ -505,6 +508,11 @@ func color_blend(dest: Color, src: Color): Color {
 @inline
 func color_nan(c: Color): bool {
     return isnan(c.r) || isnan(c.b) || isnan(c.g) || isnan(c.a);
+}
+
+@inline
+func color_is_zero(c: Color): bool {
+    return (c.r == 0) && (c.b == 0) && (c.g == 0) && (c.a == 0);
 }
 
 @inline
@@ -804,10 +812,7 @@ var diffraction_rotation: float2 = {};
 
 func main(argc: int, argv: char**): int {
     if (true) {
-        test_pixel_iterator({32,32});
-        test_pixel_iterator({64,32});
-        test_pixel_iterator({32,64});
-        test_pixel_iterator({8,1024});
+        test_pixel_iterator();
     }
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
@@ -930,18 +935,25 @@ func main(argc: int, argv: char**): int {
 
             threads_fork(&threads);
 
-            diffract_img := blur_to_copy_blend(&image, 2, .35);
+            diffract_img := blur_to_copy_blend(&image, 2, .1);
+            dt := randomn(1, DiffractionTypeCount);
 
-            diffract(&diffract_img, {
-                alpha = .25,
-                radius = 6,
+            inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
+            outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
+            radius_multiplier := randomr(1, 4);
+
+            diffracted := diffract(&diffract_img, {
+                inner_radius = color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier),
+                outer_radius = color_mul1({ 2.8, 3.36, 3.92, 3.92 }, radius_multiplier),
                 transform = diffraction_rotation,
-                type = randomn(1, DiffractionTypeCount)
+                type = dt
             });
 
             threads_join(&threads);
 
-            image_copy_to(&image, &diffract_img);
+            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+                *it.pixel = color_add(*it.pixel, color_mul(image_sample_nearest(&diffracted, it.pos), {.25,.25,.25,.25}));
+            }
 
             color_adjustment := Color {
                 clamp_low(.1, 2.3 + random_normal()*0.5),

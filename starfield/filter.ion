@@ -325,40 +325,43 @@ func bounds_after_transform(img: Image*, transform: float2): float2 {
     return { x, y };
 }
 
-func apply_diffraction(dest: Image*, alpha: Color, radius: float, transform: float2, transformed_bounds: float2, scratch: Color*, transpose_scratch: Color* /* nullable */) {
+func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, transform: float2, scratch: Color*, transpose_scratch: Color*): Image {
+    transformed_bounds := bounds_after_transform(img, transform);
     rotation := float2 { 1, 0 };
 
-    img := dest;
-    transformed: Image;
+    target := Image {};
     if (is_identity_transform(transform) == false) {
-        m := magnitude2(transform);
-        rotation = float2 { transform.x / m,  transform.y / m };
-        transformed = transform_image(dest, rotation, transformed_bounds);
-        img = &transformed;
+        rotation = div2s(transform, magnitude2(transform));
+        target = transform_image(img, rotation, transformed_bounds);
+    } else {
+        target = image_copy(img);
     }
 
-    inner_radius: float[4] = { radius * .25, radius * .25 * 1.1, radius * .25 * 1.2, radius * .25 * 1.2 };
-    outer_radius: float[4] = { radius * .70, radius * .70 * 1.2, radius * .70 * 1.4, radius * .70 * 1.4 };
+    diffract_blur(&target, scratch, transpose_scratch, { inner_radius.r, inner_radius.g, inner_radius.b, inner_radius.a }, { outer_radius.r, outer_radius.g, outer_radius.b, outer_radius.a });
 
-    pixel_count := img.size.x*img.size.y;
-    diffract_blur(img, scratch, transpose_scratch, inner_radius, outer_radius);
-
-    if (img.pixels == dest.pixels) {
-        for (i := 0; i < pixel_count; i++) {
-            dest.pixels[i] = color_add(dest.pixels[i], color_mul(img.pixels[i], alpha));
-        }
-    } else {
+    result := Image {};
+    if (is_identity_transform(transform) == false) {
+        result = make_uninitialised_image_like(img);
         scale := float2 { 1. / transformed_bounds.y, 1. / transformed_bounds.y };
         offset := float2 { 0.5, 0.5 };
-        for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
+        for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
             pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), { 0.5 * it.aspect_ratio, 0.5 });
 
             if (inside_normal_rect(pos, it.aspect_ratio)) {
-                *it.pixel = color_add(*it.pixel, color_mul(image_sample_linear(img, pos), alpha));
+                *it.pixel = image_sample_linear(&target, pos);
             }
         }
-        free_image(img);
+    } else {
+        result = target;
     }
+
+    for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
+        *it.pixel = color_sub(*it.pixel, image_sample_nearest(img, it.pos));
+    }
+
+    free_image(&target);
+
+    return result;
 }
 
 enum DiffractionType {
@@ -371,24 +374,29 @@ enum DiffractionType {
 }
 
 struct DiffractionArguments {
-    alpha: float;
-    radius: float;
+    inner_radius: Color;
+    outer_radius: Color;
     transform: float2;
     type: DiffractionType;
 }
 
-func diffract(img: Image*, args: DiffractionArguments) {
+// https://en.wikipedia.org/wiki/Diffraction_spike
+//
+// Note: this returns the difference between the diffracted image and the
+// orignal image; that is, it returns the diffracted part only. This makes sense
+// internally--different kinds of diffraction can be modeled by adding different
+// rotattions of one-spoke diffraction on top each other--but also makes it
+// possible for callers of this function to make compositing decisions, too.
+func diffract(img: Image*, args: DiffractionArguments): Image {
     if (args.type == Diffraction_None) {
-        return;
+        return {};
     }
 
     #assert(has_complete_writable_region(img));
+    #assert(!color_is_zero(args.inner_radius));
+    #assert(!color_is_zero(args.outer_radius));
 
-    alpha := args.alpha == 0 ? 1 : args.alpha;
-    radius := args.radius == 0 ? 1 : args.radius;
     transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
-
-    bounds := bounds_after_transform(img, transform);
     m := magnitude2(transform);
     working_dim := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
@@ -402,18 +410,20 @@ func diffract(img: Image*, args: DiffractionArguments) {
     scratch_buf: Color* = new[(scratch_buf_len + transpose_scratch_len)] undef;
     transpose_scratch := transpose_scratch_len ? (scratch_buf + scratch_buf_len) : 0;
 
-    apply_diffraction(img, { alpha, alpha, alpha, 1 }, radius, transform, bounds, scratch_buf, transpose_scratch);
+    result := apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch);
 
     if (args.type == Diffraction_CrossOrthoRed) {
         ortho := rotate(args.transform, { InvSqrt2, InvSqrt2 });
-        ortho_bounds := bounds_after_transform(img, ortho);
-        ortho_working_dim := int2 { int(img.size.x * ortho_bounds.x), int(img.size.y * ortho_bounds.y) };
-        #assert(maxi(ortho_working_dim.x, ortho_working_dim.y) < scratch_buf_len);
-        #assert((ortho_working_dim.x * ortho_working_dim.y) < transpose_scratch_len);
-        apply_diffraction(img, { alpha, alpha*.7, alpha*.25, 1 }, radius * .7, ortho, ortho_bounds, scratch_buf, transpose_scratch);
+        layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, transpose_scratch);
+
+        for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
+            *it.pixel = color_add(*it.pixel, color_mul(image_sample_nearest(&layer, it.pos), { 1., .7, .25, 1. }));
+        }
+
+        free_image(&layer);
     }
 
-    free(scratch_buf);
+    return result;
 }
 
 func diffract_tex(tex: Tex*, args: DiffractionArguments) {
