@@ -54,16 +54,6 @@ func is_equal(a: void const*, b: void const*, len: usize): bool {
     return cmp(a, b, len) == 0;
 }
 
-func bad_hash_int2(p: int2): usize {
-    h := (((0xcbf29ce484222325u ^ p.x) * 1099511628211u) ^ p.y) * 1099511628211u;
-    return h;
-}
-
-func bad_hash_int2_u32(p: int2): uint32 {
-    h := bad_hash_int2(p);
-    return uint32((h >> 32) ^ h);
-}
-
 @inline
 func KB(kb: ssize): ssize {
     return kb * 1024;

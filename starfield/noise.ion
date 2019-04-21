@@ -1,3 +1,8 @@
+func hash_int2(x: int, y: int): uint32 {
+    // crc32 isn't really good enough to do a visually satisfactory hash in
+    // general but for lookup indices in the low bits it's fine
+    return crc32(y*16777619, x);
+}
 
 var perlin_gradients: float2[];
 const PerlinGradientCountRoot = 16;
@@ -12,8 +17,7 @@ func perlin_gradient(p: int2): float2 {
         }
     }
 
-    // See worley_square_index regarding hash
-    result = perlin_gradients[bad_hash_int2_u32(p) & (PerlinGradientCount -1)];
+    result = perlin_gradients[hash_int2(p.x, p.y) & (PerlinGradientCount -1)];
     return result;
 }
 
@@ -56,285 +60,54 @@ func perlin_octaves(p: float2, grid_size: float): float {
     + perlin(mul2s(p, 4.2), grid_size) * 0.0625;
 }
 
+const WorleyPrecisionBitPos = 13;
+const WorleyPrecision = (1 << WorleyPrecisionBitPos);
 const WorleyMaxPointsPerSquare = 4;
-
-struct WorleySquare {
-    count: int;
-    points: float2[WorleyMaxPointsPerSquare];
-}
-
-var worley_squares: WorleySquare[];
 const WorleySquareCountRoot = 8;
 const WorleySquareCount = WorleySquareCountRoot*WorleySquareCountRoot;
-const UseWorleySSE = true;
+
+struct short2 {
+    x: int16;
+    y: int16;
+}
+
+#static_assert(WorleyMaxPointsPerSquare == 4)
+struct WorleySquare16 {
+    points: short2[WorleyMaxPointsPerSquare];
+}
+
+var worley_squares16: WorleySquare16*;
+
 #static_assert(WorleySquareCount & (WorleySquareCount - 1) == 0)
 func init_worley_squares() {
-    if (UseWorleySSE) {
-        if (worley_squares16 == 0) {
-            alpha := exp(-2.01);
+    if (worley_squares16 == 0) {
+        alpha := exp(-1.5);
 
-            worley_squares16 = alloc(WorleySquareCount*sizeof(WorleySquare16), alignof(short8));
+        worley_squares16 = alloc(WorleySquareCount*sizeof(WorleySquare16), alignof(short8));
 
-            for (i := 0; i < WorleySquareCount; i++) {
-                w := WorleySquare16 {};
-                count := clampi(1, WorleyMaxPointsPerSquare, random_poisson(alpha));
-                for (j := 0; j < count; j++) {
-                    v := random();
-                    w.points[j] = { (:short)((v >> 16) & (WorleyPrecision - 1)), (:short)(v & (WorleyPrecision - 1)) };
-                }
-                for (j := count; j < 4; j++) {
-                    w.points[j] = { SHORT_MAX, SHORT_MAX };
-                }
-                worley_squares16[i] = w;
+        for (i := 0; i < WorleySquareCount; i++) {
+            w := WorleySquare16 {};
+            count := random_poisson(alpha) + 1;
+            while (count >= 4) {
+                count = random_poisson(alpha) + 1;
             }
-        }
-    } else {
-        if (worley_squares == 0) {
-            alpha := exp(-2.01);
-            for (i := 0; i < WorleySquareCount; i++) {
-                w := WorleySquare {};
-                w.count = clampi(1, WorleyMaxPointsPerSquare, random_poisson(alpha));
-
-                for (j := 0; j < w.count; j++) {
-                    w.points[j] = { random01(), random01() };
-                }
-                apush(worley_squares, w);
+            for (j := 0; j < count; j++) {
+                w.points[j].x = random() & (WorleyPrecision - 1);
+                w.points[j].y = random() & (WorleyPrecision - 1);
             }
+            for (j := count; j < 4; j++) {
+                w.points[j] = { SHORT_MAX, SHORT_MAX };
+            }
+            worley_squares16[i] = w;
         }
     }
 }
 
-func worley_square_index(p: int2): ssize {
-    // This hash is bad enough that my processor can predict the subsequent load
-    // perfectly but good enough that the noise looks fine up to way higher
-    // frequencies than we need it for!!
-    base := bad_hash_int2_u32(p);
+func worley_square_index(x: int, y: int): ssize {
+    base := hash_int2(x, y);
     result := base & (WorleySquareCount - 1);
     return result;
 }
-
-func worley_scalar(p01: float2, grid_size: float): float2 {
-    #assert(worley_squares);
-
-    p := mul2s(p01, grid_size);
-    pi := floor2(p);
-
-    // Conceptually p01 lies in the unit square subdivided into
-    // WorleySquareCount squares, but it make sense to extend the domain and let
-    // wrapping select some square. In order to work with points negative in
-    // some dimension we need to shift the location of pi to the top left of the
-    // box, not the closest-to-zero point (with x, y down).
-    if (p01.x < 0) {
-        pi.x -= 1;
-    }
-    if (p01.y < 0) {
-        pi.y -= 1;
-    }
-
-    pf := sub2(p, pi);
-
-    f1 := 2*Sqrt2;
-    f2 := f1;
-
-    // yes, this is faster than a loop
-
-    {
-        w := worley_squares + worley_square_index({ int(pi.x), int(pi.y) });
-
-        for (m := 0; m < w.count; m++) {
-            d := distance_squared2(pf, w.points[m]);
-            if (d < f1) {
-                f2 = f1;
-                f1 = d;
-            } else if (d < f2) {
-                f2 = d;
-            }
-        }
-
-        // Early out. This is 5%~ of cases
-        min_dist := square(min(min(pf.x, 1 - pf.x), min(pf.y, 1 - pf.y)));
-        if (f2 < min_dist) {
-            return { sqrt(f1), sqrt(f2) };
-        }
-    }
-
-    {
-        i := -1.;
-        j := 0.;
-        face_dist := square(pf.x);
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := 1.;
-        j := 0.;
-        face_dist := square(1. - pf.x);
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := 0.;
-        j := -1.;
-        face_dist := square(pf.y);
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := 0.;
-        j := 1.;
-        face_dist := square(1. - pf.y);
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := -1.;
-        j := -1.;
-        face_dist := magnitude_squared2({ pf.x, pf.y });
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-
-    {
-        i := 1.;
-        j := -1.;
-        face_dist := magnitude_squared2({ 1. - pf.x, pf.y });
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := -1.;
-        j := 1.;
-        face_dist := magnitude_squared2({ pf.x, 1. - pf.y });
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    {
-        i := 1.;
-        j := 1.;
-        face_dist := magnitude_squared2({ 1. - pf.x, 1. - pf.y });
-
-        if (face_dist < f2) {
-            p_ij := add2(pi, { i, j });
-            w := worley_squares + worley_square_index({ int(p_ij.x), int(p_ij.y) });
-
-            for (m := 0; m < w.count; m++) {
-                d := distance_squared2(p, add2(p_ij, w.points[m]));
-                if (d < f1) {
-                    f2 = f1;
-                    f1 = d;
-                } else if (d < f2) {
-                    f2 = d;
-                }
-            }
-        }
-    }
-
-    // We only check the 8 adjacent squares. There are more that the
-    // closest point could theoretically be in but I have never seen this happen.
-
-    #assert(f1 <= f2);
-    #assert(f2 >= 0);
-    return { sqrt(f1), sqrt(f2) };
-}
-
 
 // By representing points within a given square in 16 bit fixed point we can fit
 // four in 16 bytes, and then do one 16 byte load to fetch what you need to
@@ -345,23 +118,8 @@ func worley_scalar(p01: float2, grid_size: float): float2 {
 // of the valid range (instead of tracking the number of points in a square
 // explicitly).
 
-#static_assert(WorleyMaxPointsPerSquare == 4)
-
-struct short2 {
-    x: int16;
-    y: int16;
-}
-
-struct WorleySquare16 {
-    points: short2[WorleyMaxPointsPerSquare];
-}
-
-const WorleyPrecisionBitPos = 13;
-const WorleyPrecision = (1 << WorleyPrecisionBitPos);
-
-var worley_squares16: WorleySquare16*;
-func worley_sse(p01: float2, grid_size: float): float2 {
-    #assert(worley_squares16);
+func worley(p01: float2, grid_size: float): float2 {
+   #assert(worley_squares16);
     p := mul2s(p01, grid_size);
     pi := float2_to_int2(p);
 
@@ -373,43 +131,31 @@ func worley_sse(p01: float2, grid_size: float): float2 {
     }
 
     pf := sub2(p, int2_to_float2(pi));
-    pfix := short2 { short(pf.x * WorleyPrecision), short(pf.y * WorleyPrecision) };
-    pfix8 := set4si((pfix.y << 16) + pfix.x);
-    #assert(abs(pfix.x) < WorleyPrecision);
-    #assert(abs(pfix.y) < WorleyPrecision);
+    pf32 := set4i((:int)(pf.y * WorleyPrecision), (:int)(pf.x * WorleyPrecision), (:int)(pf.y * WorleyPrecision), (:int)(pf.x * WorleyPrecision));
+    pf16 := pack4i16(pf32, pf32);
 
-    max_dist := int(2*Sqrt2 * WorleyPrecision) << WorleyPrecisionBitPos;
-    max_dists := set4si(max_dist);
-
-    face_offsets: short[3] = { -WorleyPrecision, 0, +WorleyPrecision };
-    x_faces: int[3] = { pi.x - 1, pi.x, pi.x + 1 };
-    y_faces: int[3] = { pi.y - 1, pi.y, pi.y + 1 };
-
-    f1fix := max_dist;
-    f2fix := max_dist;
-    min_dists := max_dists;
-    for (y := 0; y < 3; y++) {
-        for (x := 0; x < 3; x++) {
-            w := worley_squares16 + worley_square_index({ x_faces[x], y_faces[y] });
-            pos := int2 { face_offsets[x], face_offsets[y] };
-            XY := set4si((pos.y << 16) + pos.x);
-            xy := add8i(load8i((:short8*)&w.points[0].x), XY);
-            diff := sub8i(pfix8, xy);
-            i_dists := madd8i(diff, diff);
-            min := min4u(min_dists, i_dists);
-            // Only necessary for f2:
-            max := max4u(min_dists, i_dists);
-            min_dists = min4u(min, shuffle4i(max, SHUFFLE(2,1,0,3)));
+    mins := set4si(-1);
+    for (y := -1; y < 2; y++) {
+        for (x := -1; x < 2; x++) {
+            w := worley_squares16 + worley_square_index(pi.x + x, pi.y + y);
+            xy_offset := set4si(x * WorleyPrecision + ((y * WorleyPrecision) << 16));
+            xy := add8i16(load8i16((:short8*)w), xy_offset);
+            diff := sub8i16(pf16, xy);
+            i_dists := madd8i16(diff, diff);
+            min := min4u(mins, i_dists);
+            max := max4u(mins, i_dists);
+            mins = min4u(min, shuffle4i(max, SHUFFLE(2,1,0,3)));
         }
     }
 
-    rescaled := shr4si(min_dists, WorleyPrecisionBitPos);
-    f_mins := sqrt4(div4(int4_to_float4(rescaled), set4s(WorleyPrecision)));
+    rescaled := add4i(shr4si(mins, WorleyPrecisionBitPos), set4si(1));
+    r := mul4(cvti4(rescaled), set4s(1.0 / WorleyPrecision));
+    f_mins := mul4(r, rsqrt4(r));
 
     ds: float[4];
-    store4(ds, f_mins);
-    f1 := 2*Sqrt2;
-    f2 := 2*Sqrt2;
+    storeu4(ds, f_mins);
+    f1 := 4.0;
+    f2 := 4.0;
     for (i := 0; i < 4; i++) {
         if (ds[i] < f2) {
             if (ds[i] < f1) {
@@ -420,21 +166,8 @@ func worley_sse(p01: float2, grid_size: float): float2 {
             }
         }
     }
-    #assert(f1 < 2*Sqrt2);
-    #assert(f2 < 2*Sqrt2);
-    #assert(f1 >= 0);
-    #assert(f2 >= 0);
 
     return { f1, f2 };
-}
-
-@inline
-func worley(p01: float2, grid_size: float): float2 {
-    if (UseWorleySSE) {
-        return worley_sse(p01, grid_size);
-    } else {
-        return worley_scalar(p01, grid_size);
-    }
 }
 
 func worley_octaves(p: float2, grid_size: float): float2 {
@@ -448,7 +181,6 @@ func worley_octaves(p: float2, grid_size: float): float2 {
 }
 
 func rwo_gradient(p: int2): float2 {
-    // bad_hash_int2 with fnv-32 values so it gives the same results as the sse version
     h := (((0x811c9dc5 ^ uint(p.x)) * 16777619u) ^ uint(p.y)) * 16777619u;
     a := xor_shift(h);
     b := float_from_random_bits(a);
@@ -523,8 +255,9 @@ func rwo_gradient_sse(px: float4, py: float4): float4x2 {
     a  = xor128i(a, shl4si(a, 5));
     b := cast_int4_to_float4(or128i(and128i(a, set4si(f_sig_mask)), set4si(f_exp_1_2_mask)));
     c := sub4(b, set4s(1));
-    x := sqrt4(c);
-    y := sqrt4(sub4(set4s(1), c));
+    x := mul4(c, rsqrt4(c));
+    y := sub4(set4s(1), c);
+    y = mul4(y, rsqrt4(y));
 
     x_sign := and128i(a, set4si(1 << 31));
     y_sign := and128i(shl4si(a, 1), set4si(1 << 31));

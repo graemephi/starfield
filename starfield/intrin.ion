@@ -185,6 +185,9 @@ func unpackhi4(a: float4, b: float4): float4;
 @foreign("_mm_cvtepi32_ps")
 func int4_to_float4(a: int4): float4;
 
+@foreign("_mm_cvtepi32_ps")
+func cvti4(a: int4): float4;
+
 @foreign("_mm_castsi128_ps")
 func cast_int4_to_float4(a: int4): float4;
 
@@ -245,7 +248,7 @@ func max4i(a: int4, b: int4): int4;
 @foreign("_mm_min_epu32")
 func min4u(a: int4, b: int4): int4;
 
-@foreign("_mm_max_epi32")
+@foreign("_mm_max_epu32")
 func max4u(a: int4, b: int4): int4;
 
 @foreign("_mm_load_epi32")
@@ -275,42 +278,53 @@ func gt4i(a: int4, b: int4): int4;
 @foreign("_mm_cmplt_epi32")
 func lt4i(a: int4, b: int4): int4;
 
+@foreign("_mm_unpacklo_epi32")
+func unpacklo4i(a: int4, b: int4): int4;
+
 
 //
 // 16 bit ints
 
 @foreign("_mm_add_epi16")
-func add8i(a: short8, b: short8): short8;
+func add8i16(a: short8, b: short8): short8;
 
 @foreign("_mm_sub_epi16")
-func sub8i(a: short8, b: short8): short8;
+func sub8i16(a: short8, b: short8): short8;
 
 @foreign("_mm_mullo_epi16")
-func mul8i(a: short8, b: short8): short8;
+func mul8i16(a: short8, b: short8): short8;
 
 @foreign("_mm_div_epi16")
-func div8i(a: short8, b: short8): short8;
+func div8i16(a: short8, b: short8): short8;
 
 @foreign("_mm_madd_epi16")
-func madd8i(a: short8, b: short8): int4;
+func madd8i16(a: short8, b: short8): int4;
 
 @foreign("_mm_load_si128")
-func load8i(p: __m128i const*): short8;
+func load8i16(p: __m128i const*): short8;
 
 @foreign("_mm_store_si128")
-func store8i(p: short const*, a: short8);
+func store8i16(p: short const*, a: short8);
 
 @foreign("_mm_set_epi16")
-func set8i(e7: short, e6: short, e5: short, e4: short, e3: short, e2: short, e1: short): short8;
+func set8i16(e7: short, e6: short, e5: short, e4: short, e3: short, e2: short, e1: short): short8;
 
 @foreign("_mm_set1_epi16")
-func set8si(a: short): short8;
+func set8si16(a: short): short8;
 
 @foreign("_mm_cmpeq_epi16")
-func equals8i(a: short8, b: short8): short8;
+func equals8i16(a: short8, b: short8): short8;
 
 @foreign("_mm_blend_epi16")
-func blend8i(a: short8, b: short8, c: int): short8;
+func blend8i16(a: short8, b: short8, c: int): short8;
+
+@foreign("_mm_packs_epi32")
+func pack4i16(a: int4, b: int4): short8;
+
+// crc !?
+
+@foreign("_mm_crc32_u32")
+func crc32(acc: int, a: int): int;
 
 //
 //
