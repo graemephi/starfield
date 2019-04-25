@@ -218,6 +218,9 @@ func cast_float4_to_int4(a: float4): __m128i;
 @foreign("_mm_cvtsi128_si64")
 func i128_to_i64(a: int4): int64;
 
+@foreign("_mm_cvtsi128_si32")
+func i128_to_i32(a: int4): int32;
+
 //
 // 32 bit ints
 
@@ -280,6 +283,9 @@ func lt4i(a: int4, b: int4): int4;
 
 @foreign("_mm_unpacklo_epi32")
 func unpacklo4i(a: int4, b: int4): int4;
+
+@foreign("_mm_unpackhi_epi32")
+func unpackhi4i(a: int4, b: int4): int4;
 
 
 //

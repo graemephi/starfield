@@ -148,18 +148,19 @@ func worley(p01: float2, grid_size: float): float2 {
         }
     }
 
-    rescaled := add4i(shr4si(mins, WorleyPrecisionBitPos), set4si(1));
+    mins = min4u(unpacklo4i(mins, mins), unpackhi4i(mins, mins));
+    odd := unpackhi4i(mins, mins);
+    f1 := min4u(mins, odd);
+    f2 := max4u(mins, odd);
+
+    f1f2 := unpacklo4i(f1, f2);
+
+    rescaled := add4i(shr4si(f1f2, WorleyPrecisionBitPos), set4si(1));
     r := mul4(cvti4(rescaled), set4s(1.0 / WorleyPrecision));
-    f_mins := mul4(r, rsqrt4(r));
+    result128 := mul4(r, rsqrt4(r));
 
-    f_mins = min4(unpacklo4(f_mins, f_mins), unpackhi4(f_mins, f_mins));
-    f_odd := unpackhi4(f_mins, f_mins);
-    f1 := min4(f_mins, f_odd);
-    f2 := max4(f_mins, f_odd);
-
-    f1f2 := unpacklo4(f1, f2);
     result: float2[2];
-    storeu4(&result.x, f1f2);
+    storeu4(&result.x, result128);
 
     return result[0];
 }
