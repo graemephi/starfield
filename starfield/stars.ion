@@ -7,6 +7,7 @@ struct StarType {
     random_rotation: bool;
     y_offset: float;
     tex: Tex;
+    diffraction: Tex;
 }
 
 enum StarTypes {
@@ -84,7 +85,6 @@ func consume_utf8_character(c: char const*, out: int*): char const* {
     return c + 4;
 }
 
-@inline
 func decode_utf8(c: char const*): int {
     if (*c & 0x80 == 0) {
         return *c;
@@ -203,7 +203,8 @@ func init_star_type(type: StarType*, id: int) {
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             draw_simple_star(&type.tex, 64);
-            blur_tex(&type.tex, .5);
+            blur_tex(&type.tex, 2);
+            type.diffraction = diffract_tex(&type.tex, { Diffraction_Cross, {1,1,1,1}, {1.2,1.2,1.2,1.2} });
         case 10: // ✧
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
@@ -212,12 +213,10 @@ func init_star_type(type: StarType*, id: int) {
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
 
-            type.tex.pixels[((type.tex.size.x)/2 - 1) + ((type.tex.size.y)/2 - 1)*(type.tex.size.x)] = { 64, 16, 1, 1 };
-            img := tex_image_copy(&type.tex);
-            diffract(&img, { {1,1,1,1}, {2,2,2,2}, rotate(diffraction_rotation, { InvSqrt2, InvSqrt2 }) });
-            blur(&img, 0.1);
+            tex_write_nearest(&type.tex, { 0.5, 0.5 }, { 64, 16, 1, 1 });
+            type.diffraction = diffract_tex(&type.tex, { Diffraction_Cross, {.3,.3,.3,.3}, {1.2,1.2,1.2,1.2} });
             for (it := pixel_iter_begin_tex(&type.tex, {}); pixel_iter_next(&it)) {
-                c := image_sample_nearest(&img, it.pos);
+                c := tex_lookup(&type.diffraction, it.pos);
                 str := clamp01(1 - magnitude2(sub2(it.pos, { 0.5, 0.5 })) * 12);
                 str = str*str*str*str*str;
                 to_white := color_lerp({1, 1, 1, 1}, { 1, 4, 64, 1 }, str);
@@ -243,6 +242,7 @@ func init_star_type(type: StarType*, id: int) {
     }
 
     tex_preprocess(&type.tex);
+    tex_preprocess(&type.diffraction);
 }
 
 // https://en.wikipedia.org/wiki/File:TernaryColorTmap.PNG
@@ -594,6 +594,13 @@ func draw_stars(dest: Image*, starfield: Starfield*) {
     for (i := 0; i < alen(starfield.stars); i++) {
         star := starfield.stars + i;
         draw_tex_multiply(dest, star.rect, &star.type.tex, star.color);
+    }
+}
+
+func draw_star_diffractions(dest: Image*, starfield: Starfield*) {
+    for (i := 0; i < alen(starfield.stars); i++) {
+        star := starfield.stars + i;
+        draw_tex_multiply(dest, star.rect, &star.type.diffraction, star.color);
     }
 }
 

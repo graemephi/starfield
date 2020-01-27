@@ -199,8 +199,10 @@ func tex_premultiply_alpha(tex: Tex*) {
 }
 
 func tex_preprocess(tex: Tex*) {
-    tex_premultiply_alpha(tex);
-    generate_lods(tex);
+    if (tex.pixels) {
+        tex_premultiply_alpha(tex);
+        generate_lods(tex);
+    }
 }
 
 func tex_poke(tex: Tex*, pos: int2, val: Color) {
@@ -309,14 +311,10 @@ func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
 
 func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Color) {
     lod := compute_lod_level(dest.size, target.size, tex.size);
+    c := color_premultiply(multiply_color);
     for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
         rgba := tex_lookup_lod(tex, it.pos, lod);
-        if (rgba.a) {
-            rgba = color_mul1_rgb(rgba, 1. / rgba.a);
-            rgba = color_mul(rgba, multiply_color);
-            rgba = color_premultiply(rgba);
-        }
-        *it.pixel = color_blend(*it.pixel, rgba);
+        *it.pixel = color_blend(*it.pixel, color_mul(rgba, c));
     }
 }
 
@@ -616,7 +614,7 @@ struct Threads {
 }
 
 var threads: Threads;
-const WorkItems = 64;
+const WorkItems = 1024;
 
 enum WorkType {
     WorkType_None = 0,
@@ -867,10 +865,6 @@ func main(argc: int, argv: char**): int {
         if (profiling || !n_t || app.mouse.left_button.pressed) {
             image_clear(&image);
 
-            if (worley_squares) {
-                afree(worley_squares);
-                worley_squares = 0;
-            }
             if (worley_squares16) {
                 free(worley_squares16);
                 worley_squares16 = 0;
@@ -884,6 +878,7 @@ func main(argc: int, argv: char**): int {
             t0 := ticks();
 
             init_worley_squares();
+
             diffraction_rotation = random_unit_vector2();
 
             noise_level := (1 - square(random01())) / randomn(2048, 5192);
@@ -918,6 +913,9 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
+            unfocus := blur_to_copy_blend(&image, 2, .1);
+            draw_star_diffractions(&image, &starfield);
+
             lum := float2 {};
             threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
             threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
@@ -925,24 +923,25 @@ func main(argc: int, argv: char**): int {
 
             threads_fork(&threads);
 
-            diffract_img := blur_to_copy_blend(&image, 2, .1);
-            dt := randomn(1, DiffractionTypeCount);
+            dtype := randomn(1, DiffractionTypeCount);
 
             inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
             outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
-            radius_multiplier := randomr(1, 4);
+            radius_multiplier := square(random_normal());
+            diffract_alpha := square(clamp(0,.707, radius_multiplier));
 
-            diffracted := diffract(&diffract_img, {
+            diffracted := diffract(&unfocus, {
                 inner_radius = color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier),
                 outer_radius = color_mul1({ 2.8, 3.36, 3.92, 3.92 }, radius_multiplier),
                 transform = diffraction_rotation,
-                type = dt
+                type = dtype
             });
 
             threads_join(&threads);
 
             for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-                *it.pixel = color_add(*it.pixel, color_mul(image_sample_nearest(&diffracted, it.pos), {.25,.25,.25,.25}));
+                sample := color_premultiply(color_mul1(image_sample_nearest(&diffracted, it.pos), diffract_alpha));
+                *it.pixel = color_add(*it.pixel, sample);
             }
 
             color_adjustment := Color {

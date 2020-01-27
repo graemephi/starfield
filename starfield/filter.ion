@@ -330,17 +330,19 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
     rotation := float2 { 1, 0 };
 
     target := Image {};
-    if (is_identity_transform(transform) == false) {
+    result := Image {};
+    if (is_identity_transform(transform)) {
+        target = image_copy(img);
+
+        diffract_blur(&target, scratch, transpose_scratch, &inner_radius.r, &outer_radius.r);
+
+        result = target;
+    } else {
         rotation = div2s(transform, magnitude2(transform));
         target = transform_image(img, rotation, transformed_bounds);
-    } else {
-        target = image_copy(img);
-    }
 
-    diffract_blur(&target, scratch, transpose_scratch, { inner_radius.r, inner_radius.g, inner_radius.b, inner_radius.a }, { outer_radius.r, outer_radius.g, outer_radius.b, outer_radius.a });
+        diffract_blur(&target, scratch, transpose_scratch, &inner_radius.r, &outer_radius.r);
 
-    result := Image {};
-    if (is_identity_transform(transform) == false) {
         result = make_uninitialised_image_like(img);
         scale := float2 { 1. / transformed_bounds.y, 1. / transformed_bounds.y };
         offset := float2 { 0.5, 0.5 };
@@ -351,8 +353,6 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
                 *it.pixel = image_sample_linear(&target, pos);
             }
         }
-    } else {
-        result = target;
     }
 
     for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
@@ -374,10 +374,10 @@ enum DiffractionType {
 }
 
 struct DiffractionArguments {
+    type: DiffractionType;
     inner_radius: Color;
     outer_radius: Color;
     transform: float2;
-    type: DiffractionType;
 }
 
 // https://en.wikipedia.org/wiki/Diffraction_spike
@@ -385,7 +385,7 @@ struct DiffractionArguments {
 // Note: this returns the difference between the diffracted image and the
 // orignal image; that is, it returns the diffracted part only. This makes sense
 // internally--different kinds of diffraction can be modeled by adding different
-// rotattions of one-spoke diffraction on top each other--but also makes it
+// rotations of one-spoke diffraction on top each other--but also makes it
 // possible for callers of this function to make compositing decisions, too.
 func diffract(img: Image*, args: DiffractionArguments): Image {
     if (args.type == Diffraction_None) {
@@ -426,8 +426,13 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
     return result;
 }
 
-func diffract_tex(tex: Tex*, args: DiffractionArguments) {
-    #assert(tex.lod_levels == 1);
+func diffract_tex(tex: Tex*, args: DiffractionArguments): Tex {
+    if (args.type == Diffraction_None) {
+        return {};
+    }
+
     img := tex_image(tex);
-    diffract(&img, args);
+    diff := diffract(&img, args);
+    result := make_tex_from_image(&diff);
+    return result;
 }

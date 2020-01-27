@@ -5,12 +5,6 @@ REM %Starfield_SDL%: Location of SDL
 REM %Starfield_Ion$: Location of ion executable
 REM
 
-REM VSCodes no good sometimes
-if "%1" == "clear" (
-    clear
-    clear
-)
-
 set SDLInclude=%Starfield_SDL%\include
 set SDLLib=%Starfield_SDL%\lib\x64\SDL2.lib %Starfield_SDL%\lib\x64\SDL2main.lib
 
@@ -27,8 +21,8 @@ if errorlevel 1 goto end
 
 mkdir build 2> nul
 pushd build
-REM call cl %MSVCOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
-call clang-cl %ClangOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
+call cl %MSVCOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
+REM call clang-cl %ClangOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.exe ..\out_starfield.c %SDLLib% -link %LinkerOptions%
 popd
 
 :end
