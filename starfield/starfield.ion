@@ -126,7 +126,6 @@ func make_tex_from_image(img: Image*): Tex {
 }
 
 func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float2 {
-    // Todo: don't take into account rotation of the target rect.
     step_x := fabs(src_size.x / (dest_size.x * target_size.x));
     step_y := fabs(src_size.y / (dest_size.y * target_size.y));
     return { max(0, log2(step_x)), max(0, log2(step_y)) };
@@ -263,8 +262,6 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
 }
 
 func tex_lookup(tex: Tex*, pos: float2): Color {
-    // Todo: Make edge behaviour configurable? We only use this for looking up
-    // low resolution noise right now...
     img := tex_image(tex);
     return image_sample_linear_edge(&img, pos, Edge_Repeat);
 }

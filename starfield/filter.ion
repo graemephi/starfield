@@ -383,10 +383,7 @@ struct DiffractionArguments {
 // https://en.wikipedia.org/wiki/Diffraction_spike
 //
 // Note: this returns the difference between the diffracted image and the
-// orignal image; that is, it returns the diffracted part only. This makes sense
-// internally--different kinds of diffraction can be modeled by adding different
-// rotations of one-spoke diffraction on top each other--but also makes it
-// possible for callers of this function to make compositing decisions, too.
+// orignal image; that is, it returns the diffracted part only.
 func diffract(img: Image*, args: DiffractionArguments): Image {
     if (args.type == Diffraction_None) {
         return {};

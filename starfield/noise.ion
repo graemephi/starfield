@@ -192,7 +192,7 @@ func rwo_gradient(p: int2): float2 {
     x := sqrt(b);
     y := sqrt(1 - b);
 
-    // This positive in both x and y, but we don't use all the bits in a to
+    // x and y are both positve, but we don't use all the bits in a to
     // generate the random float, so we use those to dump it in some quadrant
     // of the unit circle.
     x_sign := a & (1<<31);

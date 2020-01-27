@@ -222,7 +222,6 @@ func pixel_iter_next(it: PixelIter*): bool {
 
     for (; it.wr_pos.y < it.end.y; it.wr_pos.y++) {
         for (; it.wr_pos.x < it.end.x; it.wr_pos.x++) {
-            // Todo: used fixed point instead?
             it.it_pos = add2(it.it_pos, it.dx);
 
             if (inside_normal_rect(it.it_pos, it.aspect_ratio)) {
