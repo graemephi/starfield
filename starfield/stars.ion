@@ -23,7 +23,7 @@ struct Star {
     color: Color;
 }
 
-struct NebulaLayer {
+struct Nebula {
     color: Color;
     scale: float;
     turbulence: float2;
@@ -32,16 +32,11 @@ struct NebulaLayer {
     sparsity: float;
 }
 
-struct NebulaProperties {
-    density: Tex;
-    layer_count: int;
-    layers: NebulaLayer[];
-}
-
 struct Starfield {
     types: StarType[StarTypeCount];
     stars: Star[];
-    nebula_properties: NebulaProperties;
+    density: Tex;
+    nebulas: Nebula[];
 }
 
 func free_starfield(starfield: Starfield*) {
@@ -53,11 +48,11 @@ func free_starfield(starfield: Starfield*) {
     if (starfield.stars) {
         afree(starfield.stars);
     }
-    if (starfield.nebula_properties.density.pixels) {
-        free_tex(&starfield.nebula_properties.density);
+    if (starfield.density.pixels) {
+        free_tex(&starfield.density);
     }
-    if (starfield.nebula_properties.layers) {
-        afree(starfield.nebula_properties.layers);
+    if (starfield.nebulas) {
+        afree(starfield.nebulas);
     }
     starfield.stars = 0;
 }
@@ -352,19 +347,20 @@ func create_starfield(starfield_text: char const*): Starfield {
         s.rect.pos.y = (s.rect.pos.y + y_pad) / R;
     }
 
-    star_count_noise := make_tex({ 8, 8 });
-    density := square(random_normal() + 2);
-    for (it := pixel_iter_begin_tex(&star_count_noise, {}); pixel_iter_next(&it)) {
+    star_count := square(random_normal() + 2);
+    density := make_tex({ 8, 8 });
+    for (it := pixel_iter_begin_tex(&density, {}); pixel_iter_next(&it)) {
         // TODO: Single channel texture!
-        it.pixel.r = (:float)random_poisson(exp(-clamp_low(0, density + random_normal())));
+        it.pixel.r = (:float)random_poisson(exp(-clamp_low(0, star_count + random_normal())));
     }
+    starfield.density = density;
 
     tiles := 25;
     w := 1. / tiles;
     xy := float2 {};
     for (i := 0; i < tiles; i++) {
         for (j := 0; j < tiles*aspect_ratio; j++) {
-            count := max(1., tex_lookup(&star_count_noise, xy).r);
+            count := max(1., tex_lookup(&density, xy).r);
             for (k := 0; k < count; k++) {
                 size := clamp_low(star_size, random_normal()*star_size*(1 + count - int(count)));
 
@@ -386,34 +382,29 @@ func create_starfield(starfield_text: char const*): Starfield {
     }
 
 
-    scales: float[] = {1,1.5,1.75,2,2.4,2.7,3.4,4.};
+    if (random01() < .333) {
+        scales: float[] = {1,1.5,1.75,2,2.4,2.7,3.4,4.};
 
-    turbulence := randomr(0., 0.2);
-    detail := clamp_low(-1, random_normal() * 2);
-    negative_space := (random() & 1) ? 1. : -1.;
-    sparsity := randomr(0.4, 1);
+        color_x := randomr(2, StarColorCount - 2);
+        turbulence := randomr(0., 0.2);
+        detail := clamp_low(-1, random_normal() * 2);
+        negative_space := (random() & 1) ? 1. : -1.;
+        sparsity := randomr(0.4, 1);
+        variability := fabs(random_normal());
+        color_width := variability*StarColorCount/1.5;
 
-    color_x := randomr(2, StarColorCount - 2);
-    variability := fabs(random_normal());
-    color_width := variability*StarColorCount/1.5;
-
-    starfield.nebula_properties = {
-        density = star_count_noise,
-    };
-
-    layer_count := clampi(0, sizeof(scales)/sizeof(scales[0]), random_poisson(exp(-5)));
-    // layer_count *= random01() < .333;
-    for (i := 0; i < layer_count; i++) {
-        apush(starfield.nebula_properties.layers, NebulaLayer {
-            color = star_color(color_x + random_normal()*color_width),
-            scale = scales[i] + variability*random01(),
-            turbulence = { turbulence, randomr(turbulence, variability*.1*scales[i]) },
-            detail = clamp_low(0, detail + random_normal()*variability*3),
-            negative_space = (random() & 3) == 1 ? 1. : -1.,
-            sparsity = clamp01(sparsity + random_normal()*variability*.1),
-        });
+        layer_count := clampi(0, sizeof(scales)/sizeof(scales[0]), random_poisson(exp(-5)));
+        for (i := 0; i < layer_count; i++) {
+            apush(starfield.nebulas, Nebula {
+                color = star_color(color_x + random_normal()*color_width),
+                scale = scales[i] + variability*random01(),
+                turbulence = { turbulence, randomr(turbulence, variability*.1*scales[i]) },
+                detail = clamp_low(0, detail + random_normal()*variability*3),
+                negative_space = (random() & 3) == 1 ? 1. : -1.,
+                sparsity = clamp01(sparsity + random_normal()*variability*.1),
+            });
+        }
     }
-    starfield.nebula_properties.layer_count = layer_count;
 
     return starfield;
 }
@@ -543,10 +534,10 @@ func draw_lensed_quasar(tex: Tex*) {
     tex_poke(tex, left, lum);
 }
 
-func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
+func draw_nebula(img: Image*, starfield: Starfield*, layer: Nebula*) {
     nebula := make_uninitialised_image_like(img);
 
-    density := &props.density;
+    density := &starfield.density;
     color := layer.color;
     scale := layer.scale;
     turbulence  := layer.turbulence.x * scale;
@@ -603,7 +594,7 @@ func draw_star_diffractions(dest: Image*, starfield: Starfield*) {
 
 func draw_starfield(dest: Image*, starfield: Starfield*) {
     draw_stars(dest, starfield);
-    for (i := 0; i < starfield.nebula_properties.layer_count; i++) {
-        draw_nebula(dest, &starfield.nebula_properties, starfield.nebula_properties.layers + i);
+    for (i := 0; i < alen(starfield.nebulas); i++) {
+        draw_nebula(dest, starfield, &starfield.nebulas[i]);
     }
 }
