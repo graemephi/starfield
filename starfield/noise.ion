@@ -310,7 +310,19 @@ func random_warp_sse(p: float2, freq: float, scale: float): float2 {
     return result[0];
 }
 
-@inline
-func random_warp(p: float2, freq: float, scale: float): float2 {
-    return random_warp_sse(p, freq, scale);
+func worley_curl(p: float2, grid_scale: float, magnitude_scale: float): float2
+{
+    h := 0.001;
+    x0 := worley_octaves(p, grid_scale).x;
+    x1 := worley_octaves(add2(p, {h, 0}), grid_scale).x;
+    x := magnitude_scale * (x0 + x1) / h;
+    y1 := worley_octaves(add2(p, {0, h}), grid_scale).x;
+    y := magnitude_scale * (x0 + y1) / h;
+    return { x, y };
+}
+
+func random_warp(p: float2, freq: float, scale: float, curl: float): float2 {
+    u := worley_curl(p, freq+curl, scale*0.0025);
+    w := random_warp_sse(p, freq, scale);
+    return lerp2(w, add2(p, u), .5*smoothstep(curl));
 }

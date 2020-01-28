@@ -364,7 +364,6 @@ func rotate_theta(v: float2, theta: float): float2 {
 
 func is_zero_rect(rect: Rect): bool {
     #assert(!(rect.size.x == 0 && rect.size.y == 0) || (rect.pos.x == 0 && rect.pos.y == 0));
-    #assert(!(rect.size.x == 0 && rect.size.y == 0) || (rect.rot.x == 0 && rect.rot.y == 0));
     return rect.size.x == 0 && rect.size.y == 0;
 }
 
@@ -818,7 +817,7 @@ func main(argc: int, argv: char**): int {
     starfield_text :="""
 ✺   　　 　　 ·   ⊹
  *  ⋆ 　　　  ✧  *
-  　　　　　　　.  　
+  　　　　　　　.  　  +
  +  *　  　* 　　. 　 ⋆
     　　  +   ✫
 """;
@@ -844,7 +843,7 @@ func main(argc: int, argv: char**): int {
 
     temp_size := checked_mul3(ImageSize.x, ImageSize.y, 512);
     temp_buf := alloc(temp_size, sizeof(usize));
-    temp :=  temp_allocator(temp_buf, temp_size);
+    temp := temp_allocator(temp_buf, temp_size);
     current_allocator = (:Allocator*)&temp;
 
     image := make_image(ImageSize);
