@@ -402,7 +402,7 @@ func create_starfield(starfield_text: char const*): Starfield {
     };
 
     layer_count := clampi(0, sizeof(scales)/sizeof(scales[0]), random_poisson(exp(-5)));
-    layer_count *= random01() < .333;
+    // layer_count *= random01() < .333;
     for (i := 0; i < layer_count; i++) {
         apush(starfield.nebula_properties.layers, NebulaLayer {
             color = star_color(color_x + random_normal()*color_width),
@@ -563,7 +563,7 @@ func draw_nebula(img: Image*, props: NebulaProperties*, layer: NebulaLayer*) {
         w2 := worley_octaves(random_warp(add2s(it.pos, 3.32849), 6 + 5*turbulence2, warp_scale, .5*p), 7+p*0.2).y;
         w3 := 4*worley_octaves(random_warp(add2s(it.pos, 8.22643), 10 + 10*turbulence2, warp_scale, .1*p), 10 + detail+p*0.2).y;
         w := w1*w1*w2*w3;
-        *it.pixel = color_mul1(color, clamp_low(0.08, w*p));
+        *it.pixel = color_mul1(color, smoothstep_range(0.08, 1, w*p));
     }
 
     // This is technically incorrect when rendered in blocks as the blur is incorrect
