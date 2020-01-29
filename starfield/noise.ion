@@ -175,7 +175,9 @@ func worley_octaves(p: float2, grid_size: float): float2 {
     return mul2s(add2(a, add2(b, add2(c, d))), s);
 }
 
+var rwo_seed: uint32 = 0;
 func rwo_gradient(p: int2): float2 {
+    p = mul2si(p, rwo_seed);
     h := (((0x811c9dc5 ^ uint(p.x)) * 16777619u) ^ uint(p.y)) * 16777619u;
     a := xor_shift(h);
     b := float_from_random_bits(a);
@@ -242,13 +244,15 @@ struct float4x2 {
 func rwo_gradient_sse(px: float4, py: float4): float4x2 {
     pxi := float4_to_int4(px);
     pyi := float4_to_int4(py);
+    pxi = mul4si(pxi, rwo_seed);
+    pyi = mul4si(pyi, rwo_seed);
     H0 := set4si(0x811c9dc5);
     H1 := set4si(16777619);
     h := mul4i(xor128i(mul4i(xor128i(pxi, H0), H1), pyi), H1);
     a := xor128i(h, shl4si(h, 13));
     a  = xor128i(a, shr4si(a, 17));
     a  = xor128i(a, shl4si(a, 5));
-    b := cast_int4_to_float4(or128i(and128i(a, set4si(f_sig_mask)), set4si(f_exp_1_2_mask)));
+    b := cast_int4_to_float4(or128i(and128i(a, set4si(f_sig_mask)), set4si(f_exp_1_2_mask|1)));
     c := sub4(b, set4s(1));
     x := mul4(c, rsqrt4(c));
     y := sub4(set4s(1), c);

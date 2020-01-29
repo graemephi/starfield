@@ -827,6 +827,7 @@ func main(argc: int, argv: char**): int {
     text_hash := hash(starfield_text, text_len);
 
     random_state = (:uint32)text_hash;
+    rwo_seed = random_state;
     threads_init(&threads);
 
     diffraction_rotation = random_unit_vector2();
@@ -853,6 +854,7 @@ func main(argc: int, argv: char**): int {
     blurred2;
     while (app_update() && (!profiling || n_t < 30)) {
         mark := temp_begin(&temp);
+        rwo_seed = random_state;
 
         if (app.error) {
             print_and_clear_error();
@@ -889,7 +891,8 @@ func main(argc: int, argv: char**): int {
             }
             blur(&image, 0.1);
 
-            starfield = create_starfield(starfield_text);
+            starfield = Starfield {};
+            create_starfield(&starfield, starfield_text);
             perlin_gradient({});
 
             block_dim := int2 { ImageSize.x / 4, ImageSize.y / 4 };

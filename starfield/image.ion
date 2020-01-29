@@ -136,7 +136,7 @@ func strict_writable_region(img: Image*): StrictWritableRegion {
 }
 
 struct PixelIter {
-    image: Image*;
+    image: Image;
     wr: StrictWritableRegion;
     stride: int;
     aspect_ratio: float;
@@ -187,7 +187,7 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     iter.dx = sub2(image_to_rect(rect, image, { 1. / image.size.y, 0 }), origin);
     iter.dy = sub2(image_to_rect(rect, image, { 0, 1. / image.size.y }), origin);
 
-    iter.image = image;
+    iter.image = *image;
     iter.wr = strict_writable_region(image);
     iter.stride = image.stride;
     iter.aspect_ratio = aspect_ratio;
@@ -204,7 +204,7 @@ func pixel_iter_begin(image: Image*, rect: Rect): PixelIter {
     };
 
     iter.img_pos = { (0.5 + start.x - 1) / image.size.y, (0.5 + start.y) / image.size.y };
-    iter.pos = image_to_rect(rect, iter.image, iter.img_pos);
+    iter.pos = image_to_rect(rect, &iter.image, iter.img_pos);
 
     wr_offset := int2 { iter.wr.x0, iter.wr.y0 };
 
@@ -227,7 +227,7 @@ func pixel_iter_next(it: PixelIter*): bool {
             if (inside_normal_rect(it.it_pos, it.aspect_ratio)) {
                 it.pixel = it.wr.pixels + (it.wr_pos.x + it.wr_pos.y*it.stride);
                 it.pos = it.it_pos;
-                it.img_pos = rect_to_image(it.image, it.rect, it.it_pos);
+                it.img_pos = rect_to_image(&it.image, it.rect, it.it_pos);
                 return true;
             }
         }
