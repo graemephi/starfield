@@ -359,7 +359,6 @@ func rsqrt(a: float): float {
     return cvtss(rsqrts(set4s(a)));
 }
 
-
 func mul4si(a: int4, b: int): int4 {
     return mul4i(a, set4si(b));
 }

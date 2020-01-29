@@ -13,6 +13,7 @@ struct StarType {
 enum StarTypes {
     StarType_None = 0,
     StarType_Space = 1,
+    StarType_Basic = 2,
     StarType_BigSpace = 14,
     StarTypeCount
 }
@@ -227,11 +228,11 @@ func init_star_type(type: StarType*, id: int) {
                 *it.pixel = color_add(*it.pixel, color_mul(c, to_white));
             }
         case 12: // ✹
-            type.size = { 64, 64 };
+            type.size = { 128, 128 };
             type.galaxy = true;
             type.rare = true;
         case 13: // ✺
-            type.size = { 64, 64 };
+            type.size = { 128, 128 };
             type.galaxy = true;
             type.rare = true;
         case 14: // '　'
@@ -325,7 +326,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
 
         if (type.rare) {
             if (random01() < 0.9) {
-                type = get_star_type(starfield, 2);
+                type = get_star_type(starfield, StarType_Basic);
             }
         }
 
@@ -392,7 +393,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
     tiles := 25;
     w := 1. / tiles;
     xy := float2 {};
-    bg_type := get_star_type(starfield, 2);
+    bg_type := get_star_type(starfield, StarType_Basic);
     for (i := 0; i < tiles; i++) {
         for (j := 0; j < tiles*aspect_ratio; j++) {
             count := max(1., tex_lookup(&density, xy).r);
@@ -449,6 +450,8 @@ func draw_simple_star(tex: Tex*, luminance: float) {
 func draw_galaxy(tex: Tex*, arms: int) {
     tex_img := tex_image(tex);
 
+    pa := push_scratch_allocator();
+
     arm_width := 0.0125 + randomr(-1, 1)*0.01;
     arms = clampi(2, 6, arms);
     brightness := randomr(0.8, 1.1);
@@ -458,7 +461,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
     tilt := random01();
 
     s := &Starfield {};
-    star_type := get_star_type(s, 2);
+    star_type := get_star_type(s, StarType_Basic);
     afit(s.stars, 30000);
     for (i := 0; i < 30000; i++) {
         w := arm_width;
@@ -502,7 +505,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
 
         // Dim large/bright stars towards the edge
         size := (Sqrt2 - magnitude2(pos) + z + y * tilt) * random01() * 0.016 * brightness;
-        size = clamp(1e-6, 1, size);
+        size = clamp_low(1e-6, size);
 
         apush(s.stars, {
             rect = {
@@ -540,9 +543,7 @@ func draw_galaxy(tex: Tex*, arms: int) {
         *it.pixel = color_blend(*it.pixel, color_premultiply(matter));
     }
 
-    free_starfield(s);
-    free_image(&bloom_less);
-    free_image(&bloom_more);
+    pop_scratch_allocator(pa);
 }
 
 func draw_lensed_quasar(tex: Tex*) {
@@ -567,6 +568,8 @@ func draw_lensed_quasar(tex: Tex*) {
 }
 
 func draw_nebula(img: Image*, starfield: Starfield*, layer: Nebula*) {
+    pa := push_scratch_allocator();
+
     nebula := make_uninitialised_image_like(img);
 
     density := &starfield.density;
@@ -606,8 +609,7 @@ func draw_nebula(img: Image*, starfield: Starfield*, layer: Nebula*) {
         *it.pixel = color_blend(*it.pixel, color_premultiply(z));
     }
 
-    free_image(&nebula);
-    free_image(&blur_nebula);
+    pop_scratch_allocator(pa);
 }
 
 func draw_stars(dest: Image*, starfield: Starfield*) {

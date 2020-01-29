@@ -5,6 +5,30 @@ import std { ... }
 
 #foreign(header = "<SDL_bits.h>")
 
+@threadlocal
+var scratch: TempAllocator*;
+
+struct PushedAllocator
+{
+    allocator: Allocator*;
+    mark: TempMark;
+}
+
+// They're called push and pop but the stack is maintained by the caller
+// (i.e. on the call stack).
+func push_scratch_allocator(): PushedAllocator {
+    old := current_allocator;
+    current_allocator = (:Allocator*)scratch;
+    mark := temp_begin(scratch);
+    result := PushedAllocator { old, mark };
+    return result;
+}
+
+func pop_scratch_allocator(pa: PushedAllocator) {
+    current_allocator = pa.allocator;
+    temp_end(scratch, pa.mark);
+}
+
 @foreign
 func isnan(f: float): bool;
 
@@ -679,6 +703,9 @@ func threads_thread(data: void*): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
+    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
+    scratch = &scratch_allocator;
+
     temp_size := checked_mul3(ImageSize.x, ImageSize.y, 4*sizeof(Color));
     temp_buf := alloc(temp_size, sizeof(usize));
     temp :=  temp_allocator(temp_buf, temp_size);
@@ -841,6 +868,9 @@ func main(argc: int, argv: char**): int {
     n_t := 0;
 
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
+
+    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
+    scratch = &scratch_allocator;
 
     temp_size := checked_mul3(ImageSize.x, ImageSize.y, 512);
     temp_buf := alloc(temp_size, sizeof(usize));
