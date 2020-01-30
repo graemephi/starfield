@@ -206,7 +206,6 @@ func init_star_type(type: StarType*, id: int) {
             blur_tex(&type.tex, 2);
             type.diffraction = diffract_tex(&type.tex, { Diffraction_Cross, {1,1,1,1}, {1.2,1.2,1.2,1.2} });
         case 10: // ✧
-            // type.tex= make_tex({ 32, 32 });
             tex := make_tex({ 32, 32 });
             type.size = { 32, 32 };
             type.rare = true;
@@ -228,11 +227,11 @@ func init_star_type(type: StarType*, id: int) {
                 *it.pixel = color_add(*it.pixel, color_mul(c, to_white));
             }
         case 12: // ✹
-            type.size = { 128, 128 };
+            type.size = { 256, 256 };
             type.galaxy = true;
             type.rare = true;
         case 13: // ✺
-            type.size = { 128, 128 };
+            type.size = { 256, 256 };
             type.galaxy = true;
             type.rare = true;
         case 14: // '　'
@@ -340,11 +339,12 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
 
                 if (type.galaxy) {
                     y := star_size * clamp(0.8, 1., square(random_normal())) * star.type.size.y;
-                    star.rect.size = float2 { x, y };
+                    galaxy_scale := randomr(0.25, .5);
+                    star.rect.size = float2 { x*galaxy_scale, y*galaxy_scale };
                     star.rect.rot = random_unit_vector2();
                     star.color = random_star_color_for_type(star.type, .5 + sqrt(x));
 
-                    star.tex_override = make_tex({256, 256});
+                    star.tex_override = make_tex(float2_to_int2(star.type.size));
                     draw_galaxy(&star.tex_override, randomn(1,8));
 
                     // Reveal rendering bug:
@@ -419,23 +419,42 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
 
 
     if (random01() < .666) {
-        scales: float[] = {1,1.5,1.75,2,2.4,2.7,3.4,4.};
+        layer_count := random_poisson(exp(-7));
+        scales: float[]; // = {1,1.5,1.75,2,2.4,2.7,3.4,4.};
+        s := 1.0;
+        apush(scales, s);
+        r := randomr(0.66,1.33);
+        for (i := 0; i < layer_count; i++) {
+            s += r*square(random01());
+            apush(scales, s);
+        }
 
         color_x := randomr(2, StarColorCount - 2);
+
         turbulence := randomr(0., 0.2);
         detail := clamp_low(-1, random_normal() * 2);
         sparsity := randomr(0.4, 1);
         variability := fabs(random_normal());
-        color_width := variability*StarColorCount/1.5;
+        color_width := variability*StarColorCount*0.15;
+        base_color := star_color(color_x);
+        shadows := 0.1;
 
-        layer_count := clampi(0, sizeof(scales)/sizeof(scales[0]), random_poisson(exp(-5)));
         for (i := 0; i < layer_count; i++) {
+            color: Color;
+            negative_space := smoothstep_range(-1, 1, randomr(-1.5,1.5));
+            if (random01() < shadows) {
+                color = color_mul1(base_color, clamp(0.5, 1.5, 1 + random_normal()));
+                color.a = clamp01(color.a);
+            } else {
+                color = star_color(color_x + random_normal()*color_width);
+                base_color = color;
+            }
             apush(starfield.nebulas, Nebula {
-                color = star_color(color_x + random_normal()*color_width),
+                color = color,
                 scale = scales[i] + variability*random01(),
                 turbulence = { turbulence, randomr(turbulence, variability*.1*scales[i]) },
                 detail = clamp_low(0, detail + random_normal()*variability*3),
-                negative_space = (random() & 1) == 1 ? 1. : -1.,
+                negative_space = negative_space,
                 sparsity = clamp01(sparsity + random_normal()*variability*.1),
             });
         }
