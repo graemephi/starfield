@@ -884,7 +884,6 @@ func main(argc: int, argv: char**): int {
     blurred2;
     while (app_update() && (!profiling || n_t < 30)) {
         mark := temp_begin(&temp);
-        rwo_seed = random_state;
 
         if (app.error) {
             print_and_clear_error();
@@ -892,20 +891,10 @@ func main(argc: int, argv: char**): int {
 
         if (profiling || !n_t || app.mouse.left_button.pressed) {
             image_clear(&image);
-
-            if (worley_squares16) {
-                free(worley_squares16);
-                worley_squares16 = 0;
-            }
-            if (perlin_gradients) {
-                afree(perlin_gradients);
-                perlin_gradients = 0;
-            }
             free_starfield(&starfield);
 
             t0 := ticks();
-
-            init_worley_squares();
+            noise_init();
 
             diffraction_rotation = random_unit_vector2();
 
@@ -923,7 +912,6 @@ func main(argc: int, argv: char**): int {
 
             starfield = Starfield {};
             create_starfield(&starfield, starfield_text);
-            perlin_gradient({});
 
             block_dim := int2 { ImageSize.x / 4, ImageSize.y / 4 };
             wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
