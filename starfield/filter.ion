@@ -291,16 +291,18 @@ func diffract_blur(img: Image*, scratch: Color*, transpose_scratch: Color*, inne
     }
 }
 
-func transform_image(src: Image*, rotate: float2, scale: float2): Image {
+func transform_image(src: Image*, inverse_map: Rect, scale: float2): Image {
     size := int2 { int(scale.x * src.size.x), int(scale.y * src.size.y) };
-    result :=  make_image(size);
-
-    inverse_rect := all_rect(src);
-    inverse_rect.size = { 1. / scale.y, 1. / scale.y };
-    inverse_rect.rot = { rotate.x, -rotate.y };
-
-    for (it := pixel_iter_begin(&result, inverse_rect); pixel_iter_next(&it)) {
-        *it.pixel = image_sample_linear(src, it.pos);
+    result := make_image(size);
+    result_rect := all_rect(&result);
+    ar := float(src.size.x) / float(src.size.y);
+    for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
+        p := rect_to_rect(inverse_map, result_rect, it.pos);
+        if (inside_normal_rect(p, ar)) {
+            *it.pixel = image_sample_linear(src, p);
+        } else {
+            #assert(1);
+        }
     }
 
     return result;
@@ -310,9 +312,9 @@ func bounds_after_transform(img: Image*, transform: float2): float2 {
     r := all_rect(img);
     r.rot = transform;
     a := rect_to_image(img, r, {0,0});
-    b := rect_to_image(img, r, {1,0});
+    b := rect_to_image(img, r, {r.size.x,0});
     c := rect_to_image(img, r, {0,1});
-    d := rect_to_image(img, r, {1,1});
+    d := rect_to_image(img, r, {r.size.x,1});
 
     x_min := smin4(a.x, b.x, c.x, d.x);
     x_max := smax4(a.x, b.x, c.x, d.x);
@@ -339,19 +341,17 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
         result = target;
     } else {
         rotation = div2s(transform, magnitude2(transform));
-        target = transform_image(img, rotation, transformed_bounds);
+        inverse_rect := all_rect(img);
+        inverse_rect.size = { 1. / transformed_bounds.x, 1. / transformed_bounds.y };
+        inverse_rect.rot = { rotation.x, -rotation.y };
+        target = transform_image(img, inverse_rect, transformed_bounds);
 
         diffract_blur(&target, scratch, transpose_scratch, &inner_radius.r, &outer_radius.r);
 
         result = make_uninitialised_image_like(img);
-        scale := float2 { 1. / transformed_bounds.y, 1. / transformed_bounds.y };
-        offset := float2 { 0.5, 0.5 };
+        target_rect := all_rect(&target);
         for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
-            pos := add2(mul2(rotate(sub2(it.pos, offset), rotation), scale), { 0.5 * it.aspect_ratio, 0.5 });
-
-            if (inside_normal_rect(pos, it.aspect_ratio)) {
-                *it.pixel = image_sample_linear(&target, pos);
-            }
+            *it.pixel = image_sample_linear(&target, rect_to_rect(target_rect, inverse_rect, it.pos));
         }
     }
 

@@ -325,7 +325,7 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
 func draw_tex(dest: Image*, target: Rect, tex: Tex*) {
     lod := compute_lod_level(dest.size, target.size, tex.size);
     for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
+        rgba := tex_lookup_lod(tex, it.npos, lod);
         *it.pixel = color_blend(*it.pixel, rgba);
     }
 }
@@ -334,7 +334,7 @@ func draw_tex_multiply(dest: Image*, target: Rect, tex: Tex*, multiply_color: Co
     lod := compute_lod_level(dest.size, target.size, tex.size);
     c := color_premultiply(multiply_color);
     for (it := pixel_iter_begin(dest, target); pixel_iter_next(&it)) {
-        rgba := tex_lookup_lod(tex, it.pos, lod);
+        rgba := tex_lookup_lod(tex, it.npos, lod);
         *it.pixel = color_blend(*it.pixel, color_mul(rgba, c));
     }
 }

@@ -151,6 +151,7 @@ struct PixelIter {
 
     pos: float2;
     img_pos: float2;
+    npos: float2;
     pixel: Color*;
 }
 
@@ -227,6 +228,7 @@ func pixel_iter_next(it: PixelIter*): bool {
             if (inside_normal_rect(it.it_pos, it.aspect_ratio)) {
                 it.pixel = it.wr.pixels + (it.wr_pos.x + it.wr_pos.y*it.stride);
                 it.pos = it.it_pos;
+                it.npos = { it.it_pos.x / it.aspect_ratio, it.it_pos.y };
                 it.img_pos = rect_to_image(&it.image, it.rect, it.it_pos);
                 return true;
             }
