@@ -973,7 +973,7 @@ func main(argc: int, argv: char**): int {
 
             starfield = Starfield {};
 
-            if (random01() < .05) {
+            if (false && random01() < .02) {
                 create_galactic_starfield(&starfield, starfield_text, &image);
             } else {
                 create_starfield(&starfield, starfield_text);
@@ -996,7 +996,9 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
-            unfocus := blur_to_copy_blend(&image, 2, .1); // todo fiddle
+            ufa := clamp_low(0.1, 1.5 + .5*random_normal());
+            ufb := clamp_low(0.01, .05 + .1*random_normal());
+            unfocus := blur_to_copy_blend(&image, ufa, ufb);
             draw_star_diffractions(&image, &starfield);
 
             lum := float2 {};
@@ -1011,14 +1013,18 @@ func main(argc: int, argv: char**): int {
             inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
             outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
             radius_multiplier := square(random_normal());
-            diffract_alpha := clamp(0, 0.5, square(radius_multiplier));
+            diffract_alpha := clamp(0, 0.75, .5*random_normal() + square(radius_multiplier));
+
+            inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier);
+            outer := color_mul1({ 2.8, 3.36, 3.92, 3.92 }, radius_multiplier);
 
             diffracted := diffract(&unfocus, {
-                inner_radius = color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier),
-                outer_radius = color_mul1({ 2.8, 3.36, 3.92, 3.92 }, radius_multiplier),
+                inner_radius = inner,
+                outer_radius = outer,
                 transform = diffraction_rotation,
                 type = dtype
             });
+            sharpen(&diffracted, .075, .85);
 
             threads_join(&threads);
 

@@ -187,6 +187,17 @@ func blur_to_asym(dest: Image*, src: Image*, radius: float2) {
     free(scratch);
 }
 
+func sharpen(img: Image*, radius: float, alpha: float) {
+    b := blur_to_copy(img, radius);
+    for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
+        s := image_sample_nearest(&b, it.pos);
+        s = color_sub(*it.pixel, s);
+        s.a = alpha;
+        *it.pixel = color_blend(*it.pixel, color_premultiply(s));
+    }
+    free_image(&b);
+}
+
 func diffract_fetch(row: float*, len: int, i: int): float {
     if (i < 0 || i >= len) {
         return {};

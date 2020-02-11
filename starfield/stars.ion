@@ -421,7 +421,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
                         size = { size, size }
                     },
                     type = bg_type,
-                    color = random_star_color_for_type(bg_type, clamp01(3*size*(16+4*count)))
+                    color = random_star_color_for_type(bg_type, square((size*(16+4*count))))
                 });
             }
 
