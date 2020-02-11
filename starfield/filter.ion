@@ -300,8 +300,6 @@ func transform_image(src: Image*, inverse_map: Rect, scale: float2): Image {
         p := rect_to_rect(inverse_map, result_rect, it.pos);
         if (inside_normal_rect(p, ar)) {
             *it.pixel = image_sample_linear(src, p);
-        } else {
-            #assert(1);
         }
     }
 

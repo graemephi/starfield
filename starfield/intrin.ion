@@ -170,6 +170,9 @@ func cvtss(a: float4): float;
 @foreign("_mm_sqrt_ps")
 func sqrt4(a: float4): float4;
 
+@foreign("_mm_sqrt_ss")
+func sqrts(a: float4): float4;
+
 @foreign("_mm_rsqrt_ss")
 func rsqrts(a: float4): float4;
 
@@ -355,10 +358,14 @@ func mul4s(a: float4, b: float): float4 {
     return mul4(a, set4s(b));
 }
 
-func rsqrt(a: float): float {
-    return cvtss(rsqrts(set4s(a)));
-}
-
 func mul4si(a: int4, b: int): int4 {
     return mul4i(a, set4si(b));
+}
+
+func sqrt(a: float): float {
+    return cvtss(sqrts(set4s(a)));
+}
+
+func rsqrt(a: float): float {
+    return cvtss(rsqrts(set4s(a)));
 }

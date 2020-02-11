@@ -12,7 +12,7 @@ set LinkerOptions=-subsystem:windows
 
 set NOpt=-Od -Ob1 -MTd
 set Opt=-O2 -GL -Ob2 -MT
-set MSVCOptions=-W3 -WX
+set MSVCOptions=-W3 -WX -wd4101
 set ClangOptions=-mfma -W0 -arch:AVX2
 set CompilerOptions=-Zi -Oi %Opt% -nologo -fp:fast
 

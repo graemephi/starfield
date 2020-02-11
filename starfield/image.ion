@@ -114,9 +114,12 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     #assert(src.size.x == size.x);
     #assert(src.size.y == size.y);
     src_end := src.pixels + src.stride*src.size.y;
-    for (src_it := src.pixels; src_it != src_end; src_it++) {
-        *dest = color_to_rgb8(*src_it);
-        dest++;
+    stride := src.stride;
+    for (y := 0; y < src.size.y; y++) {
+        for (x := 0; x < src.size.x; x++) {
+            *dest = color_to_rgb8(src.pixels[x + stride*y]);
+            dest++;
+        }
     }
 }
 
@@ -373,6 +376,11 @@ enum EdgeBehavior {
 
 func image_sample_linear(img: Image*, pos: float2): Color {
     return image_sample_linear_edge(img, pos, Edge_Black);
+}
+
+func image_sample_linear_stretch(img: Image*, pos: float2): Color {
+    pos.x *= float(img.size.x) / float(img.size.y);
+    return image_sample_linear_edge(img, pos, Edge_Repeat);
 }
 
 func sample_edge(img: Image*, edge_behavior: EdgeBehavior, a: int2, samples_out: Color[4]) {

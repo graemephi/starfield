@@ -1,4 +1,4 @@
-import libc { printf, fabs, cos, sin, exp, ceil, sqrt, log, exit, pow, log2, abs, fflush }
+import libc { printf, fabs, cos, sin, exp, ceil, log, exit, pow, log2, abs, fflush }
 import sdl { ... }
 import noir { ... }
 import std { ... }
@@ -32,6 +32,7 @@ func pop_scratch_allocator(pa: PushedAllocator) {
 @foreign
 func isnan(f: float): bool;
 
+var WorkingImageSize: int2 const = { 550, 550 };
 var ImageSize: int2 const = { 500, 500 };
 
 func checked_mul2(a: usize, b: usize): usize {
@@ -135,7 +136,6 @@ func tex_image_copy(tex: Tex*): Image {
 }
 
 func free_tex(tex: Tex*) {
-    #assert(tex.pixels);
     free(tex.pixels);
     tex.pixels = 0;
     tex.size = { 0, 0 };
@@ -178,7 +178,7 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.npos);
                 #assert(!color_nan(*it.pixel));
             }
         }
@@ -192,7 +192,7 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.npos);
                 #assert(!color_nan(*it.pixel));
             }
         }
@@ -206,7 +206,7 @@ func generate_lods(tex: Tex*) {
 
             for (it := pixel_iter_begin(&lod, {}); pixel_iter_next(&it)) {
                 #assert(is_zero(it.pixel, sizeof(Color)));
-                *it.pixel = image_sample_linear(&blurry_subrect, it.pos);
+                *it.pixel = image_sample_linear(&blurry_subrect, it.npos);
                 #assert(!color_nan(*it.pixel));
             }
         }
@@ -312,10 +312,10 @@ func tex_lookup_lod(tex: Tex*, pos: float2, lod: float2): Color {
     b_lod := tex_get_lod(tex, add2i(lodi, { 1, 0 }));
     c_lod := tex_get_lod(tex, add2i(lodi, { 0, 1 }));
     d_lod := tex_get_lod(tex, add2i(lodi, { 1, 1 }));
-    a := image_sample_linear(&a_lod, pos);
-    b := image_sample_linear(&b_lod, pos);
-    c := image_sample_linear(&c_lod, pos);
-    d := image_sample_linear(&d_lod, pos);
+    a := image_sample_linear_stretch(&a_lod, pos);
+    b := image_sample_linear_stretch(&b_lod, pos);
+    c := image_sample_linear_stretch(&c_lod, pos);
+    d := image_sample_linear_stretch(&d_lod, pos);
     ab := color_lerp(a, b, lodf.x);
     cd := color_lerp(c, d, lodf.x);
     abcd := color_lerp(ab, cd, lodf.y);
@@ -539,11 +539,19 @@ func srgb(val: float): float {
     return 1.055 * pow(val, 1./2.4) - 0.055;
 }
 
+func inverse_srgb(v: float): float {
+    if (v <= (0.0031308*12.92)) {
+        return v / 12.92;
+    }
+
+    return pow((v + 0.055) / 1.055, 2.4);
+}
+
 func color_to_rgb8(color: Color): RGB8 {
     result := RGB8 {
-        r = uint8(clamp(0, 255, 0.5 + srgb(color.r) * 255.)),
-        g = uint8(clamp(0, 255, 0.5 + srgb(color.g) * 255.)),
-        b = uint8(clamp(0, 255, 0.5 + srgb(color.b) * 255.)),
+        r = uint8(clamp(0, 255, 0.5 + color.r * 255.)),
+        g = uint8(clamp(0, 255, 0.5 + color.g * 255.)),
+        b = uint8(clamp(0, 255, 0.5 + color.b * 255.)),
     };
     return result;
 }
@@ -582,34 +590,82 @@ func calculate_luminance(img: Image*): float2 {
         }
         Lmax = max(Lmax, lum);
     }
-    blur_asym(&b, mul2s(int2_to_float2(ImageSize), 0.5));
+    blur_asym(&b, mul2s(int2_to_float2(WorkingImageSize), 0.5));
     Lw := exp(image_sample_linear(&b, {.5, .5}).a);
     return { Lw, Lmax };
 }
 
-func post_process(img: Image*, small_blur: Image*, big_blur: Image*, Lw: float, Lmax: float, color_adjustment: Color) {
-    mix := color_adjustment.a;
+// https://web.archive.org/web/20200131193025/http://www.thetenthplanet.de/archives/5367
+func dither(v: float, noise: float): float {
+    vv := srgb(v);
+    a := floor(vv * 255.) / 255.;
+    b := a + (1.0 / 255.);
+    discr := lerp(inverse_srgb(a), inverse_srgb(b), noise);
+    return (discr < v) ? a : b;
+}
 
-    adjust := color_adjustment;
-    adjust.a = 1. / luminance(color_adjustment);
+func nineties(v: float, noise: float): float {
+    vv := srgb(sqrt(clamp01(v)));
+    a := floor(vv * 127.) / 127.;
+    b := a + (1.0 / 127.);
+    discr := lerp(inverse_srgb(a), inverse_srgb(b), noise);
+    return (discr < v) ? a : b;
+}
+
+struct PostProcess {
+    small_blur: Image*;
+    big_blur: Image*;
+    Lw: float;
+    Lmax: float;
+    color_adjustment: Color;
+    nineties: bool;
+}
+
+func post_process(img: Image*, p: PostProcess*) {
+    mix := p.color_adjustment.a;
+
+    adjust := p.color_adjustment;
+    adjust.a = 1. / luminance(p.color_adjustment);
     adjust = color_premultiply(adjust);
 
-    a := remap(0, 10000, 6, 1, clamp(0, 10000, Lmax));
+    // https://web.archive.org/web/20191118000302/http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+    alpha0 := 1.61803398874989485;
+    alpha1 := 0.75487766624669276;
+    alpha2 := 0.569840290998;
+
+    a := remap(0, 10000, 6, 1, clamp(0, 10000, p.Lmax));
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         // Layer blurs
-        bp := image_sample_nearest(small_blur, it.img_pos);
+        bp := image_sample_nearest(p.small_blur, it.img_pos);
         mbp := color_mul(*it.pixel, bp);
         xbp := color_lerp(bp, mbp, 0.1);
 
-        bp2 := image_sample_nearest(big_blur, it.img_pos);
+        bp2 := image_sample_nearest(p.big_blur, it.img_pos);
         mbp2 := color_mul(*it.pixel, bp2);
         xbp2 := color_lerp(bp2, mbp2, .9);
         c := color_add(*it.pixel, color_add(xbp, xbp2));
 
         // Tonemap
-        it.pixel.r = lerp(c.r, a * (adjust.r * uncharted2duiker(c.r) / uncharted2duiker(Lw)), mix);
-        it.pixel.g = lerp(c.g, a * (adjust.g * uncharted2duiker(c.g) / uncharted2duiker(Lw)), mix);
-        it.pixel.b = lerp(c.b, a * (adjust.b * uncharted2duiker(c.b) / uncharted2duiker(Lw)), mix);
+        r := lerp(c.r, a * (adjust.r * uncharted2duiker(c.r) / uncharted2duiker(p.Lw)), mix);
+        g := lerp(c.g, a * (adjust.g * uncharted2duiker(c.g) / uncharted2duiker(p.Lw)), mix);
+        b := lerp(c.b, a * (adjust.b * uncharted2duiker(c.b) / uncharted2duiker(p.Lw)), mix);
+
+        // Dither
+        if (p.nineties) {
+            intensity := fract(alpha1*it.wr_pos.x + alpha2*it.wr_pos.y);
+            it.pixel.r = nineties(r, intensity);
+            intensity = fract(intensity + alpha0);
+            it.pixel.g = nineties(g, intensity);
+            intensity = fract(intensity + alpha0);
+            it.pixel.b = nineties(b, intensity);
+        } else {
+            intensity := fract(alpha1*it.wr_pos.x + alpha2*it.wr_pos.y);
+            it.pixel.r = dither(r, intensity);
+            intensity = fract(intensity + alpha0);
+            it.pixel.g = dither(g, intensity);
+            intensity = fract(intensity + alpha0);
+            it.pixel.b = dither(b, intensity);
+        }
     }
 }
 
@@ -660,11 +716,7 @@ struct calculate_luminanceArgs {
 struct post_processArgs {
     img: Image*;
     wr: WritableRegion;
-    small_blur: Image*;
-    big_blur: Image*;
-    Lw: float;
-    Lmax: float;
-    color_adjustment: Color;
+    params: PostProcess;
 }
 union WorkArgs {
     draw_starfield: draw_starfieldArgs;
@@ -705,18 +757,19 @@ func threads_thread(data: void*): int {
 
     scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
     scratch = &scratch_allocator;
+    scratch_mark := temp_begin(scratch);
 
-    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 4*sizeof(Color));
-    temp_buf := alloc(temp_size, sizeof(usize));
-    temp :=  temp_allocator(temp_buf, temp_size);
-    current_allocator = (:Allocator*)&temp;
+    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, 4*sizeof(Color));
+    mem_buf := alloc(mem_size, sizeof(usize));
+    mem := temp_allocator(mem_buf, mem_size);
+    current_allocator = (:Allocator*)&mem;
 
     completed := -1;
 
     while(true) {
         work := get_work(completed);
         t0 := ticks();
-        mark := temp_begin(&temp);
+        mark := temp_begin(&mem);
         switch (work.type) {
             case WorkType_DrawStarfield: {
                 img := *work.args.draw_starfield.img;
@@ -732,12 +785,13 @@ func threads_thread(data: void*): int {
             case WorkType_PostProcess: {
                 img := *work.args.post_process.img;
                 img.wr = work.args.post_process.wr;
-                post_process(&img, work.args.post_process.small_blur, work.args.post_process.big_blur, work.args.post_process.Lw, work.args.post_process.Lmax, work.args.post_process.color_adjustment);
+                post_process(&img, &work.args.post_process.params);
             }
             default: #assert(!"Bad work type");
         }
 
-        temp_end(&temp, mark);
+        temp_end(&mem, mark);
+        temp_end(scratch, scratch_mark);
         t1 := ticks();
         printf("type %d: %.2fms\n", work.type, seconds_between(t0, t1)*1000);
         work.type = WorkType_None;
@@ -809,12 +863,12 @@ func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: flo
     };
 }
 
-func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, small_blur: Image*, big_blur: Image*, Lw: float, Lmax: float, color_adjustment: Color) {
+func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, p: PostProcess*) {
     #assert(threads.work_index < threads.work_count);
     #assert(threads.started == false);
     threads.work[threads.work_index].type = WorkType_PostProcess;
     threads.work[threads.work_index++].args = {
-        post_process = { img, wr, small_blur, big_blur, Lw, Lmax, color_adjustment }
+        post_process = { img, wr, *p }
     };
 }
 
@@ -823,10 +877,14 @@ var diffraction_rotation: float2 = {};
 
 func main(argc: int, argv: char**): int {
     if (true) {
-        test_pixel_iterator();
+        // test_pixel_iterator();
     }
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
+
+    // Can't static_assert due to compiler bug
+    #assert(WorkingImageSize.x > ImageSize.x);
+    #assert(WorkingImageSize.y > ImageSize.y);
 
     app.window.size = ImageSize;
     if (!app_init()) {
@@ -866,24 +924,26 @@ func main(argc: int, argv: char**): int {
     max_t := 0.;
     sum_t := 0.;
     n_t := 0;
+    start := ticks();
 
     profiling := (argc > 1) ? (*argv[1] != 'b') : true;
 
     scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
     scratch = &scratch_allocator;
+    scratch_mark := temp_begin(scratch);
 
-    temp_size := checked_mul3(ImageSize.x, ImageSize.y, 512);
-    temp_buf := alloc(temp_size, sizeof(usize));
-    temp := temp_allocator(temp_buf, temp_size);
-    current_allocator = (:Allocator*)&temp;
+    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, sizeof(Color));
+    mem_size += mem_size * 32; // diffraction, blurs
+    mem_size += MB(64); // state
+    mem_buf := alloc(mem_size, sizeof(usize));
+    mem := temp_allocator(mem_buf, mem_size);
+    current_allocator = (:Allocator*)&mem;
 
-    image := make_image(ImageSize);
-    blurred := make_image(ImageSize);
-    blurred2 := make_image(ImageSize);
-    blurred;
-    blurred2;
+    image := make_image(WorkingImageSize);
+    blurred := make_image(WorkingImageSize);
+    blurred2 := make_image(WorkingImageSize);
     while (app_update() && (!profiling || n_t < 30)) {
-        mark := temp_begin(&temp);
+        mark := temp_begin(&mem);
 
         if (app.error) {
             print_and_clear_error();
@@ -894,6 +954,7 @@ func main(argc: int, argv: char**): int {
             free_starfield(&starfield);
 
             t0 := ticks();
+
             noise_init();
 
             diffraction_rotation = random_unit_vector2();
@@ -911,9 +972,14 @@ func main(argc: int, argv: char**): int {
             blur(&image, 0.1);
 
             starfield = Starfield {};
-            create_starfield(&starfield, starfield_text);
 
-            block_dim := int2 { ImageSize.x / 4, ImageSize.y / 4 };
+            if (random01() < .05) {
+                create_galactic_starfield(&starfield, starfield_text, &image);
+            } else {
+                create_starfield(&starfield, starfield_text);
+            }
+
+            block_dim := int2 { 128, 128 };
             wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
 
             while (wr.y0 < image.size.y) {
@@ -930,7 +996,7 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
-            unfocus := blur_to_copy_blend(&image, 2, .1);
+            unfocus := blur_to_copy_blend(&image, 2, .1); // todo fiddle
             draw_star_diffractions(&image, &starfield);
 
             lum := float2 {};
@@ -945,7 +1011,7 @@ func main(argc: int, argv: char**): int {
             inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
             outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
             radius_multiplier := square(random_normal());
-            diffract_alpha := square(clamp(0,.707, radius_multiplier));
+            diffract_alpha := clamp(0, 0.5, square(radius_multiplier));
 
             diffracted := diffract(&unfocus, {
                 inner_radius = color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier),
@@ -968,12 +1034,21 @@ func main(argc: int, argv: char**): int {
                 1 - square(random01())
             };
 
-            block_dim = { ImageSize.x / 2, ImageSize.y / 2 };
+            postprocess_nineties := random01() < 1e-3;
+
+            block_dim = { WorkingImageSize.x / 2, WorkingImageSize.y / 2 };
             wr = WritableRegion { 0, 0, block_dim.x, block_dim.y };
 
             while (wr.y0 < image.size.y) {
                 while (wr.x0 < image.size.x) {
-                    threads_post_process(&threads, &image, wr, &blurred, &blurred2, lum.x, lum.y, color_adjustment);
+                    threads_post_process(&threads, &image, wr, &{
+                        small_blur = &blurred,
+                        big_blur = &blurred2,
+                        Lw = lum.x,
+                        Lmax = lum.y,
+                        color_adjustment = color_adjustment,
+                        nineties = postprocess_nineties
+                    });
                     wr.x0 += block_dim.x;
                     wr.x1 += block_dim.x;
                 }
@@ -985,7 +1060,13 @@ func main(argc: int, argv: char**): int {
 
             threads_join(&threads);
 
-            image_to_rgb8((:RGB8*)surface.pixels, { surface.w, surface.h }, &image);
+            wr_img := image;
+            wr_img.wr.x0 = (WorkingImageSize.x - ImageSize.x) / 2;
+            wr_img.wr.y0 = (WorkingImageSize.y - ImageSize.y) / 2;
+            wr_img.wr.x1 = wr_img.wr.x0 + ImageSize.x;
+            wr_img.wr.y1 = wr_img.wr.y0 + ImageSize.y;
+            out := image_writable(&wr_img);
+            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &out);
 
             t1 := ticks();
 
@@ -1007,7 +1088,8 @@ func main(argc: int, argv: char**): int {
             SDL_WaitEvent(0);
         }
 
-        temp_end(&temp, mark);
+        temp_end(&mem, mark);
+        temp_end(scratch, scratch_mark);
     }
 
     return 0;

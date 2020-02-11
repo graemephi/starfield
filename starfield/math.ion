@@ -13,6 +13,11 @@ func log2i(x: int): int {
 }
 
 @inline
+func floor(x: float): float {
+    return float(int(x));
+}
+
+@inline
 func square(x: float): float {
     return x*x;
 }
