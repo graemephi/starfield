@@ -175,7 +175,7 @@ func init_star_type(type: StarType*, id: int) {
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
             draw_simple_star(&type.tex, 32);
-            type.diffraction = diffract_tex(&type.tex, { Diffraction_Cross, {.01, .01, .01, .01 }, {2, 2, 2, 2} });
+            type.diffraction = diffract_tex(&type.tex, { Diffraction_Cross, {.01, .01, .01, .01 }, {1.5, 1.5, 1.5, 1.5} });
         case 4: // .
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
@@ -317,7 +317,7 @@ func size_for(dim: float2): int2 {
 
 func create_starfield(starfield: Starfield*, starfield_text: char const*) {
     aspect_ratio := float(ImageSize.x) / float(ImageSize.y);
-    star_size_mod := square(square(random01()));
+    star_size_mod := square(square(random01() + 0.05));
     star_size := exp(-6 + star_size_mod); // 0.005
 
     galaxies := random01() < 0.01;
@@ -413,7 +413,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
         for (j := 0; j < tiles*aspect_ratio; j++) {
             count := max(1., tex_lookup(&density, xy).r);
             for (k := 0; k < count; k++) {
-                size := clamp_low(star_size, random_normal()*star_size*(1 + count - int(count)));
+                size := clamp_low(star_size, square(random_normal())*star_size*(1 + count - int(count)));
 
                 apush(starfield.stars, {
                     rect = {
@@ -421,7 +421,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
                         size = { size, size }
                     },
                     type = bg_type,
-                    color = random_star_color_for_type(bg_type, square((size*(16+4*count))))
+                    color = random_star_color_for_type(bg_type, sqrt(size))
                 });
             }
 
