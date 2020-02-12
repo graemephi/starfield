@@ -1,5 +1,3 @@
-#foreign(header = "<intrin.h>")
-
 //
 // Atomics
 
@@ -7,12 +5,6 @@
 #foreign(preamble = "#define volatile_long volatile long")
 
 @foreign typedef volatile_long = long;
-
-@foreign("_InterlockedIncrement")
-func interlocked_increment(x: volatile_long *): volatile_long;
-
-@foreign("_InterlockedDecrement")
-func interlocked_decrement(x: volatile_long *): volatile_long;
 
 //
 // sse
@@ -363,7 +355,7 @@ func mul4si(a: int4, b: int): int4 {
 }
 
 func sqrt(a: float): float {
-    return cvtss(sqrts(set4s(a)));
+    return a * cvtss(rsqrts(set4s(a)));
 }
 
 func rsqrt(a: float): float {

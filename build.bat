@@ -26,3 +26,5 @@ REM call clang-cl %ClangOptions% %CompilerOptions% -I%SDLInclude% -Festarfield.e
 popd
 
 :end
+
+REM clang -mavx -mxsave -mfma -mlzcnt -c out_starfield.c

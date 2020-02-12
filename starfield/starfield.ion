@@ -1,10 +1,3 @@
-import libc { printf, fabs, cos, sin, exp, ceil, log, exit, pow, log2, abs, fflush }
-import sdl { ... }
-import noir { ... }
-import std { ... }
-
-#foreign(header = "<SDL_bits.h>")
-
 @threadlocal
 var scratch: TempAllocator*;
 
@@ -559,14 +552,6 @@ func color_to_rgb8(color: Color): RGB8 {
     return result;
 }
 
-func ticks(): ssize {
-    return SDL_GetPerformanceCounter();
-}
-
-func seconds_between(t0: ssize, t1: ssize): double {
-    return double(t1 - t0) / double(app.time.ticks_per_sec);
-}
-
 func luminance(c: Color): float {
     // https://en.wikipedia.org/w/index.php?title=Relative_luminance&oldid=817127289
     return 0.2126*c.r + 0.7152*c.g + 0.0722*c.b;
@@ -593,7 +578,7 @@ func calculate_luminance(img: Image*): float2 {
         }
         Lmax = max(Lmax, lum);
     }
-    blur_asym(&b, mul2s(int2_to_float2(WorkingImageSize), 0.5));
+    blur_asym(&b, mul2s(int2_to_float2(img.size), 0.5));
     Lw := exp(image_sample_linear(&b, {.5, .5}).a);
     return { Lw, Lmax };
 }
@@ -672,446 +657,152 @@ func post_process(img: Image*, p: PostProcess*) {
     }
 }
 
-struct Threads {
-    threads: SDL_Thread*[];
-    thread_count: int;
-    work_available_sem: SDL_sem*;
-    work_completed_sem: SDL_sem*;
-
-    work: WorkItem[WorkItems];
-
-    // Only the main thread reads/writes these.
-    started: bool;
-    work_count: int;
-
-    // Only the main thread writes to this.
-    work_index: volatile_long;
-
-    // Worker threads write to these.
-    work_token: volatile_long;
-    work_completed: volatile_long;
-}
-
-var threads: Threads;
-const WorkItems = 1024;
-
-enum WorkType {
-    WorkType_None = 0,
-    WorkType_DrawStarfield,
-    WorkType_BlurTo,
-    WorkType_CalculateLuminance,
-    WorkType_PostProcess,
-}
-struct draw_starfieldArgs {
-    img: Image*;
-    wr: WritableRegion;
-    starfield: Starfield*;
-}
-struct blur_toArgs {
-    dest: Image*;
-    src: Image*;
-    radius: float;
-}
-struct calculate_luminanceArgs {
-    img: Image*;
-    result: float2*;
-}
-struct post_processArgs {
-    img: Image*;
-    wr: WritableRegion;
-    params: PostProcess;
-}
-union WorkArgs {
-    draw_starfield: draw_starfieldArgs;
-    blur_to: blur_toArgs;
-    calculate_luminance: calculate_luminanceArgs;
-    post_process: post_processArgs;
-}
-struct WorkItem {
-    type: WorkType;
-    args: WorkArgs;
-}
-
-func get_work(completed: int): WorkItem* {
-    work: WorkItem* = 0;
-
-    if (completed == threads.work_index) {
-        SDL_SemPost(threads.work_completed_sem);
-    }
-
-    while (true) {
-        token := interlocked_increment(&threads.work_token) - 1;
-
-        if (token < threads.work_index) {
-            work = threads.work + (token % WorkItems);
-            #assert(work.type != WorkType_None);
-            break;
-        }
-
-        SDL_SemWait(threads.work_available_sem);
-    }
-
-    return work;
-}
-
-func threads_thread(data: void*): int {
-    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
-
-    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
-    scratch = &scratch_allocator;
-    scratch_mark := temp_begin(scratch);
-
-    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, 4*sizeof(Color));
-    mem_buf := alloc(mem_size, sizeof(usize));
-    mem := temp_allocator(mem_buf, mem_size);
-    current_allocator = (:Allocator*)&mem;
-
-    completed := -1;
-
-    while(true) {
-        work := get_work(completed);
-        t0 := ticks();
-        mark := temp_begin(&mem);
-        switch (work.type) {
-            case WorkType_DrawStarfield: {
-                img := *work.args.draw_starfield.img;
-                img.wr = work.args.draw_starfield.wr;
-                draw_starfield(&img, work.args.draw_starfield.starfield);
-            }
-            case WorkType_BlurTo: {
-                blur_to(work.args.blur_to.dest, work.args.blur_to.src, work.args.blur_to.radius);
-            }
-            case WorkType_CalculateLuminance: {
-                *work.args.calculate_luminance.result = calculate_luminance(work.args.calculate_luminance.img);
-            }
-            case WorkType_PostProcess: {
-                img := *work.args.post_process.img;
-                img.wr = work.args.post_process.wr;
-                post_process(&img, &work.args.post_process.params);
-            }
-            default: #assert(!"Bad work type");
-        }
-
-        temp_end(&mem, mark);
-        temp_end(scratch, scratch_mark);
-        t1 := ticks();
-        printf("type %d: %.2fms\n", work.type, seconds_between(t0, t1)*1000);
-        work.type = WorkType_None;
-
-        completed = interlocked_increment(&threads.work_completed);
-    }
-
-    return 0;
-}
-
-func threads_init(threads: Threads*) {
-    threads.work_available_sem = SDL_CreateSemaphore(0);
-    threads.work_completed_sem = SDL_CreateSemaphore(0);
-    threads.thread_count = SDL_GetCPUCount();
-
-    threads.work_count = WorkItems;
-
-    for (i := 0; i < threads.thread_count; i++) {
-        thread := SDL_CreateThread(threads_thread, 0, 0);
-        apush(threads.threads, thread);
-    }
-}
-
-func threads_fork(threads: Threads*) {
-    if (threads.started == false) {
-        threads.started = true;
-        threads.work_completed = 0;
-        threads.work_token = 0;
-        for (i := 0; i < threads.work_index; i++) {
-            SDL_SemPost(threads.work_available_sem);
-        }
-    }
-}
-
-func threads_join(threads: Threads*) {
-    threads_fork(threads);
-    SDL_SemWait(threads.work_completed_sem);
-    #assert(threads.work_completed == threads.work_index);
-
-    threads.started = false;
-    threads.work_index = 0;
-}
-
-func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
-    #assert(threads.work_index < threads.work_count);
-    #assert(threads.started == false);
-    threads.work[threads.work_index].type = WorkType_DrawStarfield;
-    threads.work[threads.work_index++].args = {
-        draw_starfield = { img, wr, starfield }
-    };
-}
-
-func threads_blur_to(threads: Threads*, dest: Image*, src: Image*, radius: float) {
-    #assert(threads.work_index < threads.work_count);
-    #assert(threads.started == false);
-    threads.work[threads.work_index].type = WorkType_BlurTo;
-    threads.work[threads.work_index++].args = {
-        blur_to = { dest, src, radius }
-    };
-}
-
-func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: float2*) {
-    #assert(threads.work_index < threads.work_count);
-    #assert(threads.started == false);
-    #assert(result_out);
-    threads.work[threads.work_index].type = WorkType_CalculateLuminance;
-    threads.work[threads.work_index++].args = {
-        calculate_luminance = { img, result_out }
-    };
-}
-
-func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, p: PostProcess*) {
-    #assert(threads.work_index < threads.work_count);
-    #assert(threads.started == false);
-    threads.work[threads.work_index].type = WorkType_PostProcess;
-    threads.work[threads.work_index++].args = {
-        post_process = { img, wr, *p }
-    };
-}
-
 // Unique for each image.
 var diffraction_rotation: float2 = {};
 
-func main(argc: int, argv: char**): int {
-    if (true) {
-        // test_pixel_iterator();
-    }
-    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
+func render_starfield(text: char*, size: int2): Image {
+    // 25px curtain
+    working_size := add2i(size, { 50, 50 });
+    block_size := int2 { 128, 128 };
 
-    // Can't static_assert due to compiler bug
-    #assert(WorkingImageSize.x > ImageSize.x);
-    #assert(WorkingImageSize.y > ImageSize.y);
+    text_len := slen(text);
+    text_hash := hash(text, text_len);
+    random_state ^= (:uint32)text_hash;
 
-    app.window.size = ImageSize;
-    if (!app_init()) {
-        print_and_clear_error();
-        return 1;
-    }
-
-    surface := SDL_GetWindowSurface(app.window.sdl);
-    renderer := SDL_CreateSoftwareRenderer(surface);
-    #assert(surface.format.format == SDL_PIXELFORMAT_RGB888);
-    #assert(surface.format.BitsPerPixel == 32);
-    #assert(surface.w == ImageSize.x);
-    #assert(surface.h == ImageSize.y);
-
-    starfield_text :="""
-✺   　　 　　 ·   ⊹
- *  ⋆ 　　　  ✧  *
-  　　　　　　　.  　  +
- +  *　  　* 　　. 　 ⋆
-    　　  +   ✫
-""";
-
-    text_len := slen(starfield_text);
-
-    text_hash := hash(starfield_text, text_len);
-
-    random_state = (:uint32)text_hash;
-    rwo_seed = random_state;
-    threads_init(&threads);
+    image := make_image(working_size);
+    blurred := make_image(working_size);
+    blurred2 := make_image(working_size);
 
     diffraction_rotation = random_unit_vector2();
 
+    noise_level := (1 - square(random01())) / randomn(2048, 5192);
+    for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+        c := Color {
+            square(random_normal()) * (noise_level),
+            square(random_normal()) * (noise_level),
+            square(random_normal()) * (noise_level),
+            1
+        };
+        *it.pixel = c;
+    }
+    blur(&image, 0.1);
+
     starfield := Starfield {};
-    starfield;
 
-    min_t := 100000.;
-    max_t := 0.;
-    sum_t := 0.;
-    n_t := 0;
-    start := ticks();
-
-    profiling := (argc > 1) ? (*argv[1] != 'b') : true;
-
-    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
-    scratch = &scratch_allocator;
-    scratch_mark := temp_begin(scratch);
-
-    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, sizeof(Color));
-    mem_size += mem_size * 32; // diffraction, blurs
-    mem_size += MB(64); // state
-    mem_buf := alloc(mem_size, sizeof(usize));
-    mem := temp_allocator(mem_buf, mem_size);
-    current_allocator = (:Allocator*)&mem;
-
-    image := make_image(WorkingImageSize);
-    blurred := make_image(WorkingImageSize);
-    blurred2 := make_image(WorkingImageSize);
-    while (app_update() && (!profiling || n_t < 30)) {
-        mark := temp_begin(&mem);
-
-        if (app.error) {
-            print_and_clear_error();
-        }
-
-        if (profiling || !n_t || app.mouse.left_button.pressed) {
-            image_clear(&image);
-            free_starfield(&starfield);
-
-            t0 := ticks();
-
-            noise_init();
-
-            diffraction_rotation = random_unit_vector2();
-
-            noise_level := (1 - square(random01())) / randomn(2048, 5192);
-            for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-                c := Color {
-                    square(random_normal()) * (noise_level),
-                    square(random_normal()) * (noise_level),
-                    square(random_normal()) * (noise_level),
-                    1
-                };
-                *it.pixel = c;
-            }
-            blur(&image, 0.1);
-
-            starfield = Starfield {};
-
-            if (random01() < .02) {
-                create_galactic_starfield(&starfield, starfield_text, &image);
-            } else {
-                create_starfield(&starfield, starfield_text);
-            }
-
-            block_dim := int2 { 128, 128 };
-            wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
-
-            while (wr.y0 < image.size.y) {
-                while (wr.x0 < image.size.x) {
-                    threads_draw_starfield(&threads, &image, wr, &starfield);
-                    wr.x0 += block_dim.x;
-                    wr.x1 += block_dim.x;
-                }
-                wr.x0 = 0;
-                wr.x1 = block_dim.x;
-                wr.y0 += block_dim.y;
-                wr.y1 += block_dim.y;
-            }
-
-            threads_join(&threads);
-
-            ufa := clamp_low(0.1, 1.25 + .025*random_normal());
-            ufb := clamp_low(0.01, .05 + .05*random_normal());
-            unfocus := blur_to_copy_blend(&image, ufa, ufb);
-
-            draw_star_diffractions(&image, &starfield);
-
-            lum := float2 {};
-            threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
-            threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
-            threads_calculate_luminance(&threads, &image, &lum);
-
-            threads_fork(&threads);
-
-            dtype := randomn(0, DiffractionTypeCount);
-
-            inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
-            outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
-            radius_multiplier := square(random_normal());
-            fudge_amount := pow(random01(), 3);
-            inner_radius_fudge := lerp(1, clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
-            outer_radius_fudge := lerp(1, .25*inner_radius_fudge + .75*clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
-            diffract_alpha := clamp(0, 0.75, .5*random_normal() + square(radius_multiplier));
-
-            inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_radius_fudge * radius_multiplier);
-            outer := color_mul1({ 2.8, 3.36, 3.92, 3.92 }, outer_radius_fudge * radius_multiplier);
-            outer.r = clamp_low(inner.r + 0.05, outer.r);
-            outer.g = clamp_low(inner.g + 0.05, outer.g);
-            outer.b = clamp_low(inner.b + 0.05, outer.b);
-            outer.a = clamp_low(inner.a + 0.05, outer.a);
-
-            diffracted := diffract(&unfocus, {
-                inner_radius = inner,
-                outer_radius = outer,
-                transform = diffraction_rotation,
-                type = dtype
-            });
-            sharpen(&diffracted, 1.5*fudge_amount, .5 + fudge_amount);
-
-            threads_join(&threads);
-
-            sharpen(&image, fudge_amount, .25 * fudge_amount);
-
-            if (dtype) {
-                for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
-                    sample := color_premultiply(color_mul1(image_sample_nearest(&diffracted, it.pos), diffract_alpha));
-                    *it.pixel = color_add(*it.pixel, sample);
-                }
-            }
-
-            color_adjustment := Color {
-                clamp_low(.1, 2.3 + random_normal()*0.5),
-                clamp_low(.1, 2 + random_normal()*0.5),
-                clamp_low(.1, 1.7 + random_normal()*0.6),
-                1 - square(random01())
-            };
-
-            postprocess_nineties := random01() < 1e-3;
-
-            block_dim = { WorkingImageSize.x / 2, WorkingImageSize.y / 2 };
-            wr = WritableRegion { 0, 0, block_dim.x, block_dim.y };
-
-            while (wr.y0 < image.size.y) {
-                while (wr.x0 < image.size.x) {
-                    threads_post_process(&threads, &image, wr, &{
-                        small_blur = &blurred,
-                        big_blur = &blurred2,
-                        Lw = lum.x,
-                        Lmax = lum.y,
-                        color_adjustment = color_adjustment,
-                        nineties = postprocess_nineties
-                    });
-                    wr.x0 += block_dim.x;
-                    wr.x1 += block_dim.x;
-                }
-                wr.x0 = 0;
-                wr.x1 = block_dim.x;
-                wr.y0 += block_dim.y;
-                wr.y1 += block_dim.y;
-            }
-
-            threads_join(&threads);
-
-            wr_img := image;
-            wr_img.wr.x0 = (WorkingImageSize.x - ImageSize.x) / 2;
-            wr_img.wr.y0 = (WorkingImageSize.y - ImageSize.y) / 2;
-            wr_img.wr.x1 = wr_img.wr.x0 + ImageSize.x;
-            wr_img.wr.y1 = wr_img.wr.y0 + ImageSize.y;
-            out := image_writable(&wr_img);
-            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &out);
-
-            t1 := ticks();
-
-            t := (:float)seconds_between(t0, t1)*1000.;
-            min_t = min(t, min_t);
-            max_t = max(t, max_t);
-            sum_t += t;
-            n_t++;
-
-            printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
-        }
-
-
-        SDL_UpdateWindowSurface(app.window.sdl);
-
-        fflush(0);
-
-        if (!profiling) {
-            SDL_WaitEvent(0);
-        }
-
-        temp_end(&mem, mark);
-        temp_end(scratch, scratch_mark);
+    if (random01() < .02) {
+        create_galactic_starfield(&starfield, text, &image);
+    } else {
+        create_starfield(&starfield, text);
     }
 
-    return 0;
+    block_dim := int2 { 128, 128 };
+    wr := WritableRegion { 0, 0, block_dim.x, block_dim.y };
+
+    while (wr.y0 < image.size.y) {
+        while (wr.x0 < image.size.x) {
+            threads_draw_starfield(&threads, &image, wr, &starfield);
+            wr.x0 += block_dim.x;
+            wr.x1 += block_dim.x;
+        }
+        wr.x0 = 0;
+        wr.x1 = block_dim.x;
+        wr.y0 += block_dim.y;
+        wr.y1 += block_dim.y;
+    }
+
+    threads_join(&threads);
+
+    ufa := clamp_low(0.1, 1.25 + .025*random_normal());
+    ufb := clamp_low(0, .05 + .05*random_normal());
+
+    unfocus := blur_to_copy_blend(&image, ufa, ufb);
+
+    draw_star_diffractions(&image, &starfield);
+
+    lum := float2 {};
+    threads_blur_to(&threads, &blurred, &image, randomr(0, 1)); // ~1.33
+    threads_blur_to(&threads, &blurred2, &image, randomr(0.5,2)); // ~2
+    threads_calculate_luminance(&threads, &image, &lum);
+
+    threads_fork(&threads);
+
+    dtype := randomn(0, DiffractionTypeCount);
+
+    inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
+    outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
+    radius_multiplier := square(random_normal());
+    fudge_amount := pow(random01(), 3);
+    inner_radius_fudge := lerp(1, clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
+    outer_radius_fudge := lerp(1, .25*inner_radius_fudge + .75*clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
+    diffract_alpha := clamp(0, 0.75, .5*random_normal() + square(radius_multiplier));
+
+    inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_radius_fudge * radius_multiplier);
+    outer := color_mul1({ 2.8, 3.36, 3.92, 3.92 }, outer_radius_fudge * radius_multiplier);
+    outer.r = clamp_low(inner.r + 0.05, outer.r);
+    outer.g = clamp_low(inner.g + 0.05, outer.g);
+    outer.b = clamp_low(inner.b + 0.05, outer.b);
+    outer.a = clamp_low(inner.a + 0.05, outer.a);
+
+    diffracted := diffract(&unfocus, {
+        inner_radius = inner,
+        outer_radius = outer,
+        transform = diffraction_rotation,
+        type = dtype
+    });
+    sharpen(&diffracted, 1.5*fudge_amount, .5 + fudge_amount);
+
+    threads_join(&threads);
+
+    sharpen(&image, fudge_amount, .25 * fudge_amount);
+
+    if (dtype) {
+        for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
+            sample := color_premultiply(color_mul1(image_sample_nearest(&diffracted, it.pos), diffract_alpha));
+            *it.pixel = color_add(*it.pixel, sample);
+        }
+    }
+
+    color_adjustment := Color {
+        clamp_low(.1, 2.3 + random_normal()*0.5),
+        clamp_low(.1, 2 + random_normal()*0.5),
+        clamp_low(.1, 1.7 + random_normal()*0.6),
+        1 - square(random01())
+    };
+
+    postprocess_nineties := random01() < 1e-3;
+
+    block_dim = { 128, 128 };
+    wr = WritableRegion { 0, 0, block_dim.x, block_dim.y };
+
+    while (wr.y0 < image.size.y) {
+        while (wr.x0 < image.size.x) {
+            threads_post_process(&threads, &image, wr, &{
+                small_blur = &blurred,
+                big_blur = &blurred2,
+                Lw = lum.x,
+                Lmax = lum.y,
+                color_adjustment = color_adjustment,
+                nineties = postprocess_nineties
+            });
+            wr.x0 += block_dim.x;
+            wr.x1 += block_dim.x;
+        }
+        wr.x0 = 0;
+        wr.x1 = block_dim.x;
+        wr.y0 += block_dim.y;
+        wr.y1 += block_dim.y;
+    }
+
+    threads_join(&threads);
+
+    wr_img := image;
+    wr_img.wr.x0 = (working_size.x - size.x) / 2;
+    wr_img.wr.y0 = (working_size.y - size.y) / 2;
+    wr_img.wr.x1 = wr_img.wr.x0 + size.x;
+    wr_img.wr.y1 = wr_img.wr.y0 + size.y;
+    result := image_writable(&wr_img);
+
+    free_starfield(&starfield);
+
+    return result;
 }

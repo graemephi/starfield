@@ -1,0 +1,319 @@
+#foreign(header = "<intrin.h>")
+
+import libc { printf, fabs, cos, sin, exp, ceil, log, exit, pow, log2, abs, fflush }
+import sdl { ... }
+import noir { ... }
+import std { ... }
+
+@foreign("_InterlockedIncrement")
+func interlocked_increment(x: volatile_long *): volatile_long;
+
+@foreign("_InterlockedDecrement")
+func interlocked_decrement(x: volatile_long *): volatile_long;
+
+func ticks(): ssize {
+    return SDL_GetPerformanceCounter();
+}
+
+func seconds_between(t0: ssize, t1: ssize): double {
+    return double(t1 - t0) / double(app.time.ticks_per_sec);
+}
+
+struct Threads {
+    threads: SDL_Thread*[];
+    thread_count: int;
+    work_available_sem: SDL_sem*;
+    work_completed_sem: SDL_sem*;
+
+    work: WorkItem[WorkItems];
+
+    // Only the main thread reads/writes these.
+    started: bool;
+    work_count: int;
+
+    // Only the main thread writes to this.
+    work_index: volatile_long;
+
+    // Worker threads write to these.
+    work_token: volatile_long;
+    work_completed: volatile_long;
+}
+
+var threads: Threads;
+const WorkItems = 1024;
+
+enum WorkType {
+    WorkType_None = 0,
+    WorkType_DrawStarfield,
+    WorkType_BlurTo,
+    WorkType_CalculateLuminance,
+    WorkType_PostProcess,
+}
+struct draw_starfieldArgs {
+    img: Image*;
+    wr: WritableRegion;
+    starfield: Starfield*;
+}
+struct blur_toArgs {
+    dest: Image*;
+    src: Image*;
+    radius: float;
+}
+struct calculate_luminanceArgs {
+    img: Image*;
+    result: float2*;
+}
+struct post_processArgs {
+    img: Image*;
+    wr: WritableRegion;
+    params: PostProcess;
+}
+union WorkArgs {
+    draw_starfield: draw_starfieldArgs;
+    blur_to: blur_toArgs;
+    calculate_luminance: calculate_luminanceArgs;
+    post_process: post_processArgs;
+}
+struct WorkItem {
+    type: WorkType;
+    args: WorkArgs;
+}
+
+func get_work(completed: int): WorkItem* {
+    work: WorkItem* = 0;
+
+    if (completed == threads.work_index) {
+        SDL_SemPost(threads.work_completed_sem);
+    }
+
+    while (true) {
+        token := interlocked_increment(&threads.work_token) - 1;
+
+        if (token < threads.work_index) {
+            work = threads.work + (token % WorkItems);
+            #assert(work.type != WorkType_None);
+            break;
+        }
+
+        SDL_SemWait(threads.work_available_sem);
+    }
+
+    return work;
+}
+
+func threads_thread(data: void*): int {
+    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
+
+    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
+    scratch = &scratch_allocator;
+    scratch_mark := temp_begin(scratch);
+
+    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, 4*sizeof(Color));
+    mem_buf := alloc(mem_size, sizeof(usize));
+    mem := temp_allocator(mem_buf, mem_size);
+    current_allocator = (:Allocator*)&mem;
+
+    completed := -1;
+
+    while(true) {
+        work := get_work(completed);
+        t0 := ticks();
+        mark := temp_begin(&mem);
+        switch (work.type) {
+            case WorkType_DrawStarfield: {
+                img := *work.args.draw_starfield.img;
+                img.wr = work.args.draw_starfield.wr;
+                draw_starfield(&img, work.args.draw_starfield.starfield);
+            }
+            case WorkType_BlurTo: {
+                blur_to(work.args.blur_to.dest, work.args.blur_to.src, work.args.blur_to.radius);
+            }
+            case WorkType_CalculateLuminance: {
+                *work.args.calculate_luminance.result = calculate_luminance(work.args.calculate_luminance.img);
+            }
+            case WorkType_PostProcess: {
+                img := *work.args.post_process.img;
+                img.wr = work.args.post_process.wr;
+                post_process(&img, &work.args.post_process.params);
+            }
+            default: #assert(!"Bad work type");
+        }
+
+        temp_end(&mem, mark);
+        temp_end(scratch, scratch_mark);
+        t1 := ticks();
+        printf("type %d: %.2fms\n", work.type, seconds_between(t0, t1)*1000);
+        work.type = WorkType_None;
+
+        completed = interlocked_increment(&threads.work_completed);
+    }
+
+    return 0;
+}
+
+func threads_init(threads: Threads*) {
+    threads.work_available_sem = SDL_CreateSemaphore(0);
+    threads.work_completed_sem = SDL_CreateSemaphore(0);
+    threads.thread_count = SDL_GetCPUCount();
+
+    threads.work_count = WorkItems;
+
+    for (i := 0; i < threads.thread_count; i++) {
+        thread := SDL_CreateThread(threads_thread, 0, 0);
+        apush(threads.threads, thread);
+    }
+}
+
+func threads_fork(threads: Threads*) {
+    if (threads.started == false) {
+        threads.started = true;
+        threads.work_completed = 0;
+        threads.work_token = 0;
+        for (i := 0; i < threads.work_index; i++) {
+            SDL_SemPost(threads.work_available_sem);
+        }
+    }
+}
+
+func threads_join(threads: Threads*) {
+    threads_fork(threads);
+    SDL_SemWait(threads.work_completed_sem);
+    #assert(threads.work_completed == threads.work_index);
+
+    threads.started = false;
+    threads.work_index = 0;
+}
+
+func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
+    #assert(threads.work_index < threads.work_count);
+    #assert(threads.started == false);
+    threads.work[threads.work_index].type = WorkType_DrawStarfield;
+    threads.work[threads.work_index++].args = {
+        draw_starfield = { img, wr, starfield }
+    };
+}
+
+func threads_blur_to(threads: Threads*, dest: Image*, src: Image*, radius: float) {
+    #assert(threads.work_index < threads.work_count);
+    #assert(threads.started == false);
+    threads.work[threads.work_index].type = WorkType_BlurTo;
+    threads.work[threads.work_index++].args = {
+        blur_to = { dest, src, radius }
+    };
+}
+
+func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: float2*) {
+    #assert(threads.work_index < threads.work_count);
+    #assert(threads.started == false);
+    #assert(result_out);
+    threads.work[threads.work_index].type = WorkType_CalculateLuminance;
+    threads.work[threads.work_index++].args = {
+        calculate_luminance = { img, result_out }
+    };
+}
+
+func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, p: PostProcess*) {
+    #assert(threads.work_index < threads.work_count);
+    #assert(threads.started == false);
+    threads.work[threads.work_index].type = WorkType_PostProcess;
+    threads.work[threads.work_index++].args = {
+        post_process = { img, wr, *p }
+    };
+}
+
+func main(argc: int, argv: char**): int {
+    if (true) {
+        test_pixel_iterator();
+    }
+    _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
+
+    // Can't static_assert due to compiler bug
+    #assert(WorkingImageSize.x > ImageSize.x);
+    #assert(WorkingImageSize.y > ImageSize.y);
+
+    app.window.size = ImageSize;
+    if (!app_init()) {
+        print_and_clear_error();
+        return 1;
+    }
+
+    surface := SDL_GetWindowSurface(app.window.sdl);
+    renderer := SDL_CreateSoftwareRenderer(surface);
+    #assert(surface.format.format == SDL_PIXELFORMAT_RGB888);
+    #assert(surface.format.BitsPerPixel == 32);
+    #assert(surface.w == ImageSize.x);
+    #assert(surface.h == ImageSize.y);
+
+    starfield_text :="""
+✺   　　 　　 ·   ⊹
+ *  ⋆ 　　　  ✧  *
+  　　　　　　　.  　  +
+ +  *　  　* 　　. 　 ⋆
+    　　  +   ✫
+""";
+
+    threads_init(&threads);
+
+    min_t := 100000.;
+    max_t := 0.;
+    sum_t := 0.;
+    n_t := 0;
+    start := ticks();
+
+    profiling := (argc > 1) ? (*argv[1] != 'b') : true;
+
+    scratch_allocator := temp_allocator(alloc(MB(64), sizeof(usize)), MB(64));
+    scratch = &scratch_allocator;
+    scratch_mark := temp_begin(scratch);
+
+    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, sizeof(Color));
+    mem_size += mem_size * 32; // diffraction, blurs
+    mem_size += MB(64); // state
+    mem_buf := alloc(mem_size, sizeof(usize));
+    mem := temp_allocator(mem_buf, mem_size);
+    current_allocator = (:Allocator*)&mem;
+
+    while (app_update() && (!profiling || n_t < 30)) {
+        mark := temp_begin(&mem);
+
+        if (app.error) {
+            print_and_clear_error();
+        }
+
+        if (profiling || !n_t || app.mouse.left_button.pressed) {
+            t0 := ticks();
+
+            noise_init();
+
+            img := render_starfield(starfield_text, ImageSize);
+
+            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &img);
+
+            t1 := ticks();
+
+            t := (:float)seconds_between(t0, t1)*1000.;
+            min_t = min(t, min_t);
+            max_t = max(t, max_t);
+            sum_t += t;
+            n_t++;
+
+            printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
+        }
+
+
+        SDL_UpdateWindowSurface(app.window.sdl);
+
+        fflush(0);
+
+        if (!profiling) {
+            SDL_WaitEvent(0);
+        }
+
+        temp_end(&mem, mark);
+        temp_end(scratch, scratch_mark);
+    }
+
+    return 0;
+}
