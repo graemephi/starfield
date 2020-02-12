@@ -1002,6 +1002,7 @@ func main(argc: int, argv: char**): int {
             ufa := clamp_low(0.1, 1.25 + .025*random_normal());
             ufb := clamp_low(0.01, .05 + .05*random_normal());
             unfocus := blur_to_copy_blend(&image, ufa, ufb);
+
             draw_star_diffractions(&image, &starfield);
 
             lum := float2 {};
@@ -1016,9 +1017,9 @@ func main(argc: int, argv: char**): int {
             inner_radius := Color { randomr(.5, 2), randomr(.7, 2.2), randomr(.9, 2.3), 2.3 };
             outer_radius := Color { randomr(inner_radius.r, 3), randomr(inner_radius.g, 3.4), randomr(inner_radius.b, 4), 4 };
             radius_multiplier := square(random_normal());
-            fudge_amount := square(random01());
+            fudge_amount := pow(random01(), 3);
             inner_radius_fudge := lerp(1, clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
-            outer_radius_fudge := lerp(1, clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
+            outer_radius_fudge := lerp(1, .25*inner_radius_fudge + .75*clamp(0.01, 3., 1 + .5*random_normal()), fudge_amount);
             diffract_alpha := clamp(0, 0.75, .5*random_normal() + square(radius_multiplier));
 
             inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_radius_fudge * radius_multiplier);
@@ -1034,9 +1035,11 @@ func main(argc: int, argv: char**): int {
                 transform = diffraction_rotation,
                 type = dtype
             });
-            sharpen(&diffracted, .075 * (1. / (1 - fudge_amount)), .85);
+            sharpen(&diffracted, 1.5*fudge_amount, .5 + fudge_amount);
 
             threads_join(&threads);
+
+            sharpen(&image, fudge_amount, .25 * fudge_amount);
 
             if (dtype) {
                 for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
