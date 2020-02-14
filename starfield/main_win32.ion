@@ -143,7 +143,12 @@ func threads_thread(data: void*): int {
         temp_end(&mem, mark);
         temp_end(scratch, scratch_mark);
         t1 := ticks();
-        printf("type %d: %.2fms\n", work.type, seconds_between(t0, t1)*1000);
+
+        ms := seconds_between(t0, t1)*1000;
+        if (ms > 500) {
+            printf("type %d: %.2fms\n", work.type, ms);
+        }
+
         work.type = WorkType_None;
 
         completed = interlocked_increment(&threads.work_completed);
@@ -275,21 +280,30 @@ func main(argc: int, argv: char**): int {
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
 
+    img := Image {};
     while (app_update() && (!profiling || n_t < 30)) {
+        seed := random_state;
+
         mark := temp_begin(&mem);
+
+        // First frame: render and display
+        // Second frame: render, but dont display
+        // wait for click
+        // Third frame: display render from second frame
+        // Fourth frame: render, but dont display
+        render := profiling || (n_t == 0) || (img.pixels == 0);
+        display := profiling || (n_t == 0) || app.mouse.left_button.pressed;
 
         if (app.error) {
             print_and_clear_error();
         }
 
-        if (profiling || !n_t || app.mouse.left_button.pressed) {
+        if (render) {
             t0 := ticks();
 
             noise_init();
 
-            img := render_starfield(starfield_text, ImageSize);
-
-            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &img);
+            img = render_starfield(starfield_text, ImageSize);
 
             t1 := ticks();
 
@@ -299,15 +313,18 @@ func main(argc: int, argv: char**): int {
             sum_t += t;
             n_t++;
 
-            printf("cur %.2fms min %.2fms max %.2fms avg %.2fms\n", t, min_t, max_t, sum_t/n_t);
+            printf("%x: %.2fms (min %.2fms max %.2fms avg %.2fms)\n", seed, t, min_t, max_t, sum_t/n_t);
         }
 
-
-        SDL_UpdateWindowSurface(app.window.sdl);
+        if (display) {
+            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &img);
+            SDL_UpdateWindowSurface(app.window.sdl);
+            img = {};
+        }
 
         fflush(0);
 
-        if (!profiling) {
+        if (!profiling || (!render && !display)) {
             SDL_WaitEvent(0);
         }
 
