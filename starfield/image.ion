@@ -25,7 +25,9 @@ struct StrictWritableRegion {
 }
 
 enum ImageFlags {
-    // If you see this flag outside of this file something has gone very wrong
+    // This indicates that the image's pixel buffer only has storage for the current writable region.
+    // Consequently, addressing (pixels + x + y*stride) must be performed relative to the writable region,
+    // and not the image. See get_wr_read_offset.
     IsWritableRegionCopyOnly = 1
 }
 
@@ -456,6 +458,15 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     };
 
     vi := float2_to_int2(scaled);
+
+    if (scaled.x < 0) {
+        vi.x -= 1;
+    }
+
+    if (scaled.y < 0) {
+        vi.y -= 1;
+    }
+
     vf := sub2(scaled, int2_to_float2(vi));
 
     #assert(!(wr_offset > 0) || (edge_behavior == Edge_Black));
@@ -509,4 +520,41 @@ func image_fetch(img: Image*, pos: int2): Color {
 
     #assert(pos.x + pos.y*img.size.x < img.size.y*img.size.x);
     return img.pixels[pos.x + pos.y*img.stride - get_wr_read_offset(img)];
+}
+
+struct ImageBlockIter {
+    size: int2;
+    block_dim: int2;
+    wr: WritableRegion;
+
+    block: Image;
+}
+
+func image_block_iter_begin(image: Image*, block_dim: int2): ImageBlockIter {
+    result := ImageBlockIter {
+        size = image.size,
+        block_dim = block_dim,
+        // Increments to {0,0,x,y} on first iteration
+        wr = WritableRegion { -block_dim.x, 0, 0, block_dim.y },
+
+        block = *image
+    };
+    return result;
+}
+
+func image_block_next(it: ImageBlockIter*): bool {
+    it.wr.x0 += it.block_dim.x;
+    it.wr.x1 += it.block_dim.x;
+    while (it.wr.y0 < it.size.y) {
+        while (it.wr.x0 < it.size.x) {
+            it.block.wr = it.wr;
+            return true;
+        }
+        it.wr.x0 = 0;
+        it.wr.x1 = it.block_dim.x;
+        it.wr.y0 += it.block_dim.y;
+        it.wr.y1 += it.block_dim.y;
+    }
+
+    return false;
 }

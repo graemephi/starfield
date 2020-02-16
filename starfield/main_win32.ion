@@ -1,6 +1,6 @@
 #foreign(header = "<intrin.h>")
 
-import libc { printf, fabs, cos, sin, exp, ceil, log, exit, pow, log2, abs, fflush }
+import libc { printf, acos, sin, cos, exp, ceil, log, exit, pow, log2, fflush }
 import sdl { ... }
 import noir { ... }
 import std { ... }
@@ -50,8 +50,7 @@ enum WorkType {
     WorkType_PostProcess,
 }
 struct draw_starfieldArgs {
-    img: Image*;
-    wr: WritableRegion;
+    block: Image;
     starfield: Starfield*;
 }
 struct blur_toArgs {
@@ -64,8 +63,7 @@ struct calculate_luminanceArgs {
     result: float2*;
 }
 struct post_processArgs {
-    img: Image*;
-    wr: WritableRegion;
+    block: Image;
     params: PostProcess;
 }
 union WorkArgs {
@@ -109,7 +107,7 @@ func threads_thread(data: void*): int {
     scratch = &scratch_allocator;
     scratch_mark := temp_begin(scratch);
 
-    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, 4*sizeof(Color));
+    mem_size := checked_mul3(ImageSize.x + 100, ImageSize.y + 100, 4*sizeof(Color));
     mem_buf := alloc(mem_size, sizeof(usize));
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
@@ -122,8 +120,7 @@ func threads_thread(data: void*): int {
         mark := temp_begin(&mem);
         switch (work.type) {
             case WorkType_DrawStarfield: {
-                img := *work.args.draw_starfield.img;
-                img.wr = work.args.draw_starfield.wr;
+                img := work.args.draw_starfield.block;
                 draw_starfield(&img, work.args.draw_starfield.starfield);
             }
             case WorkType_BlurTo: {
@@ -133,8 +130,7 @@ func threads_thread(data: void*): int {
                 *work.args.calculate_luminance.result = calculate_luminance(work.args.calculate_luminance.img);
             }
             case WorkType_PostProcess: {
-                img := *work.args.post_process.img;
-                img.wr = work.args.post_process.wr;
+                img := work.args.post_process.block;
                 post_process(&img, &work.args.post_process.params);
             }
             default: #assert(!"Bad work type");
@@ -190,12 +186,12 @@ func threads_join(threads: Threads*) {
     threads.work_index = 0;
 }
 
-func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
+func threads_draw_starfield(threads: Threads*, block: Image, starfield: Starfield*) {
     #assert(threads.work_index < threads.work_count);
     #assert(threads.started == false);
     threads.work[threads.work_index].type = WorkType_DrawStarfield;
     threads.work[threads.work_index++].args = {
-        draw_starfield = { img, wr, starfield }
+        draw_starfield = { block, starfield }
     };
 }
 
@@ -218,12 +214,12 @@ func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: flo
     };
 }
 
-func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, p: PostProcess*) {
+func threads_post_process(threads: Threads*, block: Image, p: PostProcess*) {
     #assert(threads.work_index < threads.work_count);
     #assert(threads.started == false);
     threads.work[threads.work_index].type = WorkType_PostProcess;
     threads.work[threads.work_index++].args = {
-        post_process = { img, wr, *p }
+        post_process = { block, *p }
     };
 }
 
@@ -234,9 +230,6 @@ func main(argc: int, argv: char**): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
-    // Can't static_assert due to compiler bug
-    #assert(WorkingImageSize.x > ImageSize.x);
-    #assert(WorkingImageSize.y > ImageSize.y);
 
     app.window.size = ImageSize;
     if (!app_init()) {
@@ -273,12 +266,14 @@ func main(argc: int, argv: char**): int {
     scratch = &scratch_allocator;
     scratch_mark := temp_begin(scratch);
 
-    mem_size := checked_mul3(WorkingImageSize.x, WorkingImageSize.y, sizeof(Color));
+    mem_size := checked_mul3(ImageSize.x + 100, ImageSize.y + 100, sizeof(Color));
     mem_size += mem_size * 32; // diffraction, blurs
     mem_size += MB(64); // state
     mem_buf := alloc(mem_size, sizeof(usize));
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
+
+    random_state = 0x24842e30;
 
     img := Image {};
     while (app_update() && (!profiling || n_t < 30)) {

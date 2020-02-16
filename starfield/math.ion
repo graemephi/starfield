@@ -31,6 +31,18 @@ func clamp(a: float, b: float, x: float): float {
                      x;
 }
 
+func abs(x: float): float {
+    return x >= 0 ? x : -x;
+}
+
+func absi(x: int): int {
+    return x >= 0 ? x : -x;
+}
+
+func sign(x: float): float {
+    return (x >= 0.0) ? 1.0 : -1.0;
+}
+
 @inline
 func clamp_low(a: float, x: float): float {
     return max(a, x);
@@ -340,6 +352,13 @@ func random_normal(): float {
         s = u*u + v*v;
     } while(s >= 1);
     return u*sqrt((-2*log(s))/s);
+}
+
+// Will not return a |value| > 100
+func random_cauchy(): float {
+    x := random_normal();
+    y := random_normal();
+    return x / sqrt(y*y + 1e-4);
 }
 
 func lerp(a: float, b: float, t: float): float {

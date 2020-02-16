@@ -192,7 +192,11 @@ func sharpen(img: Image*, radius: float, alpha: float) {
     for (it := pixel_iter_begin(img, {}); pixel_iter_next(&it)) {
         s := image_sample_nearest(&b, it.pos);
         s = color_sub(*it.pixel, s);
-        s.a = alpha;
+        s.a *= alpha;
+        s.r = clamp_low(0, s.r);
+        s.g = clamp_low(0, s.g);
+        s.b = clamp_low(0, s.b);
+        s.a = clamp_low(0, s.a);
         *it.pixel = color_blend(*it.pixel, color_premultiply(s));
     }
     free_image(&b);
@@ -208,9 +212,6 @@ func diffract_fetch(row: float*, len: int, i: int): float {
 
 func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], outer_radius: float[4]) {
     for (k := 0; k < 4; k++) {
-        #assert(inner_radius[k] > 0);
-        #assert(outer_radius[k] > inner_radius[k]);
-
         src_f32 := ((:float*)src) + k;
 
         ir := clamp(0, len - 2., inner_radius[k]);
@@ -365,7 +366,11 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
     }
 
     for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
-        *it.pixel = color_sub(*it.pixel, image_sample_nearest(img, it.pos));
+        c := color_sub(*it.pixel, image_sample_nearest(img, it.pos));
+        c.r = clamp_low(0, c.r);
+        c.g = clamp_low(0, c.g);
+        c.b = clamp_low(0, c.b);
+        *it.pixel = c;
     }
 
     free_image(&target);
@@ -386,6 +391,7 @@ struct DiffractionArguments {
     type: DiffractionType;
     inner_radius: Color;
     outer_radius: Color;
+    separation: Color;
     transform: float2;
 }
 
@@ -416,18 +422,33 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
     scratch_buf: Color* = new[(scratch_buf_len + transpose_scratch_len)] undef;
     transpose_scratch := transpose_scratch_len ? (scratch_buf + scratch_buf_len) : 0;
 
-    result := apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch);
+    diff := apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch);
 
     if (args.type == Diffraction_CrossOrthoRed) {
         ortho := rotate(args.transform, { InvSqrt2, InvSqrt2 });
         layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, transpose_scratch);
 
-        for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
+        for (it := pixel_iter_begin(&diff, {}); pixel_iter_next(&it)) {
             *it.pixel = color_add(*it.pixel, color_mul(image_sample_nearest(&layer, it.pos), { 1., .7, .25, 1. }));
         }
 
         free_image(&layer);
     }
+
+    result := make_uninitialised_image_like(&diff);
+    rotation := div2s(transform, m);
+    tangent := mul2s(float2 { -rotation.y, rotation.x }, 1. / diff.size.y);
+    red_shift := mul2s(tangent, args.separation.r);
+    green_shift := mul2s(tangent, args.separation.g);
+    blue_shift := mul2s(tangent, args.separation.b);
+    for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
+        r := image_sample_linear(&diff, add2(it.pos, red_shift));
+        g := image_sample_linear(&diff, add2(it.pos, green_shift));
+        b := image_sample_linear(&diff, add2(it.pos, blue_shift));
+        *it.pixel = Color { r.r, g.g, b.b, clamp_low(0, (r.a + g.a + b.a) / 3) };
+    }
+
+    free_image(&diff);
 
     return result;
 }
