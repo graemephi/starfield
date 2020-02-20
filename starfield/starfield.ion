@@ -25,7 +25,7 @@ func pop_scratch_allocator(pa: PushedAllocator) {
 @foreign
 func isnan(f: float): bool;
 
-var ImageSize: int2 const = { 500, 480 };
+var ImageSize: int2 const = { 500, 500 };
 
 func checked_mul2(a: usize, b: usize): usize {
     // a * b < INT_MAX
@@ -621,6 +621,7 @@ struct PostProcess {
     Lmax: float;
     color_adjustment: Color;
     nineties: bool;
+    grayscale: bool;
 }
 
 func post_process(img: Image*, p: PostProcess*) {
@@ -644,6 +645,10 @@ func post_process(img: Image*, p: PostProcess*) {
         mbp2 := color_mul(*it.pixel, bp2);
         xbp2 := color_lerp(bp2, mbp2, .9);
         c := color_add(*it.pixel, color_add(xbp, xbp2));
+
+        if (p.grayscale) {
+            c = gray(luminance(c));
+        }
 
         // Tonemap
         r := lerp(c.r, df.r * uncharted2duiker(c.r), mix);
@@ -703,7 +708,7 @@ func render_starfield(text: char*, size: int2): Image {
 
     starfield := Starfield {};
 
-    if (random01() < .0002) {
+    if (random01() < .02) {
         create_galactic_starfield(&starfield, text, &image);
     } else {
         create_starfield(&starfield, text);
@@ -715,10 +720,10 @@ func render_starfield(text: char*, size: int2): Image {
 
     threads_join(&threads);
 
-    lo_blur := .1*abs(random_normal());
+    lo_blur := .05*abs(random_normal());
     hi_blur := lo_blur + abs(random_normal_cauchy(.01));
-    ufa := lo_blur * .75;
-    ufb := randomr(0, 0.25);
+    ufa := lo_blur * .75 * random01();
+    ufb := randomr(0, 0.5);
     unfocus: Image = {};
     if (diffraction_type) {
         unfocus = blur_to_copy_blend(&image, ufa, ufb);
@@ -729,12 +734,12 @@ func render_starfield(text: char*, size: int2): Image {
 
     threads_fork(&threads);
 
-    inner_multiplier := abs(random_normal_cauchy(.3));
-    outer_multiplier := inner_multiplier * (1. + abs(random_normal_cauchy(.03)));
-    diffract_alpha := clamp01(0.05 * abs(random_normal_cauchy(.1)));
+    inner_multiplier := abs(random_normal_cauchy(.1));
+    outer_multiplier := inner_multiplier + abs(random_normal_cauchy(.4));
+    diffract_alpha := clamp01(0.02 * abs(random_normal_cauchy(.1)));
 
     inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_multiplier);
-    outer := color_mul1({ 2.8, 3.36, 3.92, 3.92 }, outer_multiplier);
+    outer := color_mul1({ 1., 1.2, 1.4, 1.4 }, outer_multiplier);
 
     sep := clamp(-1.15, 1.15, random_normal());
     separation := Color { -sep, random01() * randomr(-sep, sep), sep };
@@ -768,6 +773,9 @@ func render_starfield(text: char*, size: int2): Image {
     };
 
     postprocess_nineties := random01() < 1e-3;
+    postprocess_grayscale := postprocess_nineties
+        ? (random01() < 0.125)
+        : (random01() < 1e-3);
 
     for (it := image_block_iter_begin(&image, block_dim); image_block_next(&it)) {
         threads_post_process(&threads, it.block, &{
@@ -776,7 +784,8 @@ func render_starfield(text: char*, size: int2): Image {
             Lw = lum.x,
             Lmax = lum.y,
             color_adjustment = color_adjustment,
-            nineties = postprocess_nineties
+            nineties = postprocess_nineties,
+            grayscale = postprocess_grayscale
         });
     }
 

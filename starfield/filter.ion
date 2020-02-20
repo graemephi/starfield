@@ -380,9 +380,11 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
 enum DiffractionType {
     Diffraction_None,
     Diffraction_Cross,
+    Diffraction_CrossCross,
     Diffraction_CrossOrthoRed,
     Diffraction_Single,
     Diffraction_Hex,
+    Diffraction_HexOrthoRed,
 
     DiffractionTypeCount
 }
@@ -427,6 +429,9 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
     switch (args.type) {
         case Diffraction_Cross:
             apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch));
+        case Diffraction_CrossCross:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch));
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, Pi/4), scratch_buf, transpose_scratch));
         case Diffraction_CrossOrthoRed:
             apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch));
 
@@ -434,7 +439,7 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
             layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, transpose_scratch);
 
             for (it := pixel_iter_begin(&layer, {}); pixel_iter_next(&it)) {
-                *it.pixel = color_mul(*it.pixel, { 1., .7, .25, 1. });
+                *it.pixel = color_mul(*it.pixel, color_mul1({ 1., .7, .25, 1. }, .5));
             }
 
             apush(diffs, layer);
@@ -444,6 +449,19 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
             apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, 0));
             apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, Pi / 3), scratch_buf, 0));
             apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, 2 * Pi / 3), scratch_buf, 0));
+        case Diffraction_HexOrthoRed:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, 0));
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, Pi / 3), scratch_buf, 0));
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, 2 * Pi / 3), scratch_buf, 0));
+
+            ortho := rotate_theta(args.transform, Pi/2);
+            layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, 0);
+
+            for (it := pixel_iter_begin(&layer, {}); pixel_iter_next(&it)) {
+                *it.pixel = color_mul(*it.pixel, color_mul1({ 1., .5, .25, 1. }, .15));
+            }
+
+            apush(diffs, layer);
         default:
             #assert(0);
     }
