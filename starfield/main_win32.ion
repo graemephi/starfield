@@ -267,7 +267,7 @@ func main(argc: int, argv: char**): int {
     scratch_mark := temp_begin(scratch);
 
     mem_size := checked_mul3(ImageSize.x + 100, ImageSize.y + 100, sizeof(Color));
-    mem_size += mem_size * 32; // blurs
+    mem_size += mem_size * 64; // blurs, galaxies
     mem_size += MB(64); // state
     mem_buf := alloc(mem_size, sizeof(usize));
     mem := temp_allocator(mem_buf, mem_size);
