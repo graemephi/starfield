@@ -234,8 +234,11 @@ func div4i(a: int4, b: int4): int4;
 @foreign("_mm_slli_epi32")
 func shl4si(a: int4, c: int): int4;
 
-@foreign("_mm_srai_epi32")
+@foreign("_mm_srli_epi32")
 func shr4si(a: int4, c: int): int4;
+
+@foreign("_mm_srai_epi32")
+func shra4si(a: int4, c: int): int4;
 
 @foreign("_mm_min_epu32")
 func min4i(a: int4, b: int4): int4;
@@ -360,4 +363,8 @@ func sqrt(a: float): float {
 
 func rsqrt(a: float): float {
     return cvtss(rsqrts(set4s(a)));
+}
+
+func or4si(a: int4, b: int): int4 {
+    return or128i(a, set4si(b));
 }

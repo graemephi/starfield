@@ -52,6 +52,10 @@ func alloc_zero(size: usize, align: usize): void* {
     return mem;
 }
 
+func alloc_size(count: usize, size: usize, align: usize): void* {
+    return alloc(checked_mul2(count, size), align);
+}
+
 func alloc2(dim: int2, bytes_per: usize): void* {
     return alloc(checked_mul3(dim.x, dim.y, bytes_per), sizeof(float4));
 }
@@ -577,10 +581,14 @@ func uncharted2duiker(x: float): float {
 func calculate_luminance(img: Image*): float2 {
     b := image_copy(img);
     Lmax := 0.;
+    min := srgb(1./255);
+    logmin := log(min);
     for (it := pixel_iter_begin(&b, {}); pixel_iter_next(&it)) {
         lum := luminance(*it.pixel);
-        if (lum > srgb(1./255)) {
-            it.pixel.a = log(1e-5 + luminance(*it.pixel));
+        if (lum > min) {
+            it.pixel.a = log(lum);
+        } else {
+            it.pixel.a = logmin;
         }
         Lmax = max(Lmax, lum);
     }
@@ -617,10 +625,7 @@ struct PostProcess {
 
 func post_process(img: Image*, p: PostProcess*) {
     mix := p.color_adjustment.a;
-
-    adjust := p.color_adjustment;
-    adjust.a = 1. / luminance(p.color_adjustment);
-    adjust = color_premultiply(adjust);
+    adjust := color_mul1(p.color_adjustment, 1. / luminance(p.color_adjustment));
 
     // https://web.archive.org/web/20191118000302/http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
     alpha0 := 1.61803398874989485;
@@ -684,7 +689,7 @@ func render_starfield(text: char*, size: int2): Image {
     diffraction_type = randomn(0, DiffractionTypeCount);
     diffraction_rotation = random_unit_vector2();
 
-    noise_level := (1 - square(random01())) / randomn(2048, 5192);
+    noise_level := .75 * (1 - square(random01())) / randomr(2048, 4192);
     for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
         c := Color {
             square(random_normal()) * (noise_level),
@@ -698,7 +703,7 @@ func render_starfield(text: char*, size: int2): Image {
 
     starfield := Starfield {};
 
-    if (random01() < .02) {
+    if (random01() < .0002) {
         create_galactic_starfield(&starfield, text, &image);
     } else {
         create_starfield(&starfield, text);
@@ -710,8 +715,8 @@ func render_starfield(text: char*, size: int2): Image {
 
     threads_join(&threads);
 
-    lo_blur := .5*abs(random_normal());
-    hi_blur := 1 + square(random_normal()*random_normal());
+    lo_blur := .1*abs(random_normal());
+    hi_blur := lo_blur + abs(random_normal_cauchy(.01));
     ufa := lo_blur * .75;
     ufb := randomr(0, 0.25);
     unfocus: Image = {};
@@ -719,20 +724,19 @@ func render_starfield(text: char*, size: int2): Image {
         unfocus = blur_to_copy_blend(&image, ufa, ufb);
     }
 
-    lum := float2 {};
     threads_blur_to(&threads, &blurred, &image, lo_blur);
     threads_blur_to(&threads, &blurred2, &image, hi_blur);
-    threads_calculate_luminance(&threads, &image, &lum);
 
     threads_fork(&threads);
 
-    radius_multiplier := .85 + abs(random_cauchy());
-    outer_multiplier := radius_multiplier + random_cauchy();
-    diffract_alpha := abs(random_cauchy()) * radius_multiplier;
+    inner_multiplier := abs(random_normal_cauchy(.3));
+    outer_multiplier := inner_multiplier * (1. + abs(random_normal_cauchy(.03)));
+    diffract_alpha := clamp01(0.05 * abs(random_normal_cauchy(.1)));
 
-    inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, radius_multiplier);
+    inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_multiplier);
     outer := color_mul1({ 2.8, 3.36, 3.92, 3.92 }, outer_multiplier);
-    sep := clamp(-1.3, 1.3, random_normal());
+
+    sep := clamp(-1.15, 1.15, random_normal());
     separation := Color { -sep, random01() * randomr(-sep, sep), sep };
 
     diffracted := diffract(&unfocus, {
@@ -743,8 +747,6 @@ func render_starfield(text: char*, size: int2): Image {
         type = diffraction_type
     });
 
-    sharpen(&diffracted, 1.5, 1.5);
-
     threads_join(&threads);
 
     draw_star_diffractions(&image, &starfield);
@@ -752,10 +754,11 @@ func render_starfield(text: char*, size: int2): Image {
     if (diffraction_type) {
         for (it := pixel_iter_begin(&image, {}); pixel_iter_next(&it)) {
             c := image_sample_nearest(&diffracted, it.pos);
-            c = color_apply_alpha(c, diffract_alpha);
-            *it.pixel = color_blend(*it.pixel, color_premultiply(c));
+            *it.pixel = color_add(*it.pixel, color_mul1(c, diffract_alpha));
         }
     }
+
+    lum := calculate_luminance(&image);
 
     color_adjustment := Color {
         clamp_low(.1, 2.3 + random_normal()*0.5),

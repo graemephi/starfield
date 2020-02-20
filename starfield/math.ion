@@ -306,12 +306,9 @@ union fbits {
     i: int;
 }
 
-const f_exp_1_2_mask = 0b0_01111111_00000000000000000000000;
-const f_sig_mask     = 0b0_00000000_11111111111111111111111;
 func float_from_random_bits(b: int): float {
-    i := (b & f_sig_mask) | f_exp_1_2_mask;
-    f := fbits { i = i }.f - 1.;
-    return f;
+    // 5.96046e-08 = 1. / (1 << 24)
+    return (uint(b) >> 8) * 5.96046e-08;
 }
 
 func random01(): float {
@@ -354,11 +351,14 @@ func random_normal(): float {
     return u*sqrt((-2*log(s))/s);
 }
 
-// Will not return a |value| > 100
 func random_cauchy(): float {
     x := random_normal();
     y := random_normal();
     return x / sqrt(y*y + 1e-4);
+}
+
+func random_normal_cauchy(t: float): float {
+    return lerp(random_normal(), random_cauchy(), t);
 }
 
 func lerp(a: float, b: float, t: float): float {

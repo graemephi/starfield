@@ -61,6 +61,18 @@ func make_uninitialised_image(dim: int2): Image {
     return image_from_pixels(pixels, dim);
 }
 
+func make_image_like(img: Image*): Image {
+    writable := image_writable(img);
+    size := checked_mul3(writable.size.x, writable.size.y, sizeof(Color));
+    return Image {
+        pixels = alloc_zero(size, alignof(float4)),
+        size = img.size,
+        wr = { img.wr.x0, img.wr.y0, img.wr.x1, img.wr.y1 },
+        stride = writable.size.x,
+        flags = IsWritableRegionCopyOnly
+    };
+}
+
 func make_uninitialised_image_like(img: Image*): Image {
     writable := image_writable(img);
     size := checked_mul3(writable.size.x, writable.size.y, sizeof(Color));

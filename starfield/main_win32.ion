@@ -273,7 +273,7 @@ func main(argc: int, argv: char**): int {
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
 
-    random_state = 0x24842e30;
+    random_state = 0x2b9520db;
 
     img := Image {};
     while (app_update() && (!profiling || n_t < 30)) {

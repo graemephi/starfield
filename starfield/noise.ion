@@ -155,7 +155,7 @@ func worley(p01: float2, grid_size: float): float2 {
 
     f1f2 := unpacklo4i(f1, f2);
 
-    rescaled := add4i(shr4si(f1f2, WorleyPrecisionBitPos), set4si(1));
+    rescaled := add4i(shra4si(f1f2, WorleyPrecisionBitPos), set4si(1));
     r := mul4(cvti4(rescaled), set4s(1.0 / WorleyPrecision));
     result128 := mul4(r, rsqrt4(r));
 
@@ -252,10 +252,9 @@ func rwo_gradient_sse(px: float4, py: float4): float4x2 {
     a := xor128i(h, shl4si(h, 13));
     a  = xor128i(a, shr4si(a, 17));
     a  = xor128i(a, shl4si(a, 5));
-    b := cast_int4_to_float4(or128i(and128i(a, set4si(f_sig_mask)), set4si(f_exp_1_2_mask|1)));
-    c := sub4(b, set4s(1));
-    x := mul4(c, rsqrt4(c));
-    y := sub4(set4s(1), c);
+    b := mul4s(cvti4(or4si(shr4si(a, 8), 1)), 5.96046e-08);
+    x := mul4(b, rsqrt4(b));
+    y := sub4(set4s(1), b);
     y = mul4(y, rsqrt4(y));
 
     x_sign := and128i(a, set4si(1 << 31));

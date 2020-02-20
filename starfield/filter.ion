@@ -197,7 +197,7 @@ func sharpen(img: Image*, radius: float, alpha: float) {
         s.g = clamp_low(0, s.g);
         s.b = clamp_low(0, s.b);
         s.a = clamp_low(0, s.a);
-        *it.pixel = color_blend(*it.pixel, color_premultiply(s));
+        *it.pixel = color_lerp(*it.pixel, s, s.a);
     }
     free_image(&b);
 }
@@ -212,6 +212,8 @@ func diffract_fetch(row: float*, len: int, i: int): float {
 
 func diffract_row(dest: Color*, src: Color*, len: int, inner_radius: float[4], outer_radius: float[4]) {
     for (k := 0; k < 4; k++) {
+        #assert(inner_radius[k] >= 0);
+        #assert(outer_radius[k] > inner_radius[k]);
         src_f32 := ((:float*)src) + k;
 
         ir := clamp(0, len - 2., inner_radius[k]);
@@ -367,9 +369,6 @@ func apply_diffraction(img: Image*, inner_radius: Color, outer_radius: Color, tr
 
     for (it := pixel_iter_begin(&result, {}); pixel_iter_next(&it)) {
         c := color_sub(*it.pixel, image_sample_nearest(img, it.pos));
-        c.r = clamp_low(0, c.r);
-        c.g = clamp_low(0, c.g);
-        c.b = clamp_low(0, c.b);
         *it.pixel = c;
     }
 
@@ -383,6 +382,7 @@ enum DiffractionType {
     Diffraction_Cross,
     Diffraction_CrossOrthoRed,
     Diffraction_Single,
+    Diffraction_Hex,
 
     DiffractionTypeCount
 }
@@ -405,39 +405,64 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
     }
 
     #assert(has_complete_writable_region(img));
-    #assert(!color_is_zero(args.inner_radius));
-    #assert(!color_is_zero(args.outer_radius));
+    #assert(args.outer_radius.r >= args.inner_radius.r);
+    #assert(args.outer_radius.g >= args.inner_radius.g);
+    #assert(args.outer_radius.b >= args.inner_radius.b);
+    #assert(args.outer_radius.a >= args.inner_radius.a);
+
+    result := make_uninitialised_image_like(img);
+    pa := push_scratch_allocator();
 
     transform := is_identity_transform(args.transform) ? float2 { 1, 0 } : args.transform;
     m := magnitude2(transform);
     working_dim := int2 { int(img.size.x * m * 3 / 2), int(img.size.y * m * 3 / 2) };
 
     scratch_buf_len := maxi(working_dim.x, working_dim.y);
-    transpose_scratch_len := 0;
+    transpose_scratch_len := working_dim.x * working_dim.y;
+    scratch_buf: Color* = alloc_size(scratch_buf_len, sizeof(Color), alignof(Color));
+    transpose_scratch: Color* = alloc_size(transpose_scratch_len, sizeof(Color), alignof(Color));
 
-    if (args.type != Diffraction_Single) {
-        transpose_scratch_len = working_dim.x * working_dim.y;
+    diffs: Image* = 0;
+
+    switch (args.type) {
+        case Diffraction_Cross:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch));
+        case Diffraction_CrossOrthoRed:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch));
+
+            ortho := rotate(args.transform, { InvSqrt2, InvSqrt2 });
+            layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, transpose_scratch);
+
+            for (it := pixel_iter_begin(&layer, {}); pixel_iter_next(&it)) {
+                *it.pixel = color_mul(*it.pixel, { 1., .7, .25, 1. });
+            }
+
+            apush(diffs, layer);
+        case Diffraction_Single:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, 0));
+        case Diffraction_Hex:
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, 0));
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, Pi / 3), scratch_buf, 0));
+            apush(diffs, apply_diffraction(img, args.inner_radius, args.outer_radius, rotate_theta(transform, 2 * Pi / 3), scratch_buf, 0));
+        default:
+            #assert(0);
     }
 
-    scratch_buf: Color* = new[(scratch_buf_len + transpose_scratch_len)] undef;
-    transpose_scratch := transpose_scratch_len ? (scratch_buf + scratch_buf_len) : 0;
-
-    diff := apply_diffraction(img, args.inner_radius, args.outer_radius, transform, scratch_buf, transpose_scratch);
-
-    if (args.type == Diffraction_CrossOrthoRed) {
-        ortho := rotate(args.transform, { InvSqrt2, InvSqrt2 });
-        layer := apply_diffraction(img, color_mul1(args.inner_radius, .7), color_mul1(args.outer_radius, .7), ortho, scratch_buf, transpose_scratch);
-
-        for (it := pixel_iter_begin(&diff, {}); pixel_iter_next(&it)) {
-            *it.pixel = color_add(*it.pixel, color_mul(image_sample_nearest(&layer, it.pos), { 1., .7, .25, 1. }));
+    diff := make_image_like(img);
+    for (it := pixel_iter_begin(&diff, {}); pixel_iter_next(&it)) {
+        c := Color {};
+        for (i := 0; i < alen(diffs); i++) {
+            c = color_add(c, image_sample_nearest(&diffs[i], it.pos));
         }
-
-        free_image(&layer);
+        c.r = clamp_low(0, c.r);
+        c.g = clamp_low(0, c.g);
+        c.b = clamp_low(0, c.b);
+        c.a = clamp_low(0, c.a);
+        *it.pixel = color_add(*it.pixel, c);
     }
 
-    result := make_uninitialised_image_like(&diff);
     rotation := div2s(transform, m);
-    tangent := mul2s(float2 { -rotation.y, rotation.x }, 1. / diff.size.y);
+    tangent := mul2s(float2 { -rotation.y, rotation.x }, 1. / img.size.y);
     red_shift := mul2s(tangent, args.separation.r);
     green_shift := mul2s(tangent, args.separation.g);
     blue_shift := mul2s(tangent, args.separation.b);
@@ -445,11 +470,10 @@ func diffract(img: Image*, args: DiffractionArguments): Image {
         r := image_sample_linear(&diff, add2(it.pos, red_shift));
         g := image_sample_linear(&diff, add2(it.pos, green_shift));
         b := image_sample_linear(&diff, add2(it.pos, blue_shift));
-        *it.pixel = Color { r.r, g.g, b.b, clamp_low(0, (r.a + g.a + b.a) / 3) };
+        *it.pixel = Color { r.r, g.g, b.b, g.a };
     }
 
-    free_image(&diff);
-
+    pop_scratch_allocator(pa);
     return result;
 }
 
