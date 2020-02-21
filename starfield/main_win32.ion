@@ -11,6 +11,8 @@ func interlocked_increment(x: volatile_long *): volatile_long;
 @foreign("_InterlockedDecrement")
 func interlocked_decrement(x: volatile_long *): volatile_long;
 
+var BlockDim: int2 const = { 128, 128 };
+
 func ticks(): ssize {
     return SDL_GetPerformanceCounter();
 }

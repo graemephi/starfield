@@ -134,8 +134,8 @@ func consume_star(c: char const*, id: int*): char const* {
         #static_assert(StarType_BigSpace == 14);
         *id = StarType_BigSpace;
     } else {
-        #assert(0);
-        *id = 0;
+        // Unrecognised, assume its a star
+        *id = StarType_Basic;
     }
 
     return c;
@@ -310,7 +310,7 @@ func random_star_color_for_type(type: StarType*, alpha: float): Color {
     }
 
     color := star_color(x);
-    color.a = clamp01(alpha);
+    color.a = clamp01(alpha) * (1 - square(random01()));
 
     return color;
 }
@@ -409,7 +409,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
         s.rect.pos.y += offset.y;
     }
 
-    star_count := abs(random_cauchy()) + 4;
+    star_count := absolute(random_cauchy()) + 4;
     lo := randomr(0, star_count);
     density := make_tex({ 8, 8 });
     for (it := pixel_iter_begin_tex(&density, {}); pixel_iter_next(&it)) {
@@ -458,7 +458,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
         turbulence := randomr(0., 0.2);
         detail := clamp_low(-1, random_normal() * 2);
         sparsity := randomr(0.4, 1);
-        variability := abs(random_normal());
+        variability := absolute(random_normal());
         color_width := variability*StarColorCount*0.1;
 
         for (i := 0; i < layer_count; i++) {
@@ -568,7 +568,7 @@ func create_galactic_starfield(starfield: Starfield*, starfield_text: char const
     }
 
     galaxy_density := square(random01());
-    star_count := abs(random_normal_cauchy(0.4)) + 4 - 2*galaxy_density;
+    star_count := absolute(random_normal_cauchy(0.4)) + 4 - 2*galaxy_density;
     density := make_tex({ 8, 8 });
     for (it := pixel_iter_begin_tex(&density, {}); pixel_iter_next(&it)) {
         it.pixel.r = (:float)random_poisson(exp(-clamp_low(0, star_count + .7*random_normal())));
@@ -678,7 +678,7 @@ func draw_galaxy(tex: Tex*, scale: float) {
             x = repeat(x + w/2, w) - w/2;
 
             if (arms & 1) {
-                y = abs(y);
+                y = absolute(y);
             }
 
             rot = randomn(0, arms) / float(arms);
@@ -689,7 +689,7 @@ func draw_galaxy(tex: Tex*, scale: float) {
         }
 
         // Rotate the arms more towards the edge
-        mag := abs(magnitude2({x, y}) + 0.05*random_normal());
+        mag := absolute(magnitude2({x, y}) + 0.05*random_normal());
         xy := mul2s(normalise2({ x, y }), mag);
         expand := exp(spiral_expansion*(exp_base+mag));
         spin := (random_normal() / 12 + 1)*mag*expand;

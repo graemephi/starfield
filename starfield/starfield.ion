@@ -25,7 +25,8 @@ func pop_scratch_allocator(pa: PushedAllocator) {
 @foreign
 func isnan(f: float): bool;
 
-var ImageSize: int2 const = { 500, 500 };
+const ImageDim = 440;
+var ImageSize: int2 const = { ImageDim, ImageDim };
 
 func checked_mul2(a: usize, b: usize): usize {
     // a * b < INT_MAX
@@ -96,8 +97,7 @@ struct Color {
 }
 
 struct RGB8 {
-    b, g, r: uint8;
-    padding: uint8;
+    b, g, r, a: uint8;
 } #static_assert(sizeof(RGB8) == 4)
 
 struct Tex {
@@ -149,8 +149,8 @@ func make_tex_from_image(img: Image*): Tex {
 }
 
 func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float2 {
-    step_x := abs(src_size.x / (dest_size.x * target_size.x));
-    step_y := abs(src_size.y / (dest_size.y * target_size.y));
+    step_x := absolute(src_size.x / (dest_size.x * target_size.x));
+    step_y := absolute(src_size.y / (dest_size.y * target_size.y));
     return { max(0, log2(step_x)), max(0, log2(step_y)) };
 }
 
@@ -269,7 +269,7 @@ func tex_get_lod(tex: Tex*, lod: int2): Image {
 
     // Non-square lod sizes decrease geometrically, 1, 1/2, 1/4, 1/8, so their
     // location is the running sum, (2^n - 1)/2^n * area(lod_square).
-    denom_bit := absi(lod.x - lod.y) - 1;
+    denom_bit := absolutei(lod.x - lod.y) - 1;
     numer := (1 << denom_bit) - 1;
 
     pixels := square_lod.pixels;
@@ -396,15 +396,15 @@ func inside_normal_rect(pos: float2, aspect_ratio: float): bool {
         && pos.y >= 0 && pos.y < 1;
 }
 
-func rect_relative(rect: Rect, abs_pos: float2): float2 {
-    shift_pos := sub2(abs_pos, rect.pos);
+func rect_relative(rect: Rect, absolute_pos: float2): float2 {
+    shift_pos := sub2(absolute_pos, rect.pos);
     rot_pos := rotate(shift_pos, rect.rot);
     scaled_pos := div2s(rot_pos, rect.size.y);
     result := add2(scaled_pos, { 0.5 * rect.size.x / rect.size.y, 0.5 });
     return result;
 }
 
-func rect_absolute(rect: Rect, rel_pos: float2): float2 {
+func rect_absoluteolute(rect: Rect, rel_pos: float2): float2 {
     centered_pos := sub2(rel_pos, { 0.5 * rect.size.x / rect.size.y, 0.5 });
     scaled_pos := mul2s(centered_pos, rect.size.y);
     rot_pos := rotate(scaled_pos, { rect.rot.x, -rect.rot.y });
@@ -413,7 +413,7 @@ func rect_absolute(rect: Rect, rel_pos: float2): float2 {
 }
 
 func rect_to_rect(dest: Rect, src: Rect, src_pos: float2): float2 {
-    s := rect_absolute(src, src_pos);
+    s := rect_absoluteolute(src, src_pos);
     r := rect_relative(dest, s);
     return r;
 }
@@ -558,6 +558,7 @@ func color_to_rgb8(color: Color): RGB8 {
         r = uint8(clamp(0, 255, 0.5 + color.r * 255.)),
         g = uint8(clamp(0, 255, 0.5 + color.g * 255.)),
         b = uint8(clamp(0, 255, 0.5 + color.b * 255.)),
+        a = 255
     };
     return result;
 }
@@ -681,7 +682,6 @@ var diffraction_rotation: float2 = {};
 func render_starfield(text: char*, size: int2): Image {
     // 25px apron
     working_size := add2i(size, { 50, 50 });
-    block_dim := int2 { 128, 128 };
 
     text_len := slen(text);
     text_hash := hash(text, text_len);
@@ -714,14 +714,14 @@ func render_starfield(text: char*, size: int2): Image {
         create_starfield(&starfield, text);
     }
 
-    for (it := image_block_iter_begin(&image, block_dim); image_block_next(&it)) {
+    for (it := image_block_iter_begin(&image, BlockDim); image_block_next(&it)) {
         threads_draw_starfield(&threads, it.block, &starfield);
     }
 
     threads_join(&threads);
 
-    lo_blur := .05*abs(random_normal());
-    hi_blur := lo_blur + abs(random_normal_cauchy(.01));
+    lo_blur := .05*absolute(random_normal());
+    hi_blur := lo_blur + absolute(random_normal_cauchy(.01));
     ufa := lo_blur * .75 * random01();
     ufb := randomr(0, 0.5);
     unfocus: Image = {};
@@ -734,9 +734,9 @@ func render_starfield(text: char*, size: int2): Image {
 
     threads_fork(&threads);
 
-    inner_multiplier := abs(random_normal_cauchy(.1));
-    outer_multiplier := inner_multiplier + abs(random_normal_cauchy(.4));
-    diffract_alpha := clamp01(0.02 * abs(random_normal_cauchy(.1)));
+    inner_multiplier := absolute(random_normal_cauchy(.1));
+    outer_multiplier := inner_multiplier + absolute(random_normal_cauchy(.4));
+    diffract_alpha := clamp01(0.02 * absolute(random_normal_cauchy(.1)));
 
     inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_multiplier);
     outer := color_mul1({ 1., 1.2, 1.4, 1.4 }, outer_multiplier);
@@ -777,7 +777,7 @@ func render_starfield(text: char*, size: int2): Image {
         ? (random01() < 0.125)
         : (random01() < 1e-3);
 
-    for (it := image_block_iter_begin(&image, block_dim); image_block_next(&it)) {
+    for (it := image_block_iter_begin(&image, BlockDim); image_block_next(&it)) {
         threads_post_process(&threads, it.block, &{
             small_blur = &blurred,
             big_blur = &blurred2,

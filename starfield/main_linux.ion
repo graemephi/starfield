@@ -1,16 +1,29 @@
-#foreign(header = "<x86intrin.h>")
+// The following defines mess this up, so preamble instead of include to put it first
+#foreign(preamble = "#include <x86intrin.h>")
+
+#foreign(preamble = "#define STB_IMAGE_WRITE_IMPLEMENTATION\n#include \"stb_image_write.h\"")
 
 // Suppress extern in output
 #foreign(preamble = "#define extern")
 
-// Workaround for the fact that ion wants a main function
-#foreign(preamble = "#define main __attribute__((visibility (\"default\"))) render")
-
-// gcc doesnt like static always_inline, so remove static
+// gcc/clang doesnt like static always_inline, so remove static
 #foreign(preamble = "#undef INLINE\n#define INLINE inline __attribute__((always_inline))")
 
-import libc { printf, fabs, cos, sin, exp, ceil, log, exit, pow, log2, abs, fflush }
+import libc { printf, cos, sin, exp, ceil, log, exit, pow, log2, fwrite, fflush }
 import std { ... }
+
+// ??????
+@foreign
+func stdout();
+
+func forward_to_stdout(context: void*, data: void*, size: int) {
+    fwrite(data, 1, size, (:libc.FILE*)stdout);
+}
+
+@foreign("stbi_write_png_to_func")
+func stbi_write_png_to_func(fn: func(context: void*, data: void*, size: int), context: void*, w: int, h: int, comp: int, data: void const*, stride_in_bytes: int): int;
+
+var BlockDim: int2 const = { ImageDim, ImageDim };
 
 struct int2 {
     x: int;
@@ -41,11 +54,9 @@ func threads_join(threads: Threads*) {
     threads.started = false;
 }
 
-func threads_draw_starfield(threads: Threads*, img: Image*, wr: WritableRegion, starfield: Starfield*) {
+func threads_draw_starfield(threads: Threads*, img: Image, starfield: Starfield*) {
     #assert(threads.started == false);
-    if (wr.x0 == 0 && wr.y0 == 0) {
-        draw_starfield(img, starfield);
-    }
+    draw_starfield(&img, starfield);
 }
 
 func threads_blur_to(threads: Threads*, dest: Image*, src: Image*, radius: float) {
@@ -59,36 +70,40 @@ func threads_calculate_luminance(threads: Threads*, img: Image*, result_out: flo
     *result_out = calculate_luminance(img);
 }
 
-func threads_post_process(threads: Threads*, img: Image*, wr: WritableRegion, p: PostProcess*) {
+func threads_post_process(threads: Threads*, img: Image, p: PostProcess*) {
     #assert(threads.started == false);
-    if (wr.x0 == 0 && wr.y0 == 0) {
-        post_process(img, p);
-    }
+    post_process(&img, p);
 }
 
-func main(dest: RGB8*, dim: int2, starfield_text: char*): void {
+func main(argc: int, argv: char**): int {
     _MM_SET_FLUSH_ZERO_MODE(ION_FLUSH_ZERO_ON);
     _MM_SET_DENORMALS_ZERO_MODE(ION_DENORMALS_ZERO_ON);
 
-    base_allocator := current_allocator;
+    if (argc < 2) {
+        printf("Usage: starfield \"TWEET\"\n");
+        return -1;
+    }
+
+    dest := alloc2(ImageSize, sizeof(RGB8));
+    starfield_text := argv[1];
 
     scratch_buf := alloc(MB(64), sizeof(usize));
-    scratch_allocator := temp_allocator(scratch_buf, MB(64));
+    scratch_allocator := temp_allocator(scratch_buf, MB(128));
     scratch = &scratch_allocator;
     scratch_mark := temp_begin(scratch);
 
-    mem_size := checked_mul3(dim.x, dim.y, sizeof(Color));
-    mem_size += mem_size * 32; // diffraction, blurs
+    mem_size := checked_mul3(ImageSize.x, ImageSize.y, sizeof(Color));
+    mem_size += mem_size * 64; // diffraction, blurs
     mem_size += MB(64); // state
     mem_buf := alloc(mem_size, sizeof(usize));
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
 
     noise_init();
-    img := render_starfield(starfield_text, dim);
-    image_to_rgb8(dest, dim, &img);
+    img := render_starfield(starfield_text, ImageSize);
+    image_to_rgb8(dest, ImageSize, &img);
 
-    current_allocator = base_allocator;
-    free(scratch_buf);
-    free(mem_buf);
+    err := stbi_write_png_to_func(forward_to_stdout, 0, ImageSize.x, ImageSize.y, 4, dest, ImageSize.x * sizeof(RGB8));
+
+    return !err;
 }

@@ -31,11 +31,11 @@ func clamp(a: float, b: float, x: float): float {
                      x;
 }
 
-func abs(x: float): float {
+func absolute(x: float): float {
     return x >= 0 ? x : -x;
 }
 
-func absi(x: int): int {
+func absolutei(x: int): int {
     return x >= 0 ? x : -x;
 }
 
