@@ -78,11 +78,12 @@ func set4s(p: float): float4;
 @foreign("_mm_set_ps")
 func set4(p3: float, p2: float, p1: float, p0: float): float4;
 
-@foreign("_mm_fmadd_ps")
-func fma4(a: float4, b: float4, c: float4): float4;
+// Defined in main_(platform).ion
+// @foreign("_mm_fmadd_ps")
+// func fma4(a: float4, b: float4, c: float4): float4;
 
-@foreign("_mm_fmsub_ps")
-func fmsub4(a: float4, b: float4, c: float4): float4;
+// @foreign("_mm_fmsub_ps")
+// func fmsub4(a: float4, b: float4, c: float4): float4;
 
 @foreign("_mm_hadd_ps")
 func hadd4(a: float4, b: float4): float4;

@@ -25,7 +25,7 @@ func pop_scratch_allocator(pa: PushedAllocator) {
 @foreign
 func isnan(f: float): bool;
 
-const ImageDim = 440;
+const ImageDim = 480;
 var ImageSize: int2 const = { ImageDim, ImageDim };
 
 func checked_mul2(a: usize, b: usize): usize {

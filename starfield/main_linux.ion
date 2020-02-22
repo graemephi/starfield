@@ -9,6 +9,17 @@
 // gcc/clang doesnt like static always_inline, so remove static
 #foreign(preamble = "#undef INLINE\n#define INLINE inline __attribute__((always_inline))")
 
+@foreign("__builtin_clz")
+func clz(a: uint): int;
+
+func fma4(a: float4, b: float4, c: float4): float4 {
+    return add4(mul4(a, b), c);
+}
+
+func fmsub4(a: float4, b: float4, c: float4): float4 {
+    return sub4(mul4(a, b), c);
+}
+
 import libc { printf, cos, sin, exp, ceil, log, exit, pow, log2, fwrite, fflush }
 import std { ... }
 
@@ -87,7 +98,7 @@ func main(argc: int, argv: char**): int {
     dest := alloc2(ImageSize, sizeof(RGB8));
     starfield_text := argv[1];
 
-    scratch_buf := alloc(MB(64), sizeof(usize));
+    scratch_buf := alloc(MB(128), sizeof(usize));
     scratch_allocator := temp_allocator(scratch_buf, MB(128));
     scratch = &scratch_allocator;
     scratch_mark := temp_begin(scratch);

@@ -7,12 +7,12 @@ func is_power_2(x: int32): bool {
     return x != 0 && x & (x - 1) == 0;
 }
 
-@foreign("_lzcnt_u32")
-func _lzcnt_u32(a: uint): uint;
-
 @inline
 func log2i(x: int): int {
-    return 31 - _lzcnt_u32(x);
+    if (x == 0) {
+        return -1;
+    }
+    return 31 - clz(x);
 }
 
 @inline
