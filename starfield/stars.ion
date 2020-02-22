@@ -180,21 +180,21 @@ func init_star_type(type: StarType*, id: int) {
             type.diffraction = diffract_tex(&type.tex, { star_diffraction_type, {.01, .01, .01, .01 }, {1.5, 1.5, 1.5, 1.5} });
         case 4: // .
             type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
+            type.size = { 12, 12 };
             type.y_offset = -.66;
             draw_simple_star(&type.tex, 24);
         case 5: // ·
             type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
+            type.size = { 16, 16 };
             draw_simple_star(&type.tex, 24);
         case 6: // ˚
             type.tex = make_tex({ 32, 32 });
-            type.size = { 32, 32 };
+            type.size = { 24, 24 };
             type.y_offset = .66;
             draw_simple_star(&type.tex, 24);
         case 7: // ⊹
             type.tex = make_tex({ 64,  64 });
-            type.size = { 16, 16 };
+            type.size = { 32, 32 };
             type.y_offset = -.1;
             type.rare = true;
             draw_lensed_quasar(&type.tex);
