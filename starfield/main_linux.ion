@@ -110,7 +110,6 @@ func main(argc: int, argv: char**): int {
     mem := temp_allocator(mem_buf, mem_size);
     current_allocator = (:Allocator*)&mem;
 
-    noise_init();
     img := render_starfield(starfield_text, ImageSize);
     image_to_rgb8(dest, ImageSize, &img);
 

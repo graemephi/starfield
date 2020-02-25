@@ -255,13 +255,11 @@ func main(argc: int, argv: char**): int {
     #assert(surface.w == ImageSize.x);
     #assert(surface.h == ImageSize.y);
 
-    starfield_text :="""
-✺   　　 　　 ·   ⊹
- *  ⋆ 　　　  ✧  *
-  　　　　　　　.  　  +
- +  *　  　* 　　. 　 ⋆
-    　　  +   ✫
-""";
+    starfield_text := """. 　 ⋆ 　. 　　       .
+ ˚  ˚ . ·    　　　　　　　　
+. * 　 ⋆  * 　 *     .
+ ˚ 　 · 　　　　 ⋆   　　
+　　　.  ˚  ·　　　　　 .  +""";
 
     threads_init(&threads);
 
@@ -306,8 +304,6 @@ func main(argc: int, argv: char**): int {
 
         if (render) {
             t0 := ticks();
-
-            noise_init();
 
             img = render_starfield(starfield_text, ImageSize);
 
