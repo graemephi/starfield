@@ -136,12 +136,15 @@ func blur_to(dest: Image*, src: Image*, radius: float) {
 }
 
 func blur_to_blend(dest: Image*, src: Image*, radius: float, alpha: float) {
-    blur_to(dest, src, radius);
+    b := *dest;
+    if (dest == src) {
+        b = make_image_like(dest);
+    }
 
-    if (radius != 0 && alpha != 1) {
-        for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
-            *it.pixel = color_lerp(image_sample_linear(src, it.pos), *it.pixel, alpha);
-        }
+    blur_to(&b, src, radius);
+
+    for (it := pixel_iter_begin(dest, {}); pixel_iter_next(&it)) {
+        *it.pixel = color_lerp(image_sample_linear(src, it.pos), image_sample_linear(&b, it.pos), alpha);
     }
 }
 

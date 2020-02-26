@@ -172,26 +172,26 @@ func init_star_type(type: StarType*, id: int) {
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             type.y_offset = .25;
-            draw_simple_star(&type.tex, 24);
+            draw_simple_star(&type.tex, 48);
         case 3: // +
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
-            draw_simple_star(&type.tex, 32);
+            draw_simple_star(&type.tex, 64);
             type.diffraction = diffract_tex(&type.tex, { star_diffraction_type, {.01, .01, .01, .01 }, {1.5, 1.5, 1.5, 1.5} });
         case 4: // .
             type.tex = make_tex({ 32, 32 });
             type.size = { 12, 12 };
             type.y_offset = -.66;
-            draw_simple_star(&type.tex, 24);
+            draw_simple_star(&type.tex, 48);
         case 5: // ·
             type.tex = make_tex({ 32, 32 });
             type.size = { 16, 16 };
-            draw_simple_star(&type.tex, 24);
+            draw_simple_star(&type.tex, 48);
         case 6: // ˚
             type.tex = make_tex({ 32, 32 });
             type.size = { 24, 24 };
             type.y_offset = .66;
-            draw_simple_star(&type.tex, 24);
+            draw_simple_star(&type.tex, 48);
         case 7: // ⊹
             type.tex = make_tex({ 64,  64 });
             type.size = { 32, 32 };
@@ -201,18 +201,18 @@ func init_star_type(type: StarType*, id: int) {
         case 8: // ⋆
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
-            draw_simple_star(&type.tex, 24);
+            draw_simple_star(&type.tex, 48);
         case 9: // ✦
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
-            draw_simple_star(&type.tex, 32);
+            draw_simple_star(&type.tex, 64);
             blur_tex(&type.tex, 2);
             type.diffraction = diffract_tex(&type.tex, { star_diffraction_type, {1,1,1,1}, {1.2,1.2,1.2,1.2} });
         case 10: // ✧
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
             type.rare = true;
-            draw_simple_star(&type.tex, 32);
+            draw_simple_star(&type.tex, 64);
         case 11: // ✫
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
@@ -324,7 +324,7 @@ func size_for(dim: float2): int2 {
 func create_starfield(starfield: Starfield*, starfield_text: char const*) {
     aspect_ratio := float(ImageSize.x) / float(ImageSize.y);
     star_size_mod := square(square(random01()));
-    star_size := exp(-5.5 + star_size_mod); // 0.005
+    star_size := exp(-6. + star_size_mod); // 0.005
 
     galaxies := random01() < 0.01;
 
@@ -357,7 +357,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
                 size := star_size * clamp(0.5, 1.0, square(random_normal())) * star.type.size.x;
 
                 star.rect.pos = { aspect_ratio * float(line_width) + random01()*0.5-.25, float(height) + random01()*0.5-.25 + star.type.y_offset };
-                star.color = random_star_color_for_type(star.type, .5 + sqrt(size));
+                star.color = random_star_color_for_type(star.type, .6 + 8*sqrt(size));
 
                 if (galaxies || type.galaxy) {
                     x := size * (galaxies ? randomr(0.4, 1.) : randomr(0.25, .5));
@@ -432,7 +432,7 @@ func create_starfield(starfield: Starfield*, starfield_text: char const*) {
                         size = { size, size }
                     },
                     type = bg_type,
-                    color = random_star_color_for_type(bg_type, sqrt(size))
+                    color = random_star_color_for_type(bg_type, .5 + 7*sqrt(size))
                 });
             }
 
@@ -493,7 +493,7 @@ func create_galactic_starfield(starfield: Starfield*, starfield_text: char const
 
     aspect_ratio := float(ImageSize.x) / float(ImageSize.y);
     star_size_mod := square(square(random01()) - 1);
-    star_size := exp(-5.59 + star_size_mod);
+    star_size := exp(-5.69 + star_size_mod);
 
     width := 0;
     height := 0;
@@ -610,7 +610,7 @@ func create_galactic_starfield(starfield: Starfield*, starfield_text: char const
                             size = { size, size }
                         },
                         type = bg_type,
-                        color = random_star_color_for_type(bg_type, sqrt(size))
+                        color = random_star_color_for_type(bg_type, .4 + size)
                     });
                 }
             }

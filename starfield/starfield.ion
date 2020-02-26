@@ -149,7 +149,7 @@ func make_tex_from_image(img: Image*): Tex {
 }
 
 func compute_lod_level(dest_size: int2, target_size: float2, src_size: int2): float2 {
-    step_x := absolute(src_size.x / (dest_size.x * target_size.x));
+    step_x := absolute(src_size.x / (dest_size.y * target_size.x));
     step_y := absolute(src_size.y / (dest_size.y * target_size.y));
     return { max(0, log2(step_x)), max(0, log2(step_y)) };
 }
@@ -599,7 +599,7 @@ func calculate_luminance(img: Image*): float2 {
 }
 
 // https://web.archive.org/web/20200131193025/http://www.thetenthplanet.de/archives/5367
-func dither(v: float, noise: float): float {
+func dither_srgb(v: float, noise: float): float {
     vv := srgb(v);
     a := floor(vv * 255.) / 255.;
     b := a + (1.0 / 255.);
@@ -607,7 +607,7 @@ func dither(v: float, noise: float): float {
     return (discr < v) ? a : b;
 }
 
-func nineties(v: float, noise: float): float {
+func nineties_srgb(v: float, noise: float): float {
     vv := srgb(sqrt(clamp01(v)));
     a := floor(vv * 127.) / 127.;
     b := a + (1.0 / 127.);
@@ -659,18 +659,18 @@ func post_process(img: Image*, p: PostProcess*) {
         // Dither
         if (p.nineties) {
             intensity := fract(alpha1*it.wr_pos.x + alpha2*it.wr_pos.y);
-            it.pixel.r = nineties(r, intensity);
+            it.pixel.r = nineties_srgb(r, intensity);
             intensity = fract(intensity + alpha0);
-            it.pixel.g = nineties(g, intensity);
+            it.pixel.g = nineties_srgb(g, intensity);
             intensity = fract(intensity + alpha0);
-            it.pixel.b = nineties(b, intensity);
+            it.pixel.b = nineties_srgb(b, intensity);
         } else {
             intensity := fract(alpha1*it.wr_pos.x + alpha2*it.wr_pos.y);
-            it.pixel.r = dither(r, intensity);
+            it.pixel.r = dither_srgb(r, intensity);
             intensity = fract(intensity + alpha0);
-            it.pixel.g = dither(g, intensity);
+            it.pixel.g = dither_srgb(g, intensity);
             intensity = fract(intensity + alpha0);
-            it.pixel.b = dither(b, intensity);
+            it.pixel.b = dither_srgb(b, intensity);
         }
     }
 }
@@ -737,7 +737,7 @@ func render_starfield(text: char*, size: int2): Image {
     threads_fork(&threads);
 
     inner_multiplier := absolute(random_normal_cauchy(.1));
-    outer_multiplier := inner_multiplier + absolute(random_normal_cauchy(.4));
+    outer_multiplier := inner_multiplier + absolute(.5 + random_normal_cauchy(.4));
     diffract_alpha := clamp01(0.02 * absolute(random_normal_cauchy(.1)));
 
     inner := color_mul1({ 1., 1.1, 1.2, 1.2 }, inner_multiplier);
