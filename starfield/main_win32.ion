@@ -319,7 +319,7 @@ func main(argc: int, argv: char**): int {
         }
 
         if (display) {
-            image_to_rgb8((:RGB8*)surface.pixels, ImageSize, &img);
+            image_to_bgr8((:BGR8*)surface.pixels, ImageSize, &img);
             SDL_UpdateWindowSurface(app.window.sdl);
             img = {};
         }

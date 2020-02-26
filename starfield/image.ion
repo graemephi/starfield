@@ -136,6 +136,19 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     }
 }
 
+func image_to_bgr8(dest: BGR8*, size: int2, src: Image*) {
+    #assert(src.size.x == size.x);
+    #assert(src.size.y == size.y);
+    src_end := src.pixels + src.stride*src.size.y;
+    stride := src.stride;
+    for (y := 0; y < src.size.y; y++) {
+        for (x := 0; x < src.size.x; x++) {
+            *dest = color_to_bgr8(src.pixels[x + stride*y]);
+            dest++;
+        }
+    }
+}
+
 func has_complete_writable_region(img: Image*): bool {
     return img.wr.x0 == 0 && img.wr.y0 == 0 &&
         ((img.wr.x1 == 0 && img.wr.y1 == 0) || (img.wr.x1 == img.size.x && img.wr.y1 == img.size.y));
@@ -338,6 +351,7 @@ func test_pixel_iterator_case(img: Image*) {
 }
 
 func test_pixel_iterator() {
+    s := random_state;
     test_pixel_iterator_case(&Image{});
     imgs := (:Image[]) {
         make_image({32,32}),
@@ -353,6 +367,8 @@ func test_pixel_iterator() {
     free_image(imgs + 1);
     free_image(imgs + 2);
     free_image(imgs + 3);
+    // Restore random_state so running this function doesn't have side effects
+    random_state = s;
 }
 
 func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd: float, abcd: float) {

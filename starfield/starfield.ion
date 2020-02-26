@@ -96,8 +96,12 @@ struct Color {
     a: float;
 }
 
-struct RGB8 {
+struct BGR8 {
     b, g, r, a: uint8;
+} #static_assert(sizeof(BGR8) == 4)
+
+struct RGB8 {
+    r, g, b, a: uint8;
 } #static_assert(sizeof(RGB8) == 4)
 
 struct Tex {
@@ -558,6 +562,16 @@ func color_to_rgb8(color: Color): RGB8 {
         r = uint8(clamp(0, 255, 0.5 + color.r * 255.)),
         g = uint8(clamp(0, 255, 0.5 + color.g * 255.)),
         b = uint8(clamp(0, 255, 0.5 + color.b * 255.)),
+        a = 255
+    };
+    return result;
+}
+
+func color_to_bgr8(color: Color): BGR8 {
+    result := BGR8 {
+        b = uint8(clamp(0, 255, 0.5 + color.b * 255.)),
+        g = uint8(clamp(0, 255, 0.5 + color.g * 255.)),
+        r = uint8(clamp(0, 255, 0.5 + color.r * 255.)),
         a = 255
     };
     return result;
