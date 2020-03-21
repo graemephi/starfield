@@ -24,19 +24,12 @@ struct StrictWritableRegion {
     pixels: Color*;
 }
 
-enum ImageFlags {
-    // This indicates that the image's pixel buffer only has storage for the current writable region.
-    // Consequently, addressing (pixels + x + y*stride) must be performed relative to the writable region,
-    // and not the image. See get_wr_read_offset.
-    IsWritableRegionCopyOnly = 1
-}
-
 struct Image {
     pixels: Color*;
     size: int2;
     wr: WritableRegion;
     stride: int;
-    flags: uint;
+    offset: int;
 }
 
 func image_writable(img: Image*): Image {
@@ -69,7 +62,7 @@ func make_image_like(img: Image*): Image {
         size = img.size,
         wr = { img.wr.x0, img.wr.y0, img.wr.x1, img.wr.y1 },
         stride = writable.size.x,
-        flags = IsWritableRegionCopyOnly
+        offset = img.wr.x0 + img.wr.y0*writable.size.x
     };
 }
 
@@ -81,7 +74,7 @@ func make_uninitialised_image_like(img: Image*): Image {
         size = img.size,
         wr = { img.wr.x0, img.wr.y0, img.wr.x1, img.wr.y1 },
         stride = writable.size.x,
-        flags = IsWritableRegionCopyOnly
+        offset = img.wr.x0 + img.wr.y0*writable.size.x
     };
 }
 
@@ -114,6 +107,8 @@ func image_copy(img: Image*): Image {
 }
 
 func image_copy_to(dest: Image*, src: Image*) {
+    #assert(dest.offset == 0);
+    #assert(src.offset == 0);
     if ((src.size.x == dest.size.x) && (src.size.y == dest.size.y)) {
         copy(dest.pixels, src.pixels, src.size.x*src.size.y*sizeof(Color));
     } else {
@@ -126,6 +121,7 @@ func image_copy_to(dest: Image*, src: Image*) {
 func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
     #assert(src.size.x == size.x);
     #assert(src.size.y == size.y);
+    #assert(src.offset == 0);
     src_end := src.pixels + src.stride*src.size.y;
     stride := src.stride;
     for (y := 0; y < src.size.y; y++) {
@@ -139,6 +135,7 @@ func image_to_rgb8(dest: RGB8*, size: int2, src: Image*) {
 func image_to_bgr8(dest: BGR8*, size: int2, src: Image*) {
     #assert(src.size.x == size.x);
     #assert(src.size.y == size.y);
+    #assert(src.offset == 0);
     src_end := src.pixels + src.stride*src.size.y;
     stride := src.stride;
     for (y := 0; y < src.size.y; y++) {
@@ -160,7 +157,7 @@ func strict_writable_region(img: Image*): StrictWritableRegion {
         y0 = img.wr.y0,
         x1 = img.wr.x1 ? clampi(0, img.size.x, img.wr.x1) : img.size.x,
         y1 = img.wr.y1 ? clampi(0, img.size.y, img.wr.y1) : img.size.y,
-        pixels = (img.flags & IsWritableRegionCopyOnly) ? img.pixels : (img.pixels + (img.wr.x0 + img.wr.y0*img.stride))
+        pixels = (img.offset > 0) ? img.pixels : (img.pixels + (img.wr.x0 + img.wr.y0*img.stride))
     };
 }
 
@@ -384,18 +381,6 @@ func assert_correct_signs(a: float, b: float, c: float, d: float, ab: float, cd:
     }
 }
 
-// Ideally... this wouldn't be necessary. But I want to allow threads to make
-// miminal copies of the regions of images they write to in usage code that is
-// mostly threading oblivious. So, we need to allow sampling of Images whose
-// pixel buffers point to the start of their writable region, not [0,0].
-func get_wr_read_offset(img: Image*): int {
-    if (img.flags & IsWritableRegionCopyOnly) {
-        return img.wr.x0 + img.wr.y0*img.stride;
-    }
-
-    return {};
-}
-
 enum EdgeBehavior {
     Edge_Black,
     Edge_Clamp,
@@ -423,7 +408,7 @@ func sample_edge(img: Image*, edge_behavior: EdgeBehavior, a: int2, samples_out:
             b_idx: uint = b.x + b.y*img.stride;
             c_idx: uint = c.x + c.y*img.stride;
             d_idx: uint = d.x + d.y*img.stride;
-            end: uint = img.stride*img.size.y - get_wr_read_offset(img);
+            end: uint = img.stride*img.size.y - img.offset;
             samples_out[0] = (a_idx < end) ? img.pixels[a_idx] : {};
             samples_out[1] = (b_idx < end) ? img.pixels[b_idx] : {};
             samples_out[2] = (c_idx < end) ? img.pixels[c_idx] : {};
@@ -478,7 +463,7 @@ func image_sample_linear_edge(img: Image*, pos: float2, edge_behavior: EdgeBehav
     #assert(img.size.y);
     #assert(img.stride);
 
-    wr_offset := get_wr_read_offset(img);
+    wr_offset := img.offset;
 
     scaled := float2 {
         pos.x * img.size.y - 0.5,
@@ -547,7 +532,7 @@ func image_fetch(img: Image*, pos: int2): Color {
     }
 
     #assert(pos.x + pos.y*img.size.x < img.size.y*img.size.x);
-    return img.pixels[pos.x + pos.y*img.stride - get_wr_read_offset(img)];
+    return img.pixels[pos.x + pos.y*img.stride - img.offset];
 }
 
 struct ImageBlockIter {

@@ -700,6 +700,7 @@ func render_starfield(text: char*, size: int2): Image {
     text_len := slen(text);
     text_hash := hash(text, text_len);
     random_state ^= (:uint32)text_hash;
+    random_state ^= (:uint32)(text_hash >> 32);
 
     noise_init();
 
