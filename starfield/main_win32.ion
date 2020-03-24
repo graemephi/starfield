@@ -255,11 +255,13 @@ func main(argc: int, argv: char**): int {
     #assert(surface.w == ImageSize.x);
     #assert(surface.h == ImageSize.y);
 
-    starfield_text := """. 　 ⋆ 　. 　　       .
- ˚  ˚ . ·    　　　　　　　　
-. * 　 ⋆  * 　 *     .
- ˚ 　 · 　　　　 ⋆   　　
-　　　.  ˚  ·　　　　　 .  +""";
+    starfield_text := """·　　　　·  　.　　 ˚
+　  　 　
+*  　　　　 　  　 　　　  　　　　　　　
+  　　　　 　　　　 ✦  . 　
+ ✦  　 . ✷   .　  　
+　　 　        　
+ 　·    ·　  . *""";
 
     threads_init(&threads);
 

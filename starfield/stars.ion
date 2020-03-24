@@ -205,9 +205,7 @@ func init_star_type(type: StarType*, id: int) {
         case 9: // ✦
             type.tex = make_tex({ 128, 128 });
             type.size = { 128, 128 };
-            draw_simple_star(&type.tex, 64);
-            blur_tex(&type.tex, 2);
-            type.diffraction = diffract_tex(&type.tex, { star_diffraction_type, {1,1,1,1}, {1.2,1.2,1.2,1.2} });
+            draw_simple_star(&type.tex, 96);
         case 10: // ✧
             type.tex = make_tex({ 32, 32 });
             type.size = { 32, 32 };
